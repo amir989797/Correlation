@@ -1,3 +1,4 @@
+
 import { TsetmcDataPoint, MergedDataPoint, ChartDataPoint } from '../types';
 
 /**
@@ -152,6 +153,11 @@ export const calculateRollingCorrelations = (mergedData: MergedDataPoint[], wind
     const ma200_1 = calculateSMA(prices1, i, 200);
     const ma200_2 = calculateSMA(prices2, i, 200);
 
+    // Calculate Distance from MA100 (%)
+    // Formula: ((Price - MA) / MA) * 100
+    const dist_ma100_1 = ma100_1 ? ((currentDayData.price1 - ma100_1) / ma100_1) * 100 : null;
+    const dist_ma100_2 = ma100_2 ? ((currentDayData.price2 - ma100_2) / ma100_2) * 100 : null;
+
     const point: ChartDataPoint = {
       date: formattedDate,
       timestamp: timestamp,
@@ -160,7 +166,9 @@ export const calculateRollingCorrelations = (mergedData: MergedDataPoint[], wind
       ma100_price1: ma100_1,
       ma100_price2: ma100_2,
       ma200_price1: ma200_1,
-      ma200_price2: ma200_2
+      ma200_price2: ma200_2,
+      dist_ma100_1: dist_ma100_1 ? parseFloat(dist_ma100_1.toFixed(2)) : null,
+      dist_ma100_2: dist_ma100_2 ? parseFloat(dist_ma100_2.toFixed(2)) : null,
     };
 
     // Calculate correlation for each window size
