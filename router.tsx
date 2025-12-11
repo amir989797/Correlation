@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 
 const RouterContext = createContext<{ path: string; navigate: (path: string) => void }>({
@@ -15,7 +14,7 @@ export function useLocation() {
   return { pathname: path };
 }
 
-export function Link({ to, children, className }: { to: string; children: ReactNode; className?: string }) {
+export function Link({ to, children, className }: { to: string; children?: ReactNode; className?: string }) {
   const { navigate } = useRouter();
   
   const handleClick = (e: React.MouseEvent) => {
@@ -30,7 +29,7 @@ export function Link({ to, children, className }: { to: string; children: ReactN
   );
 }
 
-export function Router({ children }: { children: ReactNode }) {
+export function Router({ children }: { children?: ReactNode }) {
   // Always initialize to Home Page ('/') regardless of current URL
   const [path, setPath] = useState('/');
 
@@ -73,7 +72,7 @@ export function Router({ children }: { children: ReactNode }) {
   );
 }
 
-export function Routes({ children }: { children: ReactNode }) {
+export function Routes({ children }: { children?: ReactNode }) {
   return <>{children}</>;
 }
 

@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   ComposedChart,
-  Area
+  Brush
 } from 'recharts';
 import { ChartDataPoint } from '../types';
 
@@ -20,6 +20,7 @@ interface DistanceChartProps {
   showSymbol2: boolean;
   name1: string;
   name2: string;
+  showBrush?: boolean;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -44,11 +45,23 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const DistanceChart = React.memo<DistanceChartProps>(({ data, syncId, showSymbol1, showSymbol2, name1, name2 }) => {
+export const DistanceChart = React.memo<DistanceChartProps>(({ 
+  data, 
+  syncId, 
+  showSymbol1,
+  showSymbol2,
+  name1, 
+  name2,
+  showBrush = true 
+}) => {
   if (!data || data.length === 0) return null;
 
+  // Colors
+  const color1 = '#22d3ee'; // Cyan
+  const color2 = '#a855f7'; // Purple
+
   return (
-    <div className="w-full h-[200px]">
+    <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={data}
@@ -56,7 +69,7 @@ export const DistanceChart = React.memo<DistanceChartProps>(({ data, syncId, sho
           margin={{
             top: 5,
             right: 30,
-            left: 20,
+            left: 0,
             bottom: 5,
           }}
         >
@@ -80,28 +93,39 @@ export const DistanceChart = React.memo<DistanceChartProps>(({ data, syncId, sho
           <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
           
           {showSymbol1 && (
-             <Line 
-               type="monotone" 
-               dataKey="dist_ma100_1" 
-               name={`فاصله ${name1} از میانگین`}
-               stroke="#22d3ee" // Cyan
-               strokeWidth={2} 
-               dot={false} 
-               activeDot={{ r: 4, strokeWidth: 0, fill: '#fff' }}
-               connectNulls={false}
-             />
+            <Line 
+              type="monotone" 
+              dataKey="dist_ma100_1" 
+              name={`فاصله ${name1}`}
+              stroke={color1} 
+              strokeWidth={2} 
+              dot={false} 
+              activeDot={{ r: 4, strokeWidth: 0, fill: '#fff' }}
+              connectNulls={false}
+            />
           )}
 
           {showSymbol2 && (
-             <Line 
-               type="monotone" 
-               dataKey="dist_ma100_2" 
-               name={`فاصله ${name2} از میانگین`}
-               stroke="#a855f7" // Purple
-               strokeWidth={2} 
-               dot={false} 
-               activeDot={{ r: 4, strokeWidth: 0, fill: '#fff' }}
-               connectNulls={false}
+            <Line 
+              type="monotone" 
+              dataKey="dist_ma100_2" 
+              name={`فاصله ${name2}`}
+              stroke={color2} 
+              strokeWidth={2} 
+              dot={false} 
+              activeDot={{ r: 4, strokeWidth: 0, fill: '#fff' }}
+              connectNulls={false}
+            />
+          )}
+
+          {showBrush && (
+             <Brush 
+               dataKey="date" 
+               height={30} 
+               stroke="#475569" 
+               fill="#1e293b" 
+               tickFormatter={() => ''}
+               travellerWidth={10}
              />
           )}
         </ComposedChart>

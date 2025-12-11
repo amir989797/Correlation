@@ -1,11 +1,12 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { extractIdFromUrl, fetchStockHistory } from '../services/tsetmcService';
-import { alignDataByDate, calculateRollingCorrelations, parseTsetmcCsv } from '../utils/mathUtils';
+import { alignDataByDate, generateAnalysisData, parseTsetmcCsv } from '../utils/mathUtils';
 import { CorrelationChart } from '../components/CorrelationChart';
 import { PriceChart } from '../components/PriceChart';
 import { DistanceChart } from '../components/DistanceChart';
 import { ChartDataPoint, FetchStatus, TsetmcDataPoint } from '../types';
+import { Upload, FileText, X } from 'lucide-react';
 
 type InputMode = 'url' | 'file';
 
@@ -16,6 +17,126 @@ const WINDOW_OPTIONS = [
   { val: 90, label: '۹۰ روزه', color: '#8b5cf6' }, // Violet
   { val: 365, label: '۳۶۵ روزه (سالانه)', color: '#ec4899' }, // Pink
 ];
+
+// Internal Dropzone Component
+const FileDropzone = ({ 
+  label, 
+  file, 
+  onFileSelect 
+}: { 
+  label: string; 
+  file: File | null; 
+  onFileSelect: (f: File | null) => void;
+}) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      onFileSelect(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleClick = () => {
+    inputRef.current?.click();
+  };
+
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onFileSelect(null);
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-slate-400">{label}</label>
+      
+      <div 
+        onClick={handleClick}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`
+          relative group cursor-pointer
+          border-2 border-dashed rounded-xl p-8
+          flex flex-col items-center justify-center text-center
+          transition-all duration-300 min-h-[160px]
+          ${isDragging 
+              ? 'border-cyan-500 bg-cyan-500/10 scale-[1.02]' 
+              : file 
+                ? 'border-emerald-500/50 bg-emerald-500/5' 
+                : 'border-slate-600 bg-slate-900/50 hover:border-cyan-400 hover:bg-slate-800'
+          }
+        `}
+      >
+        <input 
+          ref={inputRef}
+          type="file" 
+          accept=".csv,.txt" 
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+               onFileSelect(e.target.files[0]);
+            }
+          }}
+        />
+
+        {file ? (
+          <div className="flex flex-col items-center animate-fade-in w-full">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3">
+               <FileText className="w-6 h-6" />
+            </div>
+            <p className="text-emerald-200 font-medium text-sm truncate max-w-full px-4 mb-1" dir="ltr">
+              {file.name}
+            </p>
+            <p className="text-slate-500 text-xs mb-4">
+              {(file.size / 1024).toFixed(1)} KB
+            </p>
+            <button 
+              onClick={handleRemove}
+              className="px-4 py-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg text-xs flex items-center gap-2 transition-colors border border-slate-700 hover:border-red-500/30 z-10"
+            >
+              <X className="w-3.5 h-3.5" />
+              حذف فایل
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center text-slate-400 group-hover:text-cyan-400 transition-colors">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-all ${isDragging ? 'bg-cyan-500/20 text-cyan-400' : 'bg-slate-800 text-slate-500 group-hover:bg-cyan-500/10 group-hover:text-cyan-400'}`}>
+               <Upload className="w-6 h-6" />
+            </div>
+            <p className="font-bold text-sm mb-2">
+              برای آپلود کلیک کنید یا فایل را اینجا رها کنید
+            </p>
+            <p className="text-xs text-slate-500">
+              فرمت مجاز: CSV یا TXT (حداکثر ۲ مگابایت)
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Component for background titles
+const ChartBackgroundLabel = ({ text }: { text: string }) => (
+  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
+     <h3 className="text-[12vw] sm:text-6xl md:text-8xl font-black text-slate-800/30 select-none whitespace-nowrap">{text}</h3>
+  </div>
+);
+
 
 export function CorrelationPage() {
   const [mode, setMode] = useState<InputMode>('url');
@@ -35,8 +156,8 @@ export function CorrelationPage() {
   const [cachedData, setCachedData] = useState<{d1: TsetmcDataPoint[], d2: TsetmcDataPoint[]} | null>(null);
   
   // Indicator State (Distance from MA)
-  const [showDist1, setShowDist1] = useState<boolean>(false);
-  const [showDist2, setShowDist2] = useState<boolean>(false);
+  const [showDistActive, setShowDistActive] = useState<boolean>(false);
+  const [showDistBoth, setShowDistBoth] = useState<boolean>(false);
 
   // Symbol Names
   const [symbolNames, setSymbolNames] = useState<{s1: string, s2: string}>({ s1: 'نماد اول', s2: 'نماد دوم' });
@@ -60,7 +181,6 @@ export function CorrelationPage() {
       return;
     }
 
-    // Check if data is enough for the SMALLEST window to allow at least one plot
     const minWindow = Math.min(...wSizes);
 
     if (d1.length < minWindow || d2.length < minWindow) {
@@ -73,9 +193,8 @@ export function CorrelationPage() {
       throw new Error(`تعداد روزهای معاملاتی مشترک (${mergedData.length}) کمتر از حداقل بازه انتخابی (${minWindow} روز) است.`);
     }
 
-    // Calculate rolling correlations
-    const correlationData = calculateRollingCorrelations(mergedData, wSizes);
-    setChartData(correlationData);
+    const analysisData = generateAnalysisData(d1, d2, wSizes);
+    setChartData(analysisData);
   };
 
   const processData = (data1: TsetmcDataPoint[], data2: TsetmcDataPoint[]) => {
@@ -98,7 +217,6 @@ export function CorrelationPage() {
     
     setSelectedWindows(newWindows);
 
-    // If we have data, recalculate immediately
     if (cachedData) {
       try {
         setErrorContent(null);
@@ -131,10 +249,9 @@ export function CorrelationPage() {
     setStatus(FetchStatus.LOADING);
     setErrorContent(null);
     setChartData([]);
-    setCachedData(null); // Reset cache on new fetch
+    setCachedData(null); 
 
     try {
-      // Parallel fetch attempt
       const [res1, res2] = await Promise.all([
         fetchStockHistory(id1),
         fetchStockHistory(id2)
@@ -147,13 +264,11 @@ export function CorrelationPage() {
   };
 
   const validateFile = (file: File): string | null => {
-    // Check Extension
     const lowerName = file.name.toLowerCase();
     if (!lowerName.endsWith('.csv') && !lowerName.endsWith('.txt')) {
       return `فایل ${file.name} معتبر نیست. لطفا فایل CSV یا TXT آپلود کنید.`;
     }
-    // Check Size (2MB Limit)
-    const maxSize = 2 * 1024 * 1024; // 2MB in bytes
+    const maxSize = 2 * 1024 * 1024; // 2MB
     if (file.size > maxSize) {
       return `حجم فایل ${file.name} بیشتر از ۲ مگابایت است.`;
     }
@@ -167,7 +282,6 @@ export function CorrelationPage() {
         reject(new Error(error));
         return;
       }
-
       const reader = new FileReader();
       reader.onload = (e) => resolve(e.target?.result as string);
       reader.onerror = (e) => reject(new Error('خطا در خواندن فایل'));
@@ -185,7 +299,7 @@ export function CorrelationPage() {
     setStatus(FetchStatus.LOADING);
     setErrorContent(null);
     setChartData([]);
-    setCachedData(null); // Reset cache
+    setCachedData(null); 
 
     try {
       const [text1, text2] = await Promise.all([
@@ -216,6 +330,11 @@ export function CorrelationPage() {
   const activeWindowConfigs = useMemo(() => {
     return WINDOW_OPTIONS.filter(opt => selectedWindows.includes(opt.val));
   }, [selectedWindows]);
+
+  // Determine Distance Chart visibility and content
+  const isDistanceVisible = showDistActive || showDistBoth;
+  const showDistS1 = showDistBoth || (showDistActive && priceDisplaySide === 'price1');
+  const showDistS2 = showDistBoth || (showDistActive && priceDisplaySide === 'price2');
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8 animate-fade-in">
@@ -299,15 +418,38 @@ export function CorrelationPage() {
                     <label className="block text-sm font-medium text-slate-400 mb-3">
                       فاصله از میانگین (MA100)
                     </label>
-                    <div className="flex gap-4">
+                    <div className="flex flex-wrap gap-4">
+                        {/* Option 1: Active Symbol */}
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" checked={showDist1} onChange={(e) => setShowDist1(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-cyan-500"/>
-                          <span className={`text-sm ${showDist1 ? 'text-cyan-400' : 'text-slate-500'}`}>نماد اول</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" checked={showDist2} onChange={(e) => setShowDist2(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-purple-500"/>
-                          <span className={`text-sm ${showDist2 ? 'text-purple-400' : 'text-slate-500'}`}>نماد دوم</span>
-                      </label>
+                          <input 
+                            type="checkbox" 
+                            checked={showDistActive} 
+                            onChange={(e) => {
+                                setShowDistActive(e.target.checked);
+                                if (e.target.checked) setShowDistBoth(false);
+                            }} 
+                            className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-cyan-500"
+                          />
+                          <span className={`text-sm ${showDistActive ? 'text-cyan-400' : 'text-slate-500'}`}>
+                            نماد فعال
+                          </span>
+                        </label>
+
+                        {/* Option 2: Both Symbols */}
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={showDistBoth} 
+                            onChange={(e) => {
+                                setShowDistBoth(e.target.checked);
+                                if (e.target.checked) setShowDistActive(false);
+                            }} 
+                            className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-purple-500"
+                          />
+                          <span className={`text-sm ${showDistBoth ? 'text-purple-400' : 'text-slate-500'}`}>
+                            هر دو نماد
+                          </span>
+                        </label>
                     </div>
                 </div>
               </div>
@@ -337,14 +479,16 @@ export function CorrelationPage() {
           ) : (
             <form onSubmit={handleCalculateFile} className="space-y-6">
                 <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-slate-400 mb-2">فایل نماد اول (CSV/TXT - حداکثر ۲ مگابایت)</label>
-                    <input type="file" accept=".csv,.txt" onChange={(e) => setFile1(e.target.files ? e.target.files[0] : null)} className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-slate-700 file:text-cyan-400 hover:file:bg-slate-600"/>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-slate-400 mb-2">فایل نماد دوم (CSV/TXT - حداکثر ۲ مگابایت)</label>
-                    <input type="file" accept=".csv,.txt" onChange={(e) => setFile2(e.target.files ? e.target.files[0] : null)} className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-slate-700 file:text-cyan-400 hover:file:bg-slate-600"/>
-                  </div>
+                  <FileDropzone 
+                    label="فایل نماد اول" 
+                    file={file1} 
+                    onFileSelect={setFile1} 
+                  />
+                  <FileDropzone 
+                    label="فایل نماد دوم" 
+                    file={file2} 
+                    onFileSelect={setFile2} 
+                  />
                 </div>
                 <button type="submit" disabled={status === FetchStatus.LOADING} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg shadow-lg">محاسبه</button>
             </form>
@@ -378,25 +522,28 @@ export function CorrelationPage() {
             </div>
 
             {/* UNIFIED CHART CONTAINER */}
-            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-2xl">
+            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-2xl m-8">
                 {/* Toolbar */}
                 <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-b border-slate-700 bg-slate-800/50">
                    <h3 className="font-bold text-slate-200">نمودار ترکیبی</h3>
                    
-                   <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-700">
-                     <button onClick={() => setPriceDisplaySide('price1')} className={`px-3 py-1 text-sm rounded ${priceDisplaySide === 'price1' ? 'bg-emerald-500/20 text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                       {symbolNames.s1}
-                     </button>
-                     <div className="w-px h-4 bg-slate-700"></div>
-                     <button onClick={() => setPriceDisplaySide('price2')} className={`px-3 py-1 text-sm rounded ${priceDisplaySide === 'price2' ? 'bg-emerald-500/20 text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                       {symbolNames.s2}
-                     </button>
+                   <div className="flex items-center gap-4">
+                     <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-700">
+                       <button onClick={() => setPriceDisplaySide('price1')} className={`px-3 py-1 text-sm rounded ${priceDisplaySide === 'price1' ? 'bg-emerald-500/20 text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                         {symbolNames.s1}
+                       </button>
+                       <div className="w-px h-4 bg-slate-700"></div>
+                       <button onClick={() => setPriceDisplaySide('price2')} className={`px-3 py-1 text-sm rounded ${priceDisplaySide === 'price2' ? 'bg-emerald-500/20 text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                         {symbolNames.s2}
+                       </button>
+                     </div>
                    </div>
                 </div>
 
-                <div className="p-4 space-y-2">
+                {/* Chart Area with Padding Left (8px) for Axis Labels */}
+                <div className="p-4 pl-2 space-y-2">
                    {/* 1. Price Chart */}
-                   <div className="h-[350px]">
+                   <div className="h-[350px] relative transition-all duration-300 ease-in-out">
                       <PriceChart 
                           data={chartData} 
                           dataKey={priceDisplaySide} 
@@ -408,27 +555,38 @@ export function CorrelationPage() {
                    </div>
 
                    {/* 2. Correlation Chart */}
-                   <div className="h-[180px] border-t border-slate-700/50 pt-2 relative">
-                      <div className="absolute top-2 left-2 text-[10px] bg-slate-900/80 px-2 py-1 rounded text-slate-400 z-10 pointer-events-none">ضریب همبستگی</div>
-                      <CorrelationChart 
-                          data={chartData} 
-                          syncId="unified-view"
-                          activeWindows={activeWindowConfigs}
-                      />
+                   <div className="border-t border-slate-700/50 pt-2 relative flex flex-col h-[200px]">
+                      <div className="relative bg-slate-800 w-full h-full">
+                        <ChartBackgroundLabel text="ضریب همبستگی" />
+                        <div className="relative z-10 w-full h-full">
+                            <CorrelationChart 
+                                data={chartData} 
+                                syncId="unified-view"
+                                activeWindows={activeWindowConfigs}
+                                showBrush={!isDistanceVisible}
+                                showXAxis={!isDistanceVisible}
+                            />
+                        </div>
+                      </div>
                    </div>
 
                    {/* 3. Distance Chart (Conditional) */}
-                   {(showDist1 || showDist2) && (
-                     <div className="h-[180px] border-t border-slate-700/50 pt-2 relative">
-                        <div className="absolute top-2 left-2 text-[10px] bg-slate-900/80 px-2 py-1 rounded text-slate-400 z-10 pointer-events-none">فاصله از میانگین (٪)</div>
-                        <DistanceChart
-                           data={chartData}
-                           syncId="unified-view"
-                           showSymbol1={showDist1}
-                           showSymbol2={showDist2}
-                           name1={symbolNames.s1}
-                           name2={symbolNames.s2}
-                        />
+                   {isDistanceVisible && (
+                     <div className="border-t border-slate-700/50 pt-2 relative flex flex-col h-[200px]">
+                        <div className="relative bg-slate-800 w-full h-full">
+                            <ChartBackgroundLabel text="فاصله از میانگین" />
+                            <div className="relative z-10 w-full h-full">
+                            <DistanceChart
+                                data={chartData}
+                                syncId="unified-view"
+                                showSymbol1={showDistS1}
+                                showSymbol2={showDistS2}
+                                name1={symbolNames.s1}
+                                name2={symbolNames.s2}
+                                showBrush={true}
+                            />
+                            </div>
+                        </div>
                      </div>
                    )}
                 </div>

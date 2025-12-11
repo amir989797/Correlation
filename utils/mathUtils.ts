@@ -1,4 +1,3 @@
-
 import { TsetmcDataPoint, MergedDataPoint, ChartDataPoint } from '../types';
 
 /**
@@ -68,7 +67,7 @@ export const alignDataByDate = (data1: TsetmcDataPoint[], data2: TsetmcDataPoint
 };
 
 /**
- * Calculates Pearson Correlation Coefficient for a set of pairs
+ * Calculates Pearson Correlation Coefficient
  */
 const calculatePearson = (x: number[], y: number[]): number => {
   const n = x.length;
@@ -87,18 +86,6 @@ const calculatePearson = (x: number[], y: number[]): number => {
 
   if (denominator === 0) return 0;
   return numerator / denominator;
-};
-
-/**
- * Helper to calculate SMA for a specific index and window
- */
-const calculateSMA = (data: number[], index: number, window: number): number | null => {
-  if (index < window - 1) return null;
-  let sum = 0;
-  for (let i = 0; i < window; i++) {
-    sum += data[index - i];
-  }
-  return sum / window;
 };
 
 /**
@@ -124,65 +111,89 @@ const toShamsi = (gregorianDate: string): string => {
 };
 
 /**
- * Calculates rolling correlations for multiple window sizes and MAs (MA100, MA200)
+ * Helper to calculate SMA for full history.
+ * Returns a Map of Date -> SMA Value
  */
-export const calculateRollingCorrelations = (mergedData: MergedDataPoint[], windowSizes: number[]): ChartDataPoint[] => {
+const calculateFullHistorySMA = (data: TsetmcDataPoint[], window: number): Map<string, number> => {
+    const map = new Map<string, number>();
+    const prices = data.map(d => d.close);
+    
+    for (let i = window - 1; i < data.length; i++) {
+        let sum = 0;
+        for (let j = 0; j < window; j++) {
+            sum += prices[i - j];
+        }
+        map.set(data[i].date, sum / window);
+    }
+    return map;
+};
+
+/**
+ * Generates Chart Data using Full History for accurate Indicators (MA)
+ * and Aligned History for Correlation.
+ */
+export const generateAnalysisData = (
+  d1: TsetmcDataPoint[], 
+  d2: TsetmcDataPoint[], 
+  windowSizes: number[]
+): ChartDataPoint[] => {
+  // 1. Calculate MAs on full history to avoid gaps affecting the average
+  const ma100_1 = calculateFullHistorySMA(d1, 100);
+  const ma200_1 = calculateFullHistorySMA(d1, 200);
+  const ma100_2 = calculateFullHistorySMA(d2, 100);
+  const ma200_2 = calculateFullHistorySMA(d2, 200);
+
+  // 2. Align Data (Intersection)
+  const merged = alignDataByDate(d1, d2);
   const results: ChartDataPoint[] = [];
 
-  // Extract full price arrays for easier SMA calculation
-  const prices1 = mergedData.map(d => d.price1);
-  const prices2 = mergedData.map(d => d.price2);
+  const mergedPrices1 = merged.map(d => d.price1);
+  const mergedPrices2 = merged.map(d => d.price2);
 
-  for (let i = 0; i < mergedData.length; i++) {
-    const currentDayData = mergedData[i];
-    const rawDate = currentDayData.date;
-    
-    // Calculate correct timestamp from Gregorian date
+  for (let i = 0; i < merged.length; i++) {
+    const currentDay = merged[i];
+    const rawDate = currentDay.date;
+
+    // Helper for timestamp
     const gy = parseInt(rawDate.slice(0, 4));
     const gm = parseInt(rawDate.slice(4, 6)) - 1;
     const gd = parseInt(rawDate.slice(6, 8));
     const timestamp = new Date(gy, gm, gd).getTime();
+    
+    // Get Pre-calculated MAs
+    const m1_100 = ma100_1.get(rawDate) ?? null;
+    const m1_200 = ma200_1.get(rawDate) ?? null;
+    const m2_100 = ma100_2.get(rawDate) ?? null;
+    const m2_200 = ma200_2.get(rawDate) ?? null;
 
-    const formattedDate = toShamsi(rawDate);
-
-    // Calculate MA100
-    const ma100_1 = calculateSMA(prices1, i, 100);
-    const ma100_2 = calculateSMA(prices2, i, 100);
-
-    // Calculate MA200
-    const ma200_1 = calculateSMA(prices1, i, 200);
-    const ma200_2 = calculateSMA(prices2, i, 200);
-
-    // Calculate Distance from MA100 (%)
-    // Formula: ((Price - MA) / MA) * 100
-    const dist_ma100_1 = ma100_1 ? ((currentDayData.price1 - ma100_1) / ma100_1) * 100 : null;
-    const dist_ma100_2 = ma100_2 ? ((currentDayData.price2 - ma100_2) / ma100_2) * 100 : null;
+    // Calculate Distance %: ((Price - MA) / MA) * 100
+    // This will be negative if Price < MA, positive if Price > MA.
+    const dist_ma100_1 = m1_100 ? ((currentDay.price1 - m1_100) / m1_100) * 100 : null;
+    const dist_ma100_2 = m2_100 ? ((currentDay.price2 - m2_100) / m2_100) * 100 : null;
 
     const point: ChartDataPoint = {
-      date: formattedDate,
-      timestamp: timestamp,
-      price1: currentDayData.price1,
-      price2: currentDayData.price2,
-      ma100_price1: ma100_1,
-      ma100_price2: ma100_2,
-      ma200_price1: ma200_1,
-      ma200_price2: ma200_2,
-      dist_ma100_1: dist_ma100_1 ? parseFloat(dist_ma100_1.toFixed(2)) : null,
-      dist_ma100_2: dist_ma100_2 ? parseFloat(dist_ma100_2.toFixed(2)) : null,
+        date: toShamsi(rawDate),
+        timestamp,
+        price1: currentDay.price1,
+        price2: currentDay.price2,
+        ma100_price1: m1_100,
+        ma200_price1: m1_200,
+        ma100_price2: m2_100,
+        ma200_price2: m2_200,
+        dist_ma100_1: dist_ma100_1 !== null ? parseFloat(dist_ma100_1.toFixed(2)) : null,
+        dist_ma100_2: dist_ma100_2 !== null ? parseFloat(dist_ma100_2.toFixed(2)) : null,
     };
 
-    // Calculate correlation for each window size
+    // Calculate Correlations
     windowSizes.forEach(w => {
-      // We need at least 'w' data points ending at 'i'
-      if (i >= w - 1) {
-        const slice = mergedData.slice(i - w + 1, i + 1);
-        const x = slice.map(d => d.price1);
-        const y = slice.map(d => d.price2);
-        const correlation = calculatePearson(x, y);
-        point[`corr_${w}`] = parseFloat(correlation.toFixed(4));
-      } else {
-        point[`corr_${w}`] = null;
-      }
+        if (i >= w - 1) {
+            const slice1 = mergedPrices1.slice(i - w + 1, i + 1);
+            const slice2 = mergedPrices2.slice(i - w + 1, i + 1);
+            const corr = calculatePearson(slice1, slice2);
+            point[`corr_${w}`] = parseFloat(corr.toFixed(4));
+        } else {
+            point[`corr_${w}`] = null;
+        }
     });
 
     results.push(point);

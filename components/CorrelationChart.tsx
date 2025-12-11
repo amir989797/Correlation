@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   Line,
@@ -22,6 +23,8 @@ interface CorrelationChartProps {
   data: ChartDataPoint[];
   syncId?: string;
   activeWindows: WindowConfig[];
+  showBrush?: boolean;
+  showXAxis?: boolean;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -48,7 +51,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const CorrelationChart = React.memo<CorrelationChartProps>(({ data, syncId, activeWindows }) => {
+export const CorrelationChart = React.memo<CorrelationChartProps>(({ 
+  data, 
+  syncId, 
+  activeWindows, 
+  showBrush = true,
+  showXAxis = true 
+}) => {
   if (!data || data.length === 0) return null;
 
   return (
@@ -60,7 +69,7 @@ export const CorrelationChart = React.memo<CorrelationChartProps>(({ data, syncI
           margin={{
             top: 5,
             right: 30,
-            left: 20,
+            left: 0,
             bottom: 5,
           }}
         >
@@ -69,8 +78,11 @@ export const CorrelationChart = React.memo<CorrelationChartProps>(({ data, syncI
           <XAxis 
             dataKey="date" 
             stroke="#94a3b8" 
-            tick={{ fill: '#94a3b8', fontSize: 12 }}
+            tick={showXAxis ? { fill: '#94a3b8', fontSize: 12 } : false}
+            tickFormatter={showXAxis ? undefined : () => ''}
+            height={showXAxis ? 30 : 0}
             minTickGap={50}
+            axisLine={showXAxis}
           />
           
           <YAxis 
@@ -98,14 +110,16 @@ export const CorrelationChart = React.memo<CorrelationChartProps>(({ data, syncI
              />
           ))}
 
-          <Brush 
-            dataKey="date" 
-            height={30} 
-            stroke="#475569" 
-            fill="#1e293b" 
-            tickFormatter={() => ''}
-            travellerWidth={10}
-          />
+          {showBrush && (
+            <Brush 
+              dataKey="date" 
+              height={30} 
+              stroke="#475569" 
+              fill="#1e293b" 
+              tickFormatter={() => ''}
+              travellerWidth={10}
+            />
+          )}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
