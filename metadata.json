@@ -1,0 +1,5 @@
+{
+  "name": "TSETMC Correlation Analyzer",
+  "description": "An interactive tool to calculate and visualize the rolling historical correlation between two Tehran Stock Exchange (TSETMC) symbols.",
+  "requestFramePermissions": []
+}
