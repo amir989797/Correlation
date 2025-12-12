@@ -7,11 +7,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true, // Listen on 0.0.0.0
-    port: 3000
+    port: 80
   },
   preview: {
     host: true, // Listen on 0.0.0.0
-    port: 3000
+    port: 80
   },
   build: {
     chunkSizeWarningLimit: 1000,
