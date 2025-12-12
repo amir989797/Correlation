@@ -231,6 +231,7 @@ export function RatioPage() {
 
   // Settings
   const [showCorrelation, setShowCorrelation] = useState(false);
+  const [selectedWindows, setSelectedWindows] = useState<number[]>([30, 60, 90]);
   const [showDistance, setShowDistance] = useState(false);
   const [showMa100, setShowMa100] = useState(false);
   const [showMa200, setShowMa200] = useState(false);
@@ -240,9 +241,11 @@ export function RatioPage() {
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [names, setNames] = useState<{s1: string, s2: string}>({ s1: 'صورت', s2: 'مخرج' });
 
+  // Calculate all windows regardless of selection so toggling is fast
   const processData = (d1: TsetmcDataPoint[], d2: TsetmcDataPoint[]) => {
       try {
-          const data = generateRatioAnalysisData(d1, d2, [30, 60, 90]);
+          const allWindows = WINDOW_OPTIONS.map(w => w.val);
+          const data = generateRatioAnalysisData(d1, d2, allWindows);
           if (data.length < 10) throw new Error('داده‌های مشترک کافی برای محاسبه وجود ندارد.');
           setChartData(data);
           setStatus(FetchStatus.SUCCESS);
@@ -301,6 +304,26 @@ export function RatioPage() {
       }
   };
 
+  const handleWindowChange = (val: number, checked: boolean) => {
+      if (checked) {
+          setSelectedWindows(prev => [...prev, val].sort((a,b) => a - b));
+      } else {
+          setSelectedWindows(prev => prev.filter(w => w !== val));
+      }
+  };
+
+  const activeWindowConfigs = useMemo(() => {
+    return WINDOW_OPTIONS.filter(opt => selectedWindows.includes(opt.val));
+  }, [selectedWindows]);
+
+  // Determine which chart gets the Brush (time navigation)
+  const showDistBrush = showDistance;
+  const showCorrBrush = showCorrelation && !showDistance;
+  const showPriceBrush = !showCorrelation && !showDistance;
+
+  // X Axis Logic for Correlation
+  const showCorrAxis = !showDistance; 
+
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8 animate-fade-in pb-12">
         <header className="mb-6">
@@ -334,15 +357,38 @@ export function RatioPage() {
                  </div>
                  <div>
                     <label className="block text-sm font-medium text-slate-400 mb-2">نمودارهای کمکی</label>
-                    <div className="flex gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" checked={showCorrelation} onChange={(e) => setShowCorrelation(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-cyan-500"/>
-                            <span className={`text-sm ${showCorrelation ? 'text-cyan-400' : 'text-slate-500'}`}>همبستگی نمادها</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" checked={showDistance} onChange={(e) => setShowDistance(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-cyan-500"/>
-                            <span className={`text-sm ${showDistance ? 'text-cyan-400' : 'text-slate-500'}`}>فاصله از میانگین</span>
-                        </label>
+                    <div className="space-y-3">
+                        {/* helper charts checkboxes */}
+                        <div className="flex gap-4 flex-wrap">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={showCorrelation} onChange={(e) => setShowCorrelation(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-cyan-500"/>
+                                <span className={`text-sm ${showCorrelation ? 'text-cyan-400' : 'text-slate-500'}`}>همبستگی نمادها</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={showDistance} onChange={(e) => setShowDistance(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-cyan-500"/>
+                                <span className={`text-sm ${showDistance ? 'text-cyan-400' : 'text-slate-500'}`}>فاصله از میانگین</span>
+                            </label>
+                        </div>
+
+                        {/* Conditional Window Selection for Correlation */}
+                        <div className={`transition-all duration-300 overflow-hidden ${showCorrelation ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
+                            <div className="p-3 bg-slate-800 rounded border border-slate-700 flex flex-col gap-2">
+                                <span className="text-[10px] text-slate-400">بازه‌های همبستگی:</span>
+                                <div className="flex gap-4">
+                                    {WINDOW_OPTIONS.map(opt => (
+                                        <label key={opt.val} className="flex items-center gap-1.5 cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedWindows.includes(opt.val)} 
+                                                onChange={(e) => handleWindowChange(opt.val, e.target.checked)} 
+                                                className="h-3.5 w-3.5 rounded bg-slate-700 border-slate-500 text-cyan-500"
+                                            />
+                                            <span className={`text-xs ${selectedWindows.includes(opt.val) ? 'text-slate-200' : 'text-slate-500'}`}>{opt.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                  </div>
             </div>
@@ -372,57 +418,68 @@ export function RatioPage() {
 
         {status === FetchStatus.SUCCESS && chartData.length > 0 && (
             <div className="space-y-8 animate-fade-in">
-                 {/* Main Ratio Chart */}
+                 
+                 {/* UNIFIED CHART CONTAINER */}
                  <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-2xl">
                      <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
                          <h3 className="font-bold text-slate-200">نمودار نسبت <span className="text-amber-500 text-sm mx-2">({names.s1} / {names.s2})</span></h3>
                      </div>
-                     <div className="p-4 h-[400px]">
-                         <PriceChart 
-                            data={chartData}
-                            dataKey="ratio"
-                            color="#fbbf24" // Amber/Gold for Ratio
-                            showMa100={showMa100}
-                            showMa200={showMa200}
-                            label="نسبت"
-                            syncId="ratio-view"
-                         />
-                     </div>
-                 </div>
-
-                 {/* Optional Correlation Chart */}
-                 {showCorrelation && (
-                     <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-2xl relative h-[250px]">
-                        <ChartBackgroundLabel text="همبستگی" />
-                        <div className="relative z-10 w-full h-full p-4">
-                             <CorrelationChart 
-                                data={chartData} 
-                                syncId="ratio-view" 
-                                activeWindows={WINDOW_OPTIONS} 
-                                showXAxis={false}
-                                showBrush={false}
-                             />
-                        </div>
-                     </div>
-                 )}
-
-                 {/* Optional Distance Chart */}
-                 {showDistance && (
-                    <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-2xl relative h-[250px]">
-                        <ChartBackgroundLabel text="فاصله از میانگین" />
-                        <div className="relative z-10 w-full h-full p-4">
-                            <DistanceChart 
-                                data={chartData.map(d => ({ ...d, dist_ma100_1: d.dist_ma100_ratio }))}
+                     
+                     <div className="p-4 pl-2 pb-10 space-y-8">
+                        {/* Main Ratio Chart */}
+                        <div className="h-[400px]">
+                            <PriceChart 
+                                data={chartData}
+                                dataKey="ratio"
+                                color="#fbbf24" // Amber/Gold for Ratio
+                                showMa100={showMa100}
+                                showMa200={showMa200}
+                                label="نسبت"
                                 syncId="ratio-view"
-                                showSymbol1={true}
-                                showSymbol2={false}
-                                name1="نسبت"
-                                name2=""
-                                showBrush={false}
+                                showBrush={showPriceBrush}
+                                showXAxis={showPriceBrush}
                             />
                         </div>
-                    </div>
-                 )}
+
+                        {/* Optional Correlation Chart */}
+                        {showCorrelation && (
+                            <div className="border-t border-slate-700/50 pt-6 relative flex flex-col h-[200px]">
+                                <div className="relative bg-slate-800 w-full h-full">
+                                    <ChartBackgroundLabel text="همبستگی" />
+                                    <div className="relative z-10 w-full h-full">
+                                        <CorrelationChart 
+                                            data={chartData} 
+                                            syncId="ratio-view" 
+                                            activeWindows={activeWindowConfigs} 
+                                            showXAxis={showCorrAxis}
+                                            showBrush={showCorrBrush}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Optional Distance Chart */}
+                        {showDistance && (
+                            <div className="border-t border-slate-700/50 pt-6 relative flex flex-col h-[200px]">
+                                <div className="relative bg-slate-800 w-full h-full">
+                                    <ChartBackgroundLabel text="فاصله از میانگین" />
+                                    <div className="relative z-10 w-full h-full">
+                                        <DistanceChart 
+                                            data={chartData.map(d => ({ ...d, dist_ma100_1: d.dist_ma100_ratio }))}
+                                            syncId="ratio-view"
+                                            showSymbol1={true}
+                                            showSymbol2={false}
+                                            name1="نسبت"
+                                            name2=""
+                                            showBrush={showDistBrush}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                     </div>
+                 </div>
             </div>
         )}
     </div>

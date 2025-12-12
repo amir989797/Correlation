@@ -115,7 +115,7 @@ export const toShamsi = (gregorianDate: string): string => {
  * Helper to calculate SMA for full history.
  * Returns a Map of Date -> SMA Value
  */
-const calculateFullHistorySMA = (data: TsetmcDataPoint[], window: number): Map<string, number> => {
+export const calculateFullHistorySMA = (data: TsetmcDataPoint[], window: number): Map<string, number> => {
     const map = new Map<string, number>();
     const prices = data.map(d => d.close);
     

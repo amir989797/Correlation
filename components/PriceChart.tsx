@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import {
   ComposedChart,
@@ -9,7 +8,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer
+  ResponsiveContainer,
+  Brush
 } from 'recharts';
 import { ChartDataPoint } from '../types';
 
@@ -21,6 +21,8 @@ interface PriceChartProps {
   showMa100?: boolean;
   showMa200?: boolean;
   label?: string;
+  showBrush?: boolean;
+  showXAxis?: boolean;
 }
 
 const CustomTooltip = ({ active, payload, label, labelText }: any) => {
@@ -104,7 +106,9 @@ export const PriceChart: React.FC<PriceChartProps> = ({
   color = "#10b981", 
   showMa100 = false,
   showMa200 = false,
-  label = "قیمت"
+  label = "قیمت",
+  showBrush = false,
+  showXAxis = false
 }) => {
   if (!data || data.length === 0) return null;
 
@@ -112,7 +116,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({
   const ma200Key = `ma200_${dataKey}`;
 
   return (
-    <div className="w-full h-[400px]">
+    <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={data}
@@ -135,9 +139,11 @@ export const PriceChart: React.FC<PriceChartProps> = ({
           <XAxis 
             dataKey="date" 
             stroke="#94a3b8" 
-            tick={false}
-            axisLine={false}
-            height={0}
+            tick={showXAxis ? { fill: '#94a3b8', fontSize: 12 } : false}
+            tickFormatter={showXAxis ? undefined : () => ''}
+            axisLine={showXAxis}
+            height={showXAxis ? 30 : 0}
+            minTickGap={50}
           />
           
           <YAxis 
@@ -185,6 +191,17 @@ export const PriceChart: React.FC<PriceChartProps> = ({
               activeDot={{ r: 4, fill: '#fb923c', stroke: '#fff', strokeWidth: 2 }}
               name="MA200"
               connectNulls
+            />
+          )}
+          
+          {showBrush && (
+            <Brush 
+              dataKey="date" 
+              height={30} 
+              stroke="#475569" 
+              fill="#1e293b" 
+              tickFormatter={() => ''}
+              travellerWidth={10}
             />
           )}
 

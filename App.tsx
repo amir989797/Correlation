@@ -1,11 +1,11 @@
 
-
 import React from 'react';
-import { LineChart, Zap, Home, Scale } from 'lucide-react';
+import { LineChart, Zap, Home, Scale, Briefcase } from 'lucide-react';
 import { HomePage } from './pages/HomePage';
 import { CorrelationPage } from './pages/CorrelationPage';
 import { SignalPage } from './pages/SignalPage';
 import { RatioPage } from './pages/RatioPage';
+import { PortfolioPage } from './pages/PortfolioPage';
 import { Router, Routes, Route, useLocation, useRouter } from './router';
 
 function Sidebar() {
@@ -16,6 +16,7 @@ function Sidebar() {
     { path: '/', label: 'خانه', icon: Home },
     { path: '/correlation', label: 'همبستگی', icon: LineChart },
     { path: '/ratio', label: 'نسبت', icon: Scale },
+    { path: '/portfolio', label: 'پرتفوی', icon: Briefcase },
     { path: '/signal', label: 'سیگنال', icon: Zap },
   ];
 
@@ -82,6 +83,7 @@ export function App() {
                <Route path="/" element={<HomePage />} />
                <Route path="/correlation" element={<CorrelationPage />} />
                <Route path="/ratio" element={<RatioPage />} />
+               <Route path="/portfolio" element={<PortfolioPage />} />
                <Route path="/signal" element={<SignalPage />} />
              </Routes>
           </div>
