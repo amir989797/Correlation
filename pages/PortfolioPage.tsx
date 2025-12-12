@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
 import { calculateFullHistorySMA, toShamsi } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
-import { Search, Loader2, PieChart, Info, X } from 'lucide-react';
+import { Search, Loader2, PieChart, Info, X, Calendar, Clock } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -112,10 +112,28 @@ interface Allocation {
   fill: string;
 }
 
+type DateMode = 'current' | 'custom';
+
+// Helper for pie chart label positioning
+const RADIAN = Math.PI / 180;
+const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" className="text-sm font-bold drop-shadow-md">
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
 export function PortfolioPage() {
   const [symbol, setSymbol] = useState<SearchResult | null>(null);
-  const [useToday, setUseToday] = useState(true);
-  const [customDate, setCustomDate] = useState('');
+  
+  // Date State
+  const [dateMode, setDateMode] = useState<DateMode>('current');
+  const [customDate, setCustomDate] = useState(''); // YYYY-MM-DD from input
   
   const [status, setStatus] = useState<FetchStatus>(FetchStatus.IDLE);
   const [error, setError] = useState<string | null>(null);
@@ -134,15 +152,15 @@ export function PortfolioPage() {
       return;
     }
     
-    // Date Validation for custom date
-    let targetDateInt = 0;
-    if (!useToday) {
-      if (!customDate || customDate.length !== 8) {
-         setError('لطفا تاریخ را به صورت صحیح وارد کنید (مثلا 14021201)'); // Persian input hint, but API needs YYYYMMDD (Gregorian typically from API, but user might input Shamsi? Assuming User knows API format for now or simple Gregorian YYYYMMDD as per mathUtils)
-         // Actually, TSETMC data usually comes in Gregorian YYYYMMDD.
-         // Let's assume standard input for now.
+    // Date Validation
+    let formattedCustomDate = '';
+    if (dateMode === 'custom') {
+      if (!customDate) {
+         setError('لطفا تاریخ را انتخاب کنید.');
+         return;
       }
-      targetDateInt = parseInt(customDate);
+      // HTML date input gives YYYY-MM-DD, API expects YYYYMMDD
+      formattedCustomDate = customDate.replace(/-/g, '');
     }
 
     setStatus(FetchStatus.LOADING);
@@ -160,16 +178,12 @@ export function PortfolioPage() {
       // Find the specific date point
       let selectedPoint: TsetmcDataPoint | undefined;
       
-      if (useToday) {
+      if (dateMode === 'current') {
         selectedPoint = data[data.length - 1];
       } else {
-        // Find exact date or closest previous date
-        // Input `customDate` expected to match TSETMC format (YYYYMMDD)
-        // If user enters Shamsi, this will fail. Assuming user knows to enter API format or we just take YYYYMMDD.
-        // For simplicity in this demo, exact match on the string provided.
-        selectedPoint = data.find(d => d.date === customDate);
+        selectedPoint = data.find(d => d.date === formattedCustomDate);
         if (!selectedPoint) {
-           throw new Error('تاریخ مورد نظر در سابقه معاملات یافت نشد.');
+           throw new Error('تاریخ انتخاب شده در سابقه معاملات این نماد یافت نشد (روز تعطیل یا بدون معامله).');
         }
       }
 
@@ -206,42 +220,6 @@ export function PortfolioPage() {
     }
   };
 
-  const renderActiveShape = (props: any) => {
-    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
-    return (
-      <g>
-        <text x={cx} y={cy} dy={-10} textAnchor="middle" fill="#fff" className="text-lg font-bold">
-          {payload.name}
-        </text>
-        <text x={cx} y={cy} dy={15} textAnchor="middle" fill="#94a3b8" className="text-sm">
-          {`${(percent * 100).toFixed(0)}%`}
-        </text>
-        <Sector
-          cx={cx}
-          cy={cy}
-          innerRadius={innerRadius}
-          outerRadius={outerRadius + 6}
-          startAngle={startAngle}
-          endAngle={endAngle}
-          fill={fill}
-        />
-        <Sector
-          cx={cx}
-          cy={cy}
-          startAngle={startAngle}
-          endAngle={endAngle}
-          innerRadius={innerRadius + 4}
-          outerRadius={outerRadius + 8}
-          fill={fill}
-          fillOpacity={0.3}
-        />
-      </g>
-    );
-  };
-  
-  // Custom Sector needed for active shape? Recharts imports needed.
-  // Actually simpler just to use standard label or tooltip.
-  
   return (
     <div className="w-full max-w-6xl mx-auto space-y-8 animate-fade-in pb-12">
        <header className="mb-6">
@@ -259,32 +237,49 @@ export function PortfolioPage() {
                    تنظیمات ورودی
                 </h3>
                 
-                <div className="space-y-5">
+                <div className="space-y-6">
                    <SearchInput label="انتخاب نماد بورسی" value={symbol} onSelect={setSymbol} />
                    
                    <div>
-                      <label className="block text-sm font-medium text-slate-400 mb-2">تاریخ مبنای تحلیل</label>
-                      <div className="flex items-center gap-3 mb-2">
-                         <input 
-                           type="checkbox" 
-                           id="useToday" 
-                           checked={useToday} 
-                           onChange={(e) => setUseToday(e.target.checked)}
-                           className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500"
-                         />
-                         <label htmlFor="useToday" className="text-sm text-slate-300 cursor-pointer">آخرین روز معاملاتی (حال)</label>
+                      <label className="block text-sm font-medium text-slate-400 mb-3">تاریخ مبنای تحلیل</label>
+                      
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                          <label className={`cursor-pointer rounded-xl border p-3 flex flex-col items-center gap-2 transition-all ${dateMode === 'current' ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-600'}`}>
+                              <input 
+                                type="radio" 
+                                name="dateMode" 
+                                value="current" 
+                                checked={dateMode === 'current'} 
+                                onChange={() => setDateMode('current')}
+                                className="hidden"
+                              />
+                              <Clock className="w-6 h-6" />
+                              <span className="text-sm font-bold">زمان حال</span>
+                          </label>
+
+                          <label className={`cursor-pointer rounded-xl border p-3 flex flex-col items-center gap-2 transition-all ${dateMode === 'custom' ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-600'}`}>
+                              <input 
+                                type="radio" 
+                                name="dateMode" 
+                                value="custom" 
+                                checked={dateMode === 'custom'} 
+                                onChange={() => setDateMode('custom')}
+                                className="hidden"
+                              />
+                              <Calendar className="w-6 h-6" />
+                              <span className="text-sm font-bold">تاریخ سفارشی</span>
+                          </label>
                       </div>
                       
-                      {!useToday && (
+                      {/* Date Input with simple slide down animation logic */}
+                      <div className={`overflow-hidden transition-all duration-300 ${dateMode === 'custom' ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
                          <input 
-                           type="text" 
-                           placeholder="مثال: 20240215 (میلادی)" 
+                           type="date" 
                            value={customDate}
                            onChange={(e) => setCustomDate(e.target.value)}
-                           className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white text-sm focus:border-cyan-500 outline-none transition-colors"
-                           dir="ltr"
+                           className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm focus:border-cyan-500 outline-none transition-colors"
                          />
-                      )}
+                      </div>
                    </div>
 
                    <button 
@@ -356,8 +351,10 @@ export function PortfolioPage() {
                                   data={allocation}
                                   cx="50%"
                                   cy="50%"
+                                  labelLine={false}
+                                  label={renderCustomizedLabel}
                                   innerRadius={80}
-                                  outerRadius={120}
+                                  outerRadius={130}
                                   paddingAngle={5}
                                   dataKey="value"
                                   stroke="none"
@@ -412,5 +409,3 @@ export function PortfolioPage() {
     </div>
   );
 }
-// Helper for custom sector if needed, but standard Recharts shapes work well.
-const Sector = (props: any) => { return <path {...props} /> }; 
