@@ -1,9 +1,7 @@
-
 import { TsetmcDataPoint, SearchResult } from '../types';
 
-// نکته: اگر سرور پایتون روی پورت دیگری است یا از Ngrok استفاده می‌کنید، اینجا را تغییر دهید.
-// اگر مرورگر شما روی یک سیستم است و سرور پایتون روی سیستمی دیگر، باید به جای localhost آی‌پی سرور را بزنید.
-const API_BASE_URL = 'http://localhost:8000/api';
+// Updated API URL to point to the server IP
+const API_BASE_URL = 'http://109.94.164.70:8000/api';
 
 /**
  * Searches for symbols via the backend API.
