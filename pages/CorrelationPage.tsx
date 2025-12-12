@@ -640,9 +640,10 @@ export function CorrelationPage() {
                 </div>
 
                 {/* Chart Area with Padding Left (8px) for Axis Labels */}
-                <div className="p-4 pl-2 space-y-6">
+                {/* Added pb-10 and space-y-8 for margin from bottom and separation */}
+                <div className="p-4 pl-2 pb-10 space-y-8">
                    {/* 1. Price Chart */}
-                   <div className="h-[350px] relative transition-all duration-300 ease-in-out mb-4">
+                   <div className="h-[350px] relative transition-all duration-300 ease-in-out">
                       <PriceChart 
                           data={chartData} 
                           dataKey={priceDisplaySide} 
