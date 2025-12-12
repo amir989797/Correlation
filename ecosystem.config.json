@@ -10,7 +10,7 @@
       }
     },
     {
-      "name": "tsetmc-web",
+      "name": "tsetmc-app",
       "script": "npm",
       "args": "run preview",
       "env": {
