@@ -32,7 +32,9 @@ export const searchSymbols = async (query: string): Promise<SearchResult[]> => {
  */
 export const fetchStockHistory = async (symbol: string): Promise<{ data: TsetmcDataPoint[], name: string }> => {
   try {
-    const url = `${API_BASE_URL}/history/${encodeURIComponent(symbol)}`;
+    // Request a large limit to get full history for accurate long-term correlation
+    // The backend defaults to 365 if limit is not specified.
+    const url = `${API_BASE_URL}/history/${encodeURIComponent(symbol)}?limit=10000`;
     const response = await fetch(url);
     
     if (!response.ok) {
@@ -48,7 +50,7 @@ export const fetchStockHistory = async (symbol: string): Promise<{ data: TsetmcD
 
     // Map API response to TsetmcDataPoint
     const data: TsetmcDataPoint[] = json.map((item: any) => ({
-      date: item.date, // Backend normalizes this to string YYYYMMDD
+      date: item.date, // Backend provides YYYYMMDD string
       close: item.close
     }));
 
