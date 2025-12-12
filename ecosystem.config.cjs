@@ -1,0 +1,20 @@
+module.exports = {
+  apps: [
+    {
+      name: "tsetmc-api",
+      script: "./server.js",
+      env: {
+        NODE_ENV: "production",
+        PORT: 8000
+      }
+    },
+    {
+      name: "tsetmc-app",
+      script: "npm",
+      args: "run preview",
+      env: {
+        PORT: 3000
+      }
+    }
+  ]
+};
