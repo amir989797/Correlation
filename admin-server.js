@@ -56,6 +56,24 @@ const requireAuth = (req, res, next) => {
   }
 };
 
+// Helper: Sync Symbols Table
+const syncSymbolsTable = async () => {
+  const client = await pool.connect();
+  try {
+    const insertQuery = `
+      INSERT INTO symbols (symbol, name)
+      SELECT symbol, MAX(name) as name
+      FROM daily_prices
+      GROUP BY symbol
+      ON CONFLICT (symbol) DO NOTHING;
+    `;
+    const res = await client.query(insertQuery);
+    return res.rowCount;
+  } finally {
+    client.release();
+  }
+};
+
 // Serve Static Dashboard
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin-dashboard.html'));
@@ -131,10 +149,28 @@ app.post('/api/update', requireAuth, (req, res) => {
     lastUpdateLog += `\n[ERROR]: ${data.toString()}`;
   });
 
-  pythonProcess.on('close', (code) => {
+  pythonProcess.on('close', async (code) => {
     console.log(`Python script exited with code ${code}`);
-    isUpdating = false;
-    lastUpdateLog += `\n✅ عملیات با کد ${code} پایان یافت.`;
+    
+    if (code === 0) {
+        lastUpdateLog += `\n✅ دریافت دیتا با موفقیت انجام شد.`;
+        lastUpdateLog += `\n🔄 در حال بروزرسانی لیست نمادها برای جستجو...`;
+        
+        try {
+            const count = await syncSymbolsTable();
+            lastUpdateLog += `\n✨ لیست نمادها بروز شد. (${count} نماد جدید اضافه شد)`;
+        } catch (err) {
+            console.error("Symbol sync failed:", err);
+            lastUpdateLog += `\n❌ خطا در بروزرسانی جدول نمادها: ${err.message}`;
+        }
+    } else {
+        lastUpdateLog += `\n❌ عملیات با کد خطا (${code}) متوقف شد.`;
+    }
+
+    // Delay setting isUpdating to false slightly to ensure logs are sent
+    setTimeout(() => {
+        isUpdating = false;
+    }, 1000);
   });
 
   res.json({ message: 'دستور آپدیت به سرور ارسال شد.', status: 'started' });

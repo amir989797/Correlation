@@ -1,3 +1,4 @@
+
 import { TsetmcDataPoint, MergedDataPoint, ChartDataPoint } from '../types';
 
 /**
@@ -91,7 +92,7 @@ const calculatePearson = (x: number[], y: number[]): number => {
 /**
  * Converts YYYYMMDD string to Shamsi date string (YYYY/MM/DD)
  */
-const toShamsi = (gregorianDate: string): string => {
+export const toShamsi = (gregorianDate: string): string => {
   try {
     const year = parseInt(gregorianDate.substring(0, 4));
     const month = parseInt(gregorianDate.substring(4, 6)) - 1;
@@ -201,3 +202,85 @@ export const generateAnalysisData = (
 
   return results;
 };
+
+/**
+ * Generates Data specifically for Ratio Analysis (Price1 / Price2)
+ */
+export const generateRatioAnalysisData = (
+    d1: TsetmcDataPoint[], 
+    d2: TsetmcDataPoint[], 
+    windowSizes: number[]
+  ): ChartDataPoint[] => {
+    // 1. Align Data first to calculate Ratio Series
+    const merged = alignDataByDate(d1, d2);
+    
+    if (merged.length === 0) return [];
+  
+    // 2. Create Ratio Series for MA calculation
+    // We treat the "ratio" as a "close price" to reuse calculateFullHistorySMA
+    const ratioSeries: TsetmcDataPoint[] = merged.map(m => ({
+      date: m.date,
+      close: m.price2 !== 0 ? m.price1 / m.price2 : 0
+    }));
+  
+    // 3. Calculate MAs on Ratio Series
+    const ma100_ratio = calculateFullHistorySMA(ratioSeries, 100);
+    const ma200_ratio = calculateFullHistorySMA(ratioSeries, 200);
+  
+    // 4. Prepare for Correlation (on raw prices)
+    const mergedPrices1 = merged.map(d => d.price1);
+    const mergedPrices2 = merged.map(d => d.price2);
+  
+    const results: ChartDataPoint[] = [];
+  
+    for (let i = 0; i < merged.length; i++) {
+      const m = merged[i];
+      const rawDate = m.date;
+      const ratio = ratioSeries[i].close;
+  
+      // Timestamp
+      const gy = parseInt(rawDate.slice(0, 4));
+      const gm = parseInt(rawDate.slice(4, 6)) - 1;
+      const gd = parseInt(rawDate.slice(6, 8));
+      const timestamp = new Date(gy, gm, gd).getTime();
+  
+      const m100 = ma100_ratio.get(rawDate) ?? null;
+      const m200 = ma200_ratio.get(rawDate) ?? null;
+  
+      // Distance of Ratio from its MA100
+      const dist_ma100 = m100 ? ((ratio - m100) / m100) * 100 : null;
+  
+      const point: ChartDataPoint = {
+          date: toShamsi(rawDate),
+          timestamp,
+          price1: m.price1, 
+          price2: m.price2,
+          ratio: ratio, 
+          ma100_ratio: m100,
+          ma200_ratio: m200,
+          dist_ma100_ratio: dist_ma100 !== null ? parseFloat(dist_ma100.toFixed(2)) : null,
+          
+          // Required by interface but unused in ratio view
+          ma100_price1: null,
+          ma100_price2: null,
+          ma200_price1: null,
+          ma200_price2: null
+      };
+  
+      // Calculate Correlations between the two symbols
+      windowSizes.forEach(w => {
+          if (i >= w - 1) {
+              const slice1 = mergedPrices1.slice(i - w + 1, i + 1);
+              const slice2 = mergedPrices2.slice(i - w + 1, i + 1);
+              const corr = calculatePearson(slice1, slice2);
+              point[`corr_${w}`] = parseFloat(corr.toFixed(4));
+          } else {
+              point[`corr_${w}`] = null;
+          }
+      });
+  
+      results.push(point);
+    }
+  
+    return results;
+  }
