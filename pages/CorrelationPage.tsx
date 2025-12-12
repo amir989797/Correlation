@@ -640,9 +640,9 @@ export function CorrelationPage() {
                 </div>
 
                 {/* Chart Area with Padding Left (8px) for Axis Labels */}
-                <div className="p-4 pl-2 space-y-2">
+                <div className="p-4 pl-2 space-y-6">
                    {/* 1. Price Chart */}
-                   <div className="h-[350px] relative transition-all duration-300 ease-in-out">
+                   <div className="h-[350px] relative transition-all duration-300 ease-in-out mb-4">
                       <PriceChart 
                           data={chartData} 
                           dataKey={priceDisplaySide} 
@@ -654,7 +654,7 @@ export function CorrelationPage() {
                    </div>
 
                    {/* 2. Correlation Chart */}
-                   <div className="border-t border-slate-700/50 pt-2 relative flex flex-col h-[200px]">
+                   <div className="border-t border-slate-700/50 pt-6 relative flex flex-col h-[200px]">
                       <div className="relative bg-slate-800 w-full h-full">
                         <ChartBackgroundLabel text="ضریب همبستگی" />
                         <div className="relative z-10 w-full h-full">
@@ -671,7 +671,7 @@ export function CorrelationPage() {
 
                    {/* 3. Distance Chart (Conditional) */}
                    {isDistanceVisible && (
-                     <div className="border-t border-slate-700/50 pt-2 relative flex flex-col h-[200px]">
+                     <div className="border-t border-slate-700/50 pt-6 relative flex flex-col h-[200px]">
                         <div className="relative bg-slate-800 w-full h-full">
                             <ChartBackgroundLabel text="فاصله از میانگین" />
                             <div className="relative z-10 w-full h-full">
