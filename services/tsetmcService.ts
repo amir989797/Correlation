@@ -1,3 +1,4 @@
+
 import { TsetmcDataPoint, SearchResult } from '../types';
 
 // Updated API URL to point to the server IP
@@ -14,13 +15,15 @@ export const searchSymbols = async (query: string): Promise<SearchResult[]> => {
     const response = await fetch(url);
     
     if (!response.ok) {
-        throw new Error(`Search Error: ${response.status}`);
+        // Try to read the error body if available
+        const errorText = await response.text();
+        console.error(`API Error (${response.status}):`, errorText);
+        throw new Error(`Server Error: ${response.status}`);
     }
     
     return await response.json();
   } catch (error) {
-    console.error('API Search Error:', error);
-    // Return empty array instead of throwing to prevent UI crash on typing
+    console.error('Search Request Failed:', error);
     return [];
   }
 };
@@ -30,13 +33,15 @@ export const searchSymbols = async (query: string): Promise<SearchResult[]> => {
  */
 export const fetchStockHistory = async (symbol: string): Promise<{ data: TsetmcDataPoint[], name: string }> => {
   try {
-    // Request a large limit to get full history for accurate long-term correlation
-    // The backend defaults to 365 if limit is not specified.
     const url = `${API_BASE_URL}/history/${encodeURIComponent(symbol)}?limit=10000`;
     const response = await fetch(url);
     
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`History Fetch Error (${response.status}):`, errorText);
+
       if (response.status === 404) throw new Error('نماد مورد نظر یافت نشد.');
+      if (response.status === 500) throw new Error('خطای پایگاه داده.');
       throw new Error(`خطای سرور: ${response.status}`);
     }
 
@@ -46,9 +51,8 @@ export const fetchStockHistory = async (symbol: string): Promise<{ data: TsetmcD
         throw new Error('داده‌ای برای این نماد یافت نشد.');
     }
 
-    // Map API response to TsetmcDataPoint
     const data: TsetmcDataPoint[] = json.map((item: any) => ({
-      date: item.date, // Backend provides YYYYMMDD string
+      date: item.date,
       close: item.close
     }));
 
@@ -59,9 +63,8 @@ export const fetchStockHistory = async (symbol: string): Promise<{ data: TsetmcD
 
   } catch (e: any) {
     console.error("Fetch History Failed:", e);
-    // Provide user-friendly error messages
     if (e.message.includes('Failed to fetch')) {
-        throw new Error('عدم دسترسی به سرور. لطفا از اجرای فایل main.py اطمینان حاصل کنید.');
+        throw new Error('عدم دسترسی به سرور. لطفا بررسی کنید که بک‌اند Node.js اجرا باشد.');
     }
     throw new Error(e.message || 'خطا در دریافت اطلاعات.');
   }
