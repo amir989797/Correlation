@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>پنل مدیریت TSETMC</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100;300;400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Vazirmatn', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <!-- LOGIN SECTION -->
+    <div id="login-section" class="w-full max-w-md bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-2xl">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500">پنل ادمین</h1>
+            <p class="text-slate-500 mt-2">لطفا وارد شوید</p>
+        </div>
+        <form id="login-form" class="space-y-4">
+            <div>
+                <label class="block text-sm text-slate-400 mb-1">نام کاربری</label>
+                <input type="text" id="username" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-orange-500 outline-none transition" dir="ltr">
+            </div>
+            <div>
+                <label class="block text-sm text-slate-400 mb-1">رمز عبور</label>
+                <input type="password" id="password" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-orange-500 outline-none transition" dir="ltr">
+            </div>
+            <button type="submit" class="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-bold py-3 rounded-lg transition shadow-lg">ورود</button>
+        </form>
+    </div>
+
+    <!-- DASHBOARD SECTION -->
+    <div id="dashboard-section" class="w-full max-w-4xl hidden space-y-6">
+        <header class="flex justify-between items-center bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+            <div>
+                <h1 class="text-2xl font-bold text-white">داشبورد مدیریت داده‌ها</h1>
+                <p class="text-slate-400 text-sm mt-1" id="path-info">...</p>
+            </div>
+            <button id="logout-btn" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition">خروج</button>
+        </header>
+
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- Stats Card -->
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -ml-12 -mt-12"></div>
+                <h3 class="text-slate-400 text-sm font-bold mb-4">وضعیت دیتابیس</h3>
+                
+                <div class="space-y-6">
+                    <div class="flex justify-between items-end border-b border-slate-700 pb-2">
+                        <span class="text-slate-300">تعداد نمادها</span>
+                        <span id="stat-count" class="text-3xl font-black text-cyan-400">...</span>
+                    </div>
+                    <div class="flex justify-between items-end border-b border-slate-700 pb-2">
+                        <span class="text-slate-300">آخرین تاریخ دیتا</span>
+                        <span id="stat-date" class="text-xl font-bold text-emerald-400" dir="ltr">...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Card -->
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-24 h-24 bg-orange-500/10 rounded-full blur-2xl -ml-12 -mt-12"></div>
+                <h3 class="text-slate-400 text-sm font-bold mb-4">عملیات بروزرسانی</h3>
+                
+                <p class="text-xs text-slate-500 mb-6 leading-5">
+                    با کلیک روی دکمه زیر، اسکریپت پایتون اجرا شده و اطلاعات جدید بازار دریافت می‌شود. این عملیات ممکن است زمان‌بر باشد.
+                </p>
+
+                <div class="flex flex-col gap-3">
+                    <button id="update-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
+                        <span id="btn-text">شروع آپدیت بازار</span>
+                        <div id="btn-loader" class="loader hidden"></div>
+                    </button>
+                    
+                    <div class="flex items-center gap-2 text-xs text-slate-400 justify-center">
+                        <span id="status-indicator" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                        <span id="status-text">آماده به کار</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Terminal -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 shadow-inner p-4 font-mono text-xs md:text-sm h-64 overflow-y-auto custom-scrollbar" dir="ltr" id="log-terminal">
+            <span class="text-slate-500">Waiting for logs...</span>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        let token = localStorage.getItem('admin_token');
+        let refreshInterval;
+
+        const loginSection = document.getElementById('login-section');
+        const dashboardSection = document.getElementById('dashboard-section');
+        const loginForm = document.getElementById('login-form');
+        const logTerminal = document.getElementById('log-terminal');
+
+        // Initial Check
+        if (token) {
+            showDashboard();
+        }
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+
+            try {
+                const res = await fetch(`${API_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: u, password: p })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    token = data.token;
+                    localStorage.setItem('admin_token', token);
+                    showDashboard();
+                } else {
+                    alert('نام کاربری یا رمز عبور اشتباه است');
+                }
+            } catch (err) {
+                alert('خطا در ارتباط با سرور');
+            }
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.removeItem('admin_token');
+            token = null;
+            clearInterval(refreshInterval);
+            loginSection.classList.remove('hidden');
+            dashboardSection.classList.add('hidden');
+        });
+
+        document.getElementById('update-btn').addEventListener('click', async () => {
+            if (!confirm('آیا مطمئن هستید؟ این عملیات سنگین است.')) return;
+            
+            try {
+                const res = await fetch(`${API_URL}/update`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) alert(data.message);
+                fetchStats(); // Update UI immediately
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        function showDashboard() {
+            loginSection.classList.add('hidden');
+            dashboardSection.classList.remove('hidden');
+            dashboardSection.classList.add('block');
+            fetchStats();
+            refreshInterval = setInterval(fetchStats, 5000);
+        }
+
+        async function fetchStats() {
+            try {
+                const res = await fetch(`${API_URL}/stats`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.status === 401 || res.status === 403) {
+                    document.getElementById('logout-btn').click();
+                    return;
+                }
+
+                const data = await res.json();
+
+                // Convert Date
+                let formattedDate = '-';
+                if (data.lastDate) {
+                    // Try to format nicely
+                    const d = new Date(data.lastDate);
+                    formattedDate = new Intl.DateTimeFormat('fa-IR').format(d) + ` (${data.lastDate.substring(0,10)})`;
+                }
+
+                document.getElementById('stat-count').innerText = new Intl.NumberFormat('fa-IR').format(data.symbolCount);
+                document.getElementById('stat-date').innerText = formattedDate;
+                document.getElementById('path-info').innerText = `مسیر اسکریپت: ${data.scriptPath} (${data.scriptExists ? 'یافت شد' : 'یافت نشد!'})`;
+                
+                // Update Button State
+                const btn = document.getElementById('update-btn');
+                const loader = document.getElementById('btn-loader');
+                const statusDot = document.getElementById('status-indicator');
+                const statusText = document.getElementById('status-text');
+
+                if (data.isUpdating) {
+                    btn.disabled = true;
+                    btn.classList.add('opacity-75');
+                    document.getElementById('btn-text').innerText = 'در حال اجرا...';
+                    loader.classList.remove('hidden');
+                    
+                    statusDot.classList.remove('bg-slate-500', 'bg-red-500');
+                    statusDot.classList.add('bg-green-500', 'animate-pulse');
+                    statusText.innerText = 'اسکریپت در حال اجراست';
+                    statusText.classList.add('text-green-400');
+                } else {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-75');
+                    document.getElementById('btn-text').innerText = 'شروع آپدیت بازار';
+                    loader.classList.add('hidden');
+                    
+                    statusDot.classList.remove('bg-green-500', 'animate-pulse', 'bg-red-500');
+                    statusDot.classList.add('bg-slate-500');
+                    statusText.innerText = 'آماده به کار';
+                    statusText.classList.remove('text-green-400');
+                }
+
+                // Update Logs
+                if (data.lastLog) {
+                    logTerminal.innerText = data.lastLog;
+                    logTerminal.scrollTop = logTerminal.scrollHeight;
+                }
+
+            } catch (err) {
+                console.error("Stats fetch error", err);
+            }
+        }
+    </script>
+</body>
+</html>

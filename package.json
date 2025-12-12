@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "start-api": "node server.js",
+    "start-admin": "node admin-server.js",
     "init-db": "node init-symbols.js"
   },
   "dependencies": {

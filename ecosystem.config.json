@@ -9,6 +9,14 @@
       }
     },
     {
+      "name": "tsetmc-admin",
+      "script": "./admin-server.js",
+      "env": {
+        "NODE_ENV": "production",
+        "PORT": 8080
+      }
+    },
+    {
       "name": "tsetmc-app",
       "script": "npm",
       "args": "run preview",
