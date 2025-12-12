@@ -20,34 +20,31 @@ app.use((req, res, next) => {
 
 // Database Config
 const dbConfig = {
-  user: process.env.DB_USER || 'postgres',
+  user: process.env.DB_USER || 'tseuser',
   host: process.env.DB_HOST || 'localhost',
   database: process.env.DB_NAME || 'tsetmc',
-  password: process.env.DB_PASSWORD || 'password',
+  password: process.env.DB_PASSWORD || 'YourStrongPass123',
   port: parseInt(process.env.DB_PORT || '5432'),
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
 };
 
-// Create Pool
 const pool = new Pool(dbConfig);
 
-// Initial Connection Test
+// Test Connection
 pool.connect().then(client => {
   console.log(`✅ Connected to PostgreSQL database at ${dbConfig.host}:${dbConfig.port}`);
   client.release();
 }).catch(err => {
-  console.error('❌ Failed to connect to database on startup:', err.message);
-  console.error('Check your .env file or DB credentials.');
+  console.error('❌ Failed to connect to database:', err.message);
 });
 
-// Root Endpoint (Health Check)
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'TSETMC Node.js API is running' });
 });
 
 /**
  * Search Endpoint
- * GET /api/search?q=symbol_name
+ * Searches in daily_prices using DISTINCT to get unique symbols.
  */
 app.get('/api/search', async (req, res) => {
   const { q } = req.query;
@@ -56,12 +53,13 @@ app.get('/api/search', async (req, res) => {
   let client;
   try {
     client = await pool.connect();
-    // Using ILIKE for case-insensitive search and explicit casting to text if needed
-    // Assuming table 'symbols' exists.
+    
+    // Using DISTINCT because daily_prices contains multiple entries per symbol
+    // Searching in both symbol and name columns
     const query = `
-      SELECT symbol, name 
-      FROM symbols 
-      WHERE symbol LIKE $1 OR name LIKE $1 
+      SELECT DISTINCT symbol, name 
+      FROM daily_prices 
+      WHERE symbol LIKE $1 OR name LIKE $1
       LIMIT 20
     `;
     const values = [`%${q}%`];
@@ -69,11 +67,7 @@ app.get('/api/search', async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error('❌ Search Error:', err);
-    res.status(500).json({ 
-      error: 'Database error', 
-      details: err.message,
-      hint: 'Ensure table "symbols" exists.' 
-    });
+    res.status(500).json({ error: 'Database error', details: err.message });
   } finally {
     if (client) client.release();
   }
@@ -81,18 +75,21 @@ app.get('/api/search', async (req, res) => {
 
 /**
  * History Endpoint
- * GET /api/history/:symbol
+ * Fetches history from daily_prices
  */
 app.get('/api/history/:symbol', async (req, res) => {
   const { symbol } = req.params;
-  const limit = parseInt(req.query.limit) || 365;
+  const limit = parseInt(req.query.limit) || 10000;
 
   let client;
   try {
     client = await pool.connect();
+    
+    // We format date as 'YYYYMMDD' (no dashes) because the frontend utils/mathUtils.ts
+    // parses dates using strict indices (slice(0,4), slice(4,6), slice(6,8)).
     const query = `
-      SELECT to_char(date, 'YYYYMMDD') as date, close 
-      FROM history 
+      SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
+      FROM daily_prices 
       WHERE symbol = $1 
       ORDER BY date ASC 
       LIMIT $2
@@ -101,7 +98,7 @@ app.get('/api/history/:symbol', async (req, res) => {
     const result = await client.query(query, values);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Symbol not found in history' });
+      return res.status(404).json({ error: 'Symbol not found' });
     }
 
     res.json(result.rows);
