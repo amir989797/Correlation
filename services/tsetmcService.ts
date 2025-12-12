@@ -1,6 +1,8 @@
 
 import { TsetmcDataPoint, SearchResult } from '../types';
 
+// نکته: اگر سرور پایتون روی پورت دیگری است یا از Ngrok استفاده می‌کنید، اینجا را تغییر دهید.
+// اگر مرورگر شما روی یک سیستم است و سرور پایتون روی سیستمی دیگر، باید به جای localhost آی‌پی سرور را بزنید.
 const API_BASE_URL = 'http://localhost:8000/api';
 
 /**
@@ -10,11 +12,17 @@ export const searchSymbols = async (query: string): Promise<SearchResult[]> => {
   if (!query || query.length < 2) return [];
   
   try {
-    const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
-    if (!response.ok) throw new Error('Search failed');
+    const url = `${API_BASE_URL}/search?q=${encodeURIComponent(query)}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+        throw new Error(`Search Error: ${response.status}`);
+    }
+    
     return await response.json();
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('API Search Error:', error);
+    // Return empty array instead of throwing to prevent UI crash on typing
     return [];
   }
 };
@@ -24,28 +32,37 @@ export const searchSymbols = async (query: string): Promise<SearchResult[]> => {
  */
 export const fetchStockHistory = async (symbol: string): Promise<{ data: TsetmcDataPoint[], name: string }> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/history/${encodeURIComponent(symbol)}`);
+    const url = `${API_BASE_URL}/history/${encodeURIComponent(symbol)}`;
+    const response = await fetch(url);
     
     if (!response.ok) {
-      if (response.status === 404) throw new Error('نماد پیدا نشد.');
-      throw new Error('خطا در دریافت اطلاعات از سرور.');
+      if (response.status === 404) throw new Error('نماد مورد نظر یافت نشد.');
+      throw new Error(`خطای سرور: ${response.status}`);
     }
 
     const json = await response.json();
     
-    // Map API response (YYYY-MM-DD) to TsetmcDataPoint (YYYYMMDD)
+    if (!Array.isArray(json) || json.length === 0) {
+        throw new Error('داده‌ای برای این نماد یافت نشد.');
+    }
+
+    // Map API response to TsetmcDataPoint
     const data: TsetmcDataPoint[] = json.map((item: any) => ({
-      date: item.date.replace(/-/g, ''), // Convert 2023-01-01 to 20230101
+      date: item.date, // Backend normalizes this to string YYYYMMDD
       close: item.close
     }));
 
     return {
       data,
-      name: symbol // The backend returns just data, so we use the requested symbol as name
+      name: symbol 
     };
 
   } catch (e: any) {
-    console.error("Fetch failed:", e.message);
-    throw new Error('عدم موفقیت در برقراری ارتباط با سرور.');
+    console.error("Fetch History Failed:", e);
+    // Provide user-friendly error messages
+    if (e.message.includes('Failed to fetch')) {
+        throw new Error('عدم دسترسی به سرور. لطفا از اجرای فایل main.py اطمینان حاصل کنید.');
+    }
+    throw new Error(e.message || 'خطا در دریافت اطلاعات.');
   }
 };
