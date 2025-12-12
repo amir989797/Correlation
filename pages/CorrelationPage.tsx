@@ -1,14 +1,14 @@
 
-import React, { useState, useMemo, useRef } from 'react';
-import { extractIdFromUrl, fetchStockHistory } from '../services/tsetmcService';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
 import { alignDataByDate, generateAnalysisData, parseTsetmcCsv } from '../utils/mathUtils';
 import { CorrelationChart } from '../components/CorrelationChart';
 import { PriceChart } from '../components/PriceChart';
 import { DistanceChart } from '../components/DistanceChart';
-import { ChartDataPoint, FetchStatus, TsetmcDataPoint } from '../types';
-import { Upload, FileText, X } from 'lucide-react';
+import { ChartDataPoint, FetchStatus, TsetmcDataPoint, SearchResult } from '../types';
+import { Upload, FileText, X, Search, Loader2 } from 'lucide-react';
 
-type InputMode = 'url' | 'file';
+type InputMode = 'database' | 'file';
 
 const WINDOW_OPTIONS = [
   { val: 7, label: '۷ روزه', color: '#f59e0b' },   // Amber
@@ -18,7 +18,115 @@ const WINDOW_OPTIONS = [
   { val: 365, label: '۳۶۵ روزه (سالانه)', color: '#ec4899' }, // Pink
 ];
 
-// Internal Dropzone Component
+// --- Sub-components ---
+
+const SearchInput = ({ 
+  label, 
+  value, 
+  onSelect 
+}: { 
+  label: string; 
+  value: SearchResult | null; 
+  onSelect: (val: SearchResult | null) => void;
+}) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (query.length >= 2) {
+        setLoading(true);
+        const res = await searchSymbols(query);
+        setResults(res);
+        setLoading(false);
+        setIsOpen(true);
+      } else {
+        setResults([]);
+        setIsOpen(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  // Click outside to close
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [wrapperRef]);
+
+  if (value) {
+    return (
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-slate-400">{label}</label>
+        <div className="flex items-center justify-between p-3 bg-slate-900 border border-emerald-500/50 rounded-lg text-emerald-400">
+           <div className="flex items-center gap-3">
+             <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <FileText className="w-4 h-4" />
+             </div>
+             <div>
+               <span className="block font-bold text-sm">{value.symbol}</span>
+               <span className="block text-xs opacity-70">{value.name}</span>
+             </div>
+           </div>
+           <button onClick={() => { onSelect(null); setQuery(''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400 transition-colors">
+             <X className="w-5 h-5" />
+           </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2" ref={wrapperRef}>
+      <label className="block text-sm font-medium text-slate-400">{label}</label>
+      <div className="relative">
+        <input 
+          type="text" 
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="جستجوی نماد (مثلا: فولاد)..." 
+          className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-4 pr-10 py-3 focus:ring-2 focus:ring-cyan-500 outline-none text-sm text-right" 
+        />
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+          {loading ? <Loader2 className="w-5 h-5 animate-spin text-cyan-500" /> : <Search className="w-5 h-5" />}
+        </div>
+
+        {isOpen && results.length > 0 && (
+          <div className="absolute top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
+             {results.map((item, idx) => (
+               <button 
+                key={idx}
+                type="button"
+                onClick={() => { onSelect(item); setIsOpen(false); }}
+                className="w-full text-right px-4 py-3 hover:bg-slate-700 border-b border-slate-700/50 last:border-0 flex justify-between items-center group transition-colors"
+               >
+                 <span className="font-bold text-white group-hover:text-cyan-400">{item.symbol}</span>
+                 <span className="text-xs text-slate-400">{item.name}</span>
+               </button>
+             ))}
+          </div>
+        )}
+        
+        {isOpen && results.length === 0 && !loading && (
+          <div className="absolute top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 p-4 text-center text-slate-500 text-sm">
+             نمادی یافت نشد
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const FileDropzone = ({ 
   label, 
   file, 
@@ -139,11 +247,11 @@ const ChartBackgroundLabel = ({ text }: { text: string }) => (
 
 
 export function CorrelationPage() {
-  const [mode, setMode] = useState<InputMode>('url');
+  const [mode, setMode] = useState<InputMode>('database');
   
-  // URL Mode State
-  const [url1, setUrl1] = useState('');
-  const [url2, setUrl2] = useState('');
+  // Database Mode State
+  const [selectedSymbol1, setSelectedSymbol1] = useState<SearchResult | null>(null);
+  const [selectedSymbol2, setSelectedSymbol2] = useState<SearchResult | null>(null);
   
   // File Mode State
   const [file1, setFile1] = useState<File | null>(null);
@@ -230,18 +338,15 @@ export function CorrelationPage() {
     }
   };
 
-  const handleCalculateUrl = async (e: React.FormEvent) => {
+  const handleCalculateDatabase = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const id1 = extractIdFromUrl(url1);
-    const id2 = extractIdFromUrl(url2);
-
-    if (!id1 || !id2) {
-      handleError('لینک‌های وارد شده معتبر نیستند. لطفا لینک‌های صحیح سایت TSETMC را وارد کنید.');
+    if (!selectedSymbol1 || !selectedSymbol2) {
+      handleError('لطفا هر دو نماد را انتخاب کنید.');
       return;
     }
 
-    if (id1 === id2) {
+    if (selectedSymbol1.symbol === selectedSymbol2.symbol) {
       handleError('لطفا دو نماد متفاوت را انتخاب کنید.');
       return;
     }
@@ -253,13 +358,13 @@ export function CorrelationPage() {
 
     try {
       const [res1, res2] = await Promise.all([
-        fetchStockHistory(id1),
-        fetchStockHistory(id2)
+        fetchStockHistory(selectedSymbol1.symbol),
+        fetchStockHistory(selectedSymbol2.symbol)
       ]);
-      setSymbolNames({ s1: res1.name || 'نماد اول', s2: res2.name || 'نماد دوم' });
+      setSymbolNames({ s1: selectedSymbol1.symbol, s2: selectedSymbol2.symbol });
       processData(res1.data, res2.data);
     } catch (err: any) {
-      handleError(err.message || 'خطای ناشناخته رخ داده است.');
+      handleError(err.message || 'خطای ناشناخته در ارتباط با سرور.');
     }
   };
 
@@ -322,11 +427,6 @@ export function CorrelationPage() {
     }
   };
 
-  const handleFillExample = () => {
-    setUrl1('https://old.tsetmc.com/Loader.aspx?ParTree=151311&i=59142194115401696');
-    setUrl2('https://old.tsetmc.com/Loader.aspx?ParTree=151311&i=47041908051542008');
-  };
-
   const activeWindowConfigs = useMemo(() => {
     return WINDOW_OPTIONS.filter(opt => selectedWindows.includes(opt.val));
   }, [selectedWindows]);
@@ -347,14 +447,14 @@ export function CorrelationPage() {
         <div className="flex justify-start mb-6">
           <div className="bg-slate-800 p-1 rounded-xl flex shadow-lg border border-slate-700">
             <button
-              onClick={() => { setMode('url'); setErrorContent(null); }}
+              onClick={() => { setMode('database'); setErrorContent(null); }}
               className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
-                mode === 'url' 
+                mode === 'database' 
                   ? 'bg-cyan-500 text-white shadow-lg' 
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              دریافت خودکار (لینک)
+              جستجو از دیتابیس
             </button>
             <button
               onClick={() => { setMode('file'); setErrorContent(null); }}
@@ -455,24 +555,23 @@ export function CorrelationPage() {
               </div>
           </div>
 
-          {mode === 'url' ? (
-            <form onSubmit={handleCalculateUrl} className="space-y-6">
+          {mode === 'database' ? (
+            <form onSubmit={handleCalculateDatabase} className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label htmlFor="url1" className="block text-sm font-medium text-slate-400">لینک نماد اول</label>
-                  <input id="url1" type="text" value={url1} onChange={(e) => setUrl1(e.target.value)} placeholder="https://old.tsetmc.com/..." className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 focus:ring-2 focus:ring-cyan-500 outline-none text-sm ltr-text text-left" dir="ltr" required />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="url2" className="block text-sm font-medium text-slate-400">لینک نماد دوم</label>
-                  <input id="url2" type="text" value={url2} onChange={(e) => setUrl2(e.target.value)} placeholder="https://old.tsetmc.com/..." className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 focus:ring-2 focus:ring-cyan-500 outline-none text-sm ltr-text text-left" dir="ltr" required />
-                </div>
+                 <SearchInput 
+                    label="جستجوی نماد اول" 
+                    value={selectedSymbol1} 
+                    onSelect={setSelectedSymbol1} 
+                 />
+                 <SearchInput 
+                    label="جستجوی نماد دوم" 
+                    value={selectedSymbol2} 
+                    onSelect={setSelectedSymbol2} 
+                 />
               </div>
               <div className="flex flex-col sm:flex-row gap-4 pt-2">
                 <button type="submit" disabled={status === FetchStatus.LOADING || selectedWindows.length === 0} className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-3 px-6 rounded-lg transition-all hover:scale-[1.02] shadow-lg disabled:opacity-50">
-                  {status === FetchStatus.LOADING ? 'در حال پردازش...' : 'محاسبه همبستگی'}
-                </button>
-                <button type="button" onClick={handleFillExample} className="px-6 py-3 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700 transition-colors text-sm font-medium">
-                  نمونه تستی
+                  {status === FetchStatus.LOADING ? 'در حال دریافت اطلاعات...' : 'محاسبه همبستگی'}
                 </button>
               </div>
             </form>

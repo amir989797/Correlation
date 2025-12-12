@@ -24,6 +24,11 @@ export interface ChartDataPoint {
   [key: string]: any; // Dynamic keys for correlations e.g. 'corr_7', 'corr_30'
 }
 
+export interface SearchResult {
+  symbol: string;
+  name: string;
+}
+
 export enum FetchStatus {
   IDLE,
   LOADING,
