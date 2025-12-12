@@ -44,7 +44,7 @@ app.get('/', (req, res) => {
 
 /**
  * Search Endpoint
- * Searches in daily_prices using DISTINCT to get unique symbols.
+ * OPTIMIZED: Now searches in the 'symbols' table instead of 'daily_prices'.
  */
 app.get('/api/search', async (req, res) => {
   const { q } = req.query;
@@ -54,20 +54,24 @@ app.get('/api/search', async (req, res) => {
   try {
     client = await pool.connect();
     
-    // Using DISTINCT because daily_prices contains multiple entries per symbol
-    // Searching in both symbol and name columns
+    // Fast query on the dedicated symbols table
     const query = `
-      SELECT DISTINCT symbol, name 
-      FROM daily_prices 
+      SELECT symbol, name 
+      FROM symbols 
       WHERE symbol LIKE $1 OR name LIKE $1
       LIMIT 20
     `;
     const values = [`%${q}%`];
     const result = await client.query(query, values);
+    
+    // Fallback: If symbols table is empty (migration not run), this returns empty array.
+    // The user should run 'npm run init-db'.
+    
     res.json(result.rows);
   } catch (err) {
     console.error('❌ Search Error:', err);
-    res.status(500).json({ error: 'Database error', details: err.message });
+    // Silent fail for search to avoid crashing frontend logic, just return empty
+    res.status(500).json([]); 
   } finally {
     if (client) client.release();
   }
