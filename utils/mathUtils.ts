@@ -70,7 +70,7 @@ export const alignDataByDate = (data1: TsetmcDataPoint[], data2: TsetmcDataPoint
 /**
  * Calculates Pearson Correlation Coefficient
  */
-const calculatePearson = (x: number[], y: number[]): number => {
+export const calculatePearson = (x: number[], y: number[]): number => {
   const n = x.length;
   if (n === 0) return 0;
 

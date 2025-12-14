@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
-import { calculateFullHistorySMA, toShamsi, jalaliToGregorian, getTodayShamsi } from '../utils/mathUtils';
+import { calculateFullHistorySMA, toShamsi, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
-import { Search, Loader2, PieChart, Info, X, Calendar, Clock, ChevronDown } from 'lucide-react';
+import { Search, Loader2, PieChart, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, DollarSign, Activity } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -12,6 +12,9 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
+
+// CONSTANTS FOR DEFAULT SYMBOLS
+const GOLD_SYMBOL = 'عیار'; // Standard Gold ETF
 
 // --- Reusable Search Input ---
 const SearchInput = ({ 
@@ -105,7 +108,6 @@ const SearchInput = ({
 };
 
 // --- Custom Shamsi Date Picker ---
-
 const PERSIAN_MONTHS = [
   'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
   'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
@@ -126,7 +128,6 @@ const ShamsiDatePicker = ({
 }) => {
   return (
     <div className="flex gap-2 items-center" dir="rtl">
-        {/* Day */}
         <div className="relative w-20">
             <select 
                 value={value.jd}
@@ -139,8 +140,6 @@ const ShamsiDatePicker = ({
             </select>
             <ChevronDown className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
         </div>
-
-        {/* Month */}
         <div className="relative flex-1">
             <select 
                 value={value.jm}
@@ -153,8 +152,6 @@ const ShamsiDatePicker = ({
             </select>
             <ChevronDown className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
         </div>
-
-        {/* Year */}
         <div className="relative w-24">
             <input 
                 type="number"
@@ -169,12 +166,23 @@ const ShamsiDatePicker = ({
   );
 };
 
-// --- Portfolio Page ---
+// --- Types for Page ---
 
 interface Allocation {
   name: string;
   value: number;
   fill: string;
+}
+
+interface DetailedMetrics {
+  priceSymbol: number;
+  priceGold: number;
+  distSymbolMA: number; // %
+  distGoldMA: number; // %
+  ratioGoldSymbolAboveMA: boolean; // Ratio = Gold / Symbol
+  isAnomaly: boolean; // |Corr_Year - Corr_Month| > 1
+  corrMonth: number;
+  corrYear: number;
 }
 
 type DateMode = 'current' | 'custom';
@@ -192,10 +200,11 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
   );
 };
 
+// --- Helper Functions for Metrics ---
+const calculateDistance = (price: number, ma: number) => ((price - ma) / ma) * 100;
+
 export function PortfolioPage() {
   const [symbol, setSymbol] = useState<SearchResult | null>(null);
-  
-  // Date State
   const [dateMode, setDateMode] = useState<DateMode>('current');
   const [shamsiDate, setShamsiDate] = useState<ShamsiDate>(getTodayShamsi());
   
@@ -205,10 +214,10 @@ export function PortfolioPage() {
   const [allocation, setAllocation] = useState<Allocation[]>([]);
   const [analysisInfo, setAnalysisInfo] = useState<{
     date: string;
-    price: number;
-    ma100: number;
     condition: 'Above' | 'Below';
   } | null>(null);
+
+  const [metrics, setMetrics] = useState<DetailedMetrics | null>(null);
 
   const handleCalculate = async () => {
     if (!symbol) {
@@ -220,7 +229,6 @@ export function PortfolioPage() {
     let targetDateStr = ''; // YYYYMMDD
     if (dateMode === 'custom') {
         const { gy, gm, gd } = jalaliToGregorian(shamsiDate.jy, shamsiDate.jm, shamsiDate.jd);
-        // Format to YYYYMMDD
         const mm = gm < 10 ? `0${gm}` : `${gm}`;
         const dd = gd < 10 ? `0${gd}` : `${gd}`;
         targetDateStr = `${gy}${mm}${dd}`;
@@ -230,51 +238,124 @@ export function PortfolioPage() {
     setError(null);
     setAllocation([]);
     setAnalysisInfo(null);
+    setMetrics(null);
 
     try {
-      const { data } = await fetchStockHistory(symbol.symbol);
-      if (data.length < 100) throw new Error('سابقه معاملاتی برای محاسبه میانگین ۱۰۰ روزه کافی نیست.');
+      // Fetch data in parallel (Removed Index Fetch)
+      const [stockRes, goldRes] = await Promise.all([
+        fetchStockHistory(symbol.symbol),
+        fetchStockHistory(GOLD_SYMBOL)
+      ]);
 
-      const ma100Map = calculateFullHistorySMA(data, 100);
+      const stockData = stockRes.data;
+      const goldData = goldRes.data;
 
-      let selectedPoint: TsetmcDataPoint | undefined;
-      
+      if (stockData.length < 100) throw new Error('سابقه معاملاتی نماد برای محاسبات کافی نیست.');
+
+      // 1. Determine Target Date
+      let targetPoint: TsetmcDataPoint;
       if (dateMode === 'current') {
-        selectedPoint = data[data.length - 1];
+        targetPoint = stockData[stockData.length - 1];
+        targetDateStr = targetPoint.date;
       } else {
-        // Find the specific date point (or the closest one before it if exact not found? No, exact match is safer for now)
-        selectedPoint = data.find(d => d.date === targetDateStr);
-        if (!selectedPoint) {
-            // Check if date is in range
-            const firstDate = data[0].date;
-            const lastDate = data[data.length - 1].date;
-            if (targetDateStr < firstDate || targetDateStr > lastDate) {
-                 throw new Error('تاریخ انتخاب شده خارج از محدوده داده‌های تاریخی موجود است.');
-            }
-            throw new Error('تاریخ انتخاب شده در سابقه معاملات این نماد یافت نشد (روز تعطیل یا بدون معامله).');
-        }
+        const found = stockData.find(d => d.date === targetDateStr);
+        if (!found) throw new Error('تاریخ انتخاب شده در سابقه معاملات نماد یافت نشد (تعطیل یا بدون معامله).');
+        targetPoint = found;
       }
 
-      const ma100 = ma100Map.get(selectedPoint.date);
-      if (!ma100) throw new Error('میانگین ۱۰۰ روزه برای این تاریخ قابل محاسبه نیست (داده کافی قبل از این تاریخ وجود ندارد).');
+      // --- BASIC STRATEGY LOGIC ---
+      const stockMA100Map = calculateFullHistorySMA(stockData, 100);
+      const stockMA100 = stockMA100Map.get(targetDateStr);
+      if (stockMA100 === undefined) throw new Error('داده کافی برای محاسبه میانگین متحرک در تاریخ انتخاب شده وجود ندارد.');
+      
+      const isAbove = targetPoint.close > stockMA100;
 
-      const price = selectedPoint.close;
-      const isAbove = price > ma100;
+      // --- DETAILED METRICS ---
 
-      // Strategy
-      const newAllocation: Allocation[] = [
-        { name: symbol.symbol, value: isAbove ? 50 : 25, fill: '#10b981' }, // Stock (Emerald)
-        { name: 'طلا', value: isAbove ? 25 : 50, fill: '#fbbf24' },        // Gold (Amber)
-        { name: 'اوراق', value: 25, fill: '#3b82f6' }                       // Bonds (Blue)
-      ];
+      // A. Prices & Distances
+      const stockPrice = targetPoint.close;
+      const distStock = calculateDistance(stockPrice, stockMA100);
 
-      setAllocation(newAllocation);
+      // Find Gold Point
+      const goldPoint = goldData.find(d => d.date === targetDateStr);
+      let goldPrice = 0;
+      let distGold = 0;
+      
+      if (goldPoint) {
+         const goldMA100Map = calculateFullHistorySMA(goldData, 100);
+         const goldMA100 = goldMA100Map.get(targetDateStr);
+         if (goldMA100) {
+             goldPrice = goldPoint.close;
+             distGold = calculateDistance(goldPrice, goldMA100);
+         }
+      }
+
+      // B. Ratio Status (Gold / Symbol)
+      // We need aligned history of Gold and Symbol to build the ratio series
+      const mergedGoldStock = alignDataByDate(stockData, goldData); // price1=Stock, price2=Gold
+      // IMPORTANT: Ratio is Gold / Symbol => price2 / price1 (if price1 != 0)
+      const ratioGS_Series: TsetmcDataPoint[] = mergedGoldStock.map(m => ({
+          date: m.date,
+          close: m.price1 !== 0 ? m.price2 / m.price1 : 0
+      }));
+      
+      const ratioGS_MA100Map = calculateFullHistorySMA(ratioGS_Series, 100);
+      const currentRatioGS_Point = ratioGS_Series.find(d => d.date === targetDateStr);
+      const currentRatioGS_MA = ratioGS_MA100Map.get(targetDateStr);
+      
+      let ratioGoldSymbolAboveMA = false;
+      if (currentRatioGS_Point && currentRatioGS_MA) {
+          ratioGoldSymbolAboveMA = currentRatioGS_Point.close > currentRatioGS_MA;
+      }
+
+      // D. Anomaly (Correlation)
+      // Using aligned Gold & Stock data (mergedGoldStock)
+      // Find index of targetDate in merged array
+      const targetIndex = mergedGoldStock.findIndex(m => m.date === targetDateStr);
+      
+      let corrMonth = 0;
+      let corrYear = 0;
+      let isAnomaly = false;
+
+      if (targetIndex !== -1) {
+          // Calculate 30-day Correlation
+          if (targetIndex >= 29) {
+              const slice = mergedGoldStock.slice(targetIndex - 29, targetIndex + 1);
+              corrMonth = calculatePearson(slice.map(s => s.price2), slice.map(s => s.price1)); // Gold vs Stock
+          }
+          // Calculate 365-day Correlation
+          if (targetIndex >= 364) {
+              const slice = mergedGoldStock.slice(targetIndex - 364, targetIndex + 1);
+              corrYear = calculatePearson(slice.map(s => s.price2), slice.map(s => s.price1));
+          }
+          
+          isAnomaly = Math.abs(corrYear - corrMonth) > 1;
+      }
+
+      // --- SET STATE ---
+
+      setAllocation([
+        { name: symbol.symbol, value: isAbove ? 50 : 25, fill: '#10b981' }, 
+        { name: 'طلا', value: isAbove ? 25 : 50, fill: '#fbbf24' },        
+        { name: 'اوراق', value: 25, fill: '#3b82f6' }                       
+      ]);
+
       setAnalysisInfo({
-        date: selectedPoint.date,
-        price,
-        ma100,
+        date: targetDateStr,
         condition: isAbove ? 'Above' : 'Below'
       });
+
+      setMetrics({
+          priceSymbol: stockPrice,
+          priceGold: goldPrice,
+          distSymbolMA: distStock,
+          distGoldMA: distGold,
+          ratioGoldSymbolAboveMA,
+          isAnomaly,
+          corrMonth,
+          corrYear
+      });
+
       setStatus(FetchStatus.SUCCESS);
 
     } catch (err: any) {
@@ -290,7 +371,7 @@ export function PortfolioPage() {
           <p className="text-slate-400">پیشنهاد وزن‌دهی دارایی‌ها بر اساس شرایط تکنیکال نماد</p>
        </header>
 
-       {/* SECTION 1: Top Inputs (Full Width) */}
+       {/* SECTION 1: Inputs */}
        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
           <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2 border-b border-slate-700 pb-4">
              <Info className="w-5 h-5 text-cyan-400" />
@@ -299,12 +380,9 @@ export function PortfolioPage() {
 
           <div className="flex flex-col gap-6">
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-                  {/* Col 1: Symbol Search */}
                   <div>
                       <SearchInput label="انتخاب نماد بورسی" value={symbol} onSelect={setSymbol} />
                   </div>
-
-                  {/* Col 2: Date Mode */}
                   <div>
                       <label className="block text-sm font-medium text-slate-400 mb-2">مبنای زمانی</label>
                       <div className="flex gap-3">
@@ -320,15 +398,12 @@ export function PortfolioPage() {
                         </label>
                       </div>
                   </div>
-
-                  {/* Col 3: Date Picker (Conditional) */}
                   <div className={`transition-all duration-300 ${dateMode === 'custom' ? 'opacity-100' : 'opacity-30 pointer-events-none grayscale'}`}>
                        <label className="block text-sm font-medium text-slate-400 mb-2">انتخاب تاریخ</label>
                        <ShamsiDatePicker value={shamsiDate} onChange={setShamsiDate} />
                   </div>
               </div>
 
-              {/* Calculate Button */}
               <button 
                   onClick={handleCalculate}
                   disabled={status === FetchStatus.LOADING}
@@ -344,10 +419,10 @@ export function PortfolioPage() {
           </div>
        </div>
 
-       {/* SECTION 2: Grid Area */}
+       {/* SECTION 2: Grid Area (Logic & Chart) */}
        <div className="grid md:grid-cols-12 gap-6 items-stretch">
           
-          {/* Right Column (in RTL): Logic Explanation */}
+          {/* Logic Explanation */}
           <div className="md:col-span-4 lg:col-span-4 order-1 md:order-none">
              <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-full shadow-lg flex flex-col">
                 <h4 className="font-bold text-white mb-4 text-base border-b border-slate-700 pb-2">منطق محاسباتی</h4>
@@ -386,7 +461,7 @@ export function PortfolioPage() {
              </div>
           </div>
 
-          {/* Left Column (in RTL): Chart & Results */}
+          {/* Chart & Results */}
           <div className="md:col-span-8 lg:col-span-8 order-2 md:order-none">
              <div className="bg-slate-800 rounded-2xl border border-slate-700 h-full min-h-[500px] shadow-xl relative overflow-hidden flex flex-col">
                 {status === FetchStatus.SUCCESS && analysisInfo ? (
@@ -446,7 +521,6 @@ export function PortfolioPage() {
                             </RechartsPieChart>
                          </ResponsiveContainer>
                          
-                         {/* Center Overlay Text */}
                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                             <div className="text-center bg-slate-900/80 p-4 rounded-full backdrop-blur-sm border border-slate-700/50 shadow-2xl">
                                <span className="block text-3xl font-black text-white">{analysisInfo.condition === 'Above' ? 'سهامی' : 'طلایی'}</span>
@@ -491,6 +565,121 @@ export function PortfolioPage() {
              </div>
           </div>
        </div>
+
+       {/* SECTION 3: Detailed Metrics Dashboard */}
+       {status === FetchStatus.SUCCESS && metrics && (
+           <div className="animate-fade-in-up mt-8">
+               <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2 border-b border-slate-700 pb-4">
+                 <Activity className="w-5 h-5 text-purple-400" />
+                 داشبورد تحلیلی تکمیلی
+               </h3>
+               
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                   
+                   {/* Card 1: Prices */}
+                   <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg relative overflow-hidden group hover:border-blue-500/50 transition-all">
+                       <div className="absolute top-0 left-0 w-20 h-20 bg-blue-500/5 rounded-full -ml-10 -mt-10 group-hover:bg-blue-500/10 transition-colors"></div>
+                       <div className="flex justify-between items-start mb-4 relative z-10">
+                           <span className="text-slate-400 text-sm font-medium">قیمت پایانی</span>
+                           <DollarSign className="w-5 h-5 text-blue-400" />
+                       </div>
+                       <div className="space-y-3 relative z-10">
+                           <div className="flex justify-between items-center">
+                               <span className="text-xs text-slate-500">{symbol?.symbol}:</span>
+                               <span className="text-white font-bold">{metrics.priceSymbol.toLocaleString()}</span>
+                           </div>
+                           <div className="flex justify-between items-center">
+                               <span className="text-xs text-slate-500">طلا (عیار):</span>
+                               <span className="text-amber-400 font-bold">{metrics.priceGold.toLocaleString()}</span>
+                           </div>
+                       </div>
+                   </div>
+
+                   {/* Card 2: Floor/Ceiling (Distance from MA) */}
+                   <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg relative overflow-hidden group hover:border-emerald-500/50 transition-all">
+                       <div className="absolute top-0 left-0 w-20 h-20 bg-emerald-500/5 rounded-full -ml-10 -mt-10 group-hover:bg-emerald-500/10 transition-colors"></div>
+                       <div className="flex justify-between items-start mb-4 relative z-10">
+                           <span className="text-slate-400 text-sm font-medium">فاصله از میانگین (MA100)</span>
+                           <TrendingUp className="w-5 h-5 text-emerald-400" />
+                       </div>
+                       <div className="space-y-4 relative z-10">
+                           <div>
+                               <div className="flex justify-between text-xs mb-1">
+                                   <span className="text-slate-500">{symbol?.symbol}</span>
+                                   <span className={metrics.distSymbolMA > 0 ? "text-emerald-400" : "text-red-400"}>{metrics.distSymbolMA > 0 ? '+' : ''}{metrics.distSymbolMA.toFixed(2)}%</span>
+                               </div>
+                               <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
+                                   <div className={`h-full rounded-full ${metrics.distSymbolMA > 0 ? "bg-emerald-500" : "bg-red-500"}`} style={{width: `${Math.min(Math.abs(metrics.distSymbolMA), 100)}%`}}></div>
+                               </div>
+                           </div>
+                           <div>
+                               <div className="flex justify-between text-xs mb-1">
+                                   <span className="text-slate-500">طلا</span>
+                                   <span className={metrics.distGoldMA > 0 ? "text-emerald-400" : "text-red-400"}>{metrics.distGoldMA > 0 ? '+' : ''}{metrics.distGoldMA.toFixed(2)}%</span>
+                               </div>
+                               <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
+                                   <div className={`h-full rounded-full ${metrics.distGoldMA > 0 ? "bg-emerald-500" : "bg-red-500"}`} style={{width: `${Math.min(Math.abs(metrics.distGoldMA), 100)}%`}}></div>
+                               </div>
+                           </div>
+                       </div>
+                   </div>
+
+                   {/* Card 3: Ratio Analysis */}
+                   <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg relative overflow-hidden group hover:border-purple-500/50 transition-all">
+                       <div className="absolute top-0 left-0 w-20 h-20 bg-purple-500/5 rounded-full -ml-10 -mt-10 group-hover:bg-purple-500/10 transition-colors"></div>
+                       <div className="flex justify-between items-start mb-4 relative z-10">
+                           <span className="text-slate-400 text-sm font-medium">تحلیل نسبت (Ratio)</span>
+                           <Activity className="w-5 h-5 text-purple-400" />
+                       </div>
+                       <div className="space-y-3 relative z-10">
+                           <div className="flex items-center justify-between p-2 bg-slate-900/50 rounded-lg">
+                               <div className="flex flex-col">
+                                   <span className="text-[10px] text-slate-500">طلا / {symbol?.symbol}</span>
+                                   <span className={`text-xs font-bold ${metrics.ratioGoldSymbolAboveMA ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                       {metrics.ratioGoldSymbolAboveMA ? 'طلا قوی‌تر' : 'نماد قوی‌تر'}
+                                   </span>
+                               </div>
+                               {metrics.ratioGoldSymbolAboveMA ? <TrendingUp className="w-4 h-4 text-amber-500" /> : <TrendingDown className="w-4 h-4 text-emerald-500" />}
+                           </div>
+                       </div>
+                   </div>
+
+                   {/* Card 4: Anomaly */}
+                   <div className={`bg-slate-800 border p-5 rounded-2xl shadow-lg relative overflow-hidden transition-all group ${metrics.isAnomaly ? 'border-red-500/50 hover:border-red-500' : 'border-slate-700 hover:border-slate-500'}`}>
+                       <div className={`absolute top-0 left-0 w-20 h-20 rounded-full -ml-10 -mt-10 transition-colors ${metrics.isAnomaly ? 'bg-red-500/10' : 'bg-slate-500/5'}`}></div>
+                       <div className="flex justify-between items-start mb-4 relative z-10">
+                           <span className="text-slate-400 text-sm font-medium">وضعیت ناهنجاری</span>
+                           {metrics.isAnomaly ? <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" /> : <CheckCircle2 className="w-5 h-5 text-slate-500" />}
+                       </div>
+                       
+                       <div className="relative z-10">
+                           <div className="text-center mb-3">
+                               {metrics.isAnomaly ? (
+                                   <span className="inline-block px-3 py-1 bg-red-500/20 text-red-400 text-xs font-bold rounded-full border border-red-500/30">
+                                       ناهنجاری شناسایی شد
+                                   </span>
+                               ) : (
+                                   <span className="inline-block px-3 py-1 bg-slate-700 text-slate-400 text-xs font-bold rounded-full border border-slate-600">
+                                       وضعیت نرمال
+                                   </span>
+                               )}
+                           </div>
+                           <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500">
+                               <div className="bg-slate-900/50 p-1.5 rounded text-center">
+                                   <div className="mb-1">همبستگی ماهانه</div>
+                                   <div className="text-white font-mono">{metrics.corrMonth.toFixed(2)}</div>
+                               </div>
+                               <div className="bg-slate-900/50 p-1.5 rounded text-center">
+                                   <div className="mb-1">همبستگی سالانه</div>
+                                   <div className="text-white font-mono">{metrics.corrYear.toFixed(2)}</div>
+                               </div>
+                           </div>
+                       </div>
+                   </div>
+
+               </div>
+           </div>
+       )}
     </div>
   );
 }
