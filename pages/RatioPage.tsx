@@ -397,7 +397,7 @@ export function RatioPage() {
                 <form onSubmit={handleDbSubmit} className="grid md:grid-cols-2 gap-6">
                     <SearchInput label="صورت کسر (نماد اول)" value={symbol1} onSelect={setSymbol1} />
                     <SearchInput label="مخرج کسر (نماد دوم)" value={symbol2} onSelect={setSymbol2} />
-                    <button type="submit" disabled={status === FetchStatus.LOADING} className="md:col-span-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold py-3 rounded-lg shadow-lg disabled:opacity-50 transition-all">
+                    <button type="submit" disabled={status === FetchStatus.LOADING} className="md:col-span-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 rounded-lg shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all border-none">
                         {status === FetchStatus.LOADING ? 'در حال محاسبه...' : 'ترسیم نمودار نسبت'}
                     </button>
                 </form>
@@ -405,7 +405,7 @@ export function RatioPage() {
                 <form onSubmit={handleFileSubmit} className="grid md:grid-cols-2 gap-6">
                     <FileDropzone label="فایل صورت کسر" file={file1} onFileSelect={setFile1} />
                     <FileDropzone label="فایل مخرج کسر" file={file2} onFileSelect={setFile2} />
-                    <button type="submit" disabled={status === FetchStatus.LOADING} className="md:col-span-2 bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-lg shadow-lg disabled:opacity-50">محاسبه</button>
+                    <button type="submit" disabled={status === FetchStatus.LOADING} className="md:col-span-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 rounded-lg shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all border-none">محاسبه</button>
                 </form>
             )}
         </div>

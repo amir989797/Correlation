@@ -68,7 +68,7 @@ const SearchInput = ({
     return (
       <div className="space-y-2">
         <label className="block text-sm font-medium text-slate-400">{label}</label>
-        <div className="flex items-center justify-between p-3 bg-slate-900 border border-emerald-500/50 rounded-lg text-emerald-400">
+        <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-600 rounded-lg text-emerald-400">
            <div className="flex items-center gap-3">
              <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
                 <FileText className="w-4 h-4" />
@@ -450,7 +450,7 @@ export function CorrelationPage() {
               onClick={() => { setMode('database'); setErrorContent(null); }}
               className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
                 mode === 'database' 
-                  ? 'bg-cyan-500 text-white shadow-lg' 
+                  ? 'bg-slate-900 text-white shadow-lg border border-slate-600' 
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -460,7 +460,7 @@ export function CorrelationPage() {
               onClick={() => { setMode('file'); setErrorContent(null); }}
               className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
                 mode === 'file' 
-                  ? 'bg-cyan-500 text-white shadow-lg' 
+                  ? 'bg-slate-900 text-white shadow-lg border border-slate-600' 
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -570,7 +570,7 @@ export function CorrelationPage() {
                  />
               </div>
               <div className="flex flex-col sm:flex-row gap-4 pt-2">
-                <button type="submit" disabled={status === FetchStatus.LOADING || selectedWindows.length === 0} className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-3 px-6 rounded-lg transition-all hover:scale-[1.02] shadow-lg disabled:opacity-50">
+                <button type="submit" disabled={status === FetchStatus.LOADING || selectedWindows.length === 0} className="flex-1 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 px-6 rounded-lg shadow-lg shadow-cyan-500/20 transition-all hover:scale-[1.02] disabled:opacity-50 border-none">
                   {status === FetchStatus.LOADING ? 'در حال دریافت اطلاعات...' : 'محاسبه همبستگی'}
                 </button>
               </div>
@@ -589,7 +589,7 @@ export function CorrelationPage() {
                     onFileSelect={setFile2} 
                   />
                 </div>
-                <button type="submit" disabled={status === FetchStatus.LOADING} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg shadow-lg">محاسبه</button>
+                <button type="submit" disabled={status === FetchStatus.LOADING} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 rounded-lg shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50 border-none">محاسبه</button>
             </form>
           )}
         </div>
@@ -628,11 +628,11 @@ export function CorrelationPage() {
                    
                    <div className="flex items-center gap-4">
                      <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-700">
-                       <button onClick={() => setPriceDisplaySide('price1')} className={`px-3 py-1 text-sm rounded ${priceDisplaySide === 'price1' ? 'bg-emerald-500/20 text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                       <button onClick={() => setPriceDisplaySide('price1')} className={`px-3 py-1 text-sm rounded ${priceDisplaySide === 'price1' ? 'bg-slate-700 text-white font-bold' : 'text-slate-400'}`}>
                          {symbolNames.s1}
                        </button>
                        <div className="w-px h-4 bg-slate-700"></div>
-                       <button onClick={() => setPriceDisplaySide('price2')} className={`px-3 py-1 text-sm rounded ${priceDisplaySide === 'price2' ? 'bg-emerald-500/20 text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                       <button onClick={() => setPriceDisplaySide('price2')} className={`px-3 py-1 text-sm rounded ${priceDisplaySide === 'price2' ? 'bg-slate-700 text-white font-bold' : 'text-slate-400'}`}>
                          {symbolNames.s2}
                        </button>
                      </div>

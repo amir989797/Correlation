@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
 import { calculateFullHistorySMA, toShamsi, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
-import { Search, Loader2, PieChart, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, DollarSign, Activity } from 'lucide-react';
+import { Search, Loader2, PieChart, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Banknote, Activity } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -63,9 +63,9 @@ const SearchInput = ({
     return (
       <div className="space-y-2 w-full">
         <label className="block text-sm font-medium text-slate-400">{label}</label>
-        <div className="flex items-center justify-between p-3 bg-slate-900 border border-emerald-500/50 rounded-lg text-emerald-400">
+        <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-600 rounded-lg text-emerald-400">
            <span className="font-bold text-sm truncate">{value.symbol}</span>
-           <button onClick={() => { onSelect(null); setQuery(''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400 transition-colors">
+           <button onClick={() => { onSelect(null); setQuery(''); }} className="p-1 hover:bg-black rounded text-slate-400 hover:text-red-400 transition-colors">
              <X className="w-5 h-5" />
            </button>
         </div>
@@ -82,21 +82,21 @@ const SearchInput = ({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="جستجوی نماد (مثلا: فولاد)..." 
-          className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-4 pr-10 py-3 focus:ring-2 focus:ring-amber-500 outline-none text-sm text-right" 
+          className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-4 pr-10 py-3 focus:ring-1 focus:ring-white focus:border-white outline-none text-sm text-right text-white placeholder-slate-500 transition-all" 
         />
         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-          {loading ? <Loader2 className="w-5 h-5 animate-spin text-amber-500" /> : <Search className="w-5 h-5" />}
+          {loading ? <Loader2 className="w-5 h-5 animate-spin text-white" /> : <Search className="w-5 h-5" />}
         </div>
         {isOpen && results.length > 0 && (
-          <div className="absolute top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
+          <div className="absolute top-full mt-2 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
              {results.map((item, idx) => (
                <button 
                 key={idx}
                 type="button"
                 onClick={() => { onSelect(item); setIsOpen(false); }}
-                className="w-full text-right px-4 py-3 hover:bg-slate-700 border-b border-slate-700/50 last:border-0 flex justify-between items-center group transition-colors"
+                className="w-full text-right px-4 py-3 hover:bg-slate-800 border-b border-slate-800 last:border-0 flex justify-between items-center group transition-colors"
                >
-                 <span className="font-bold text-white group-hover:text-amber-400">{item.symbol}</span>
+                 <span className="font-bold text-white group-hover:text-slate-200">{item.symbol}</span>
                  <span className="text-xs text-slate-400">{item.name}</span>
                </button>
              ))}
@@ -180,8 +180,8 @@ interface DetailedMetrics {
   distSymbolMA: number; // %
   distGoldMA: number; // %
   ratioGoldSymbolAboveMA: boolean; // Ratio = Gold / Symbol
-  isAnomaly: boolean; // |Corr_Year - Corr_Month| > 1
-  corrMonth: number;
+  isAnomaly: boolean; // |Corr_Year - Corr_2Month| > 1
+  corr2Month: number;
   corrYear: number;
 }
 
@@ -313,15 +313,15 @@ export function PortfolioPage() {
       // Find index of targetDate in merged array
       const targetIndex = mergedGoldStock.findIndex(m => m.date === targetDateStr);
       
-      let corrMonth = 0;
+      let corr2Month = 0;
       let corrYear = 0;
       let isAnomaly = false;
 
       if (targetIndex !== -1) {
-          // Calculate 30-day Correlation
-          if (targetIndex >= 29) {
-              const slice = mergedGoldStock.slice(targetIndex - 29, targetIndex + 1);
-              corrMonth = calculatePearson(slice.map(s => s.price2), slice.map(s => s.price1)); // Gold vs Stock
+          // Calculate 2-Month (60 days) Correlation
+          if (targetIndex >= 59) {
+              const slice = mergedGoldStock.slice(targetIndex - 59, targetIndex + 1);
+              corr2Month = calculatePearson(slice.map(s => s.price2), slice.map(s => s.price1)); // Gold vs Stock
           }
           // Calculate 365-day Correlation
           if (targetIndex >= 364) {
@@ -329,7 +329,7 @@ export function PortfolioPage() {
               corrYear = calculatePearson(slice.map(s => s.price2), slice.map(s => s.price1));
           }
           
-          isAnomaly = Math.abs(corrYear - corrMonth) > 1;
+          isAnomaly = Math.abs(corrYear - corr2Month) > 1;
       }
 
       // --- SET STATE ---
@@ -352,7 +352,7 @@ export function PortfolioPage() {
           distGoldMA: distGold,
           ratioGoldSymbolAboveMA,
           isAnomaly,
-          corrMonth,
+          corr2Month,
           corrYear
       });
 
@@ -386,12 +386,12 @@ export function PortfolioPage() {
                   <div>
                       <label className="block text-sm font-medium text-slate-400 mb-2">مبنای زمانی</label>
                       <div className="flex gap-3">
-                        <label className={`flex-1 cursor-pointer rounded-lg border p-3 flex items-center justify-center gap-2 transition-all ${dateMode === 'current' ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-600'}`}>
+                        <label className={`flex-1 cursor-pointer rounded-lg border p-3 flex items-center justify-center gap-2 transition-all ${dateMode === 'current' ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-600'}`}>
                             <input type="radio" name="dateMode" value="current" checked={dateMode === 'current'} onChange={() => setDateMode('current')} className="hidden" />
                             <Clock className="w-4 h-4" />
                             <span className="text-sm font-bold">آخرین قیمت</span>
                         </label>
-                        <label className={`flex-1 cursor-pointer rounded-lg border p-3 flex items-center justify-center gap-2 transition-all ${dateMode === 'custom' ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-600'}`}>
+                        <label className={`flex-1 cursor-pointer rounded-lg border p-3 flex items-center justify-center gap-2 transition-all ${dateMode === 'custom' ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-500'}`}>
                             <input type="radio" name="dateMode" value="custom" checked={dateMode === 'custom'} onChange={() => setDateMode('custom')} className="hidden" />
                             <Calendar className="w-4 h-4" />
                             <span className="text-sm font-bold">تاریخ خاص</span>
@@ -407,7 +407,7 @@ export function PortfolioPage() {
               <button 
                   onClick={handleCalculate}
                   disabled={status === FetchStatus.LOADING}
-                  className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 rounded-xl shadow-lg shadow-cyan-500/20 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed border-none"
               >
                   {status === FetchStatus.LOADING ? (
                     <span className="flex items-center justify-center gap-2">
@@ -581,7 +581,7 @@ export function PortfolioPage() {
                        <div className="absolute top-0 left-0 w-20 h-20 bg-blue-500/5 rounded-full -ml-10 -mt-10 group-hover:bg-blue-500/10 transition-colors"></div>
                        <div className="flex justify-between items-start mb-4 relative z-10">
                            <span className="text-slate-400 text-sm font-medium">قیمت پایانی</span>
-                           <DollarSign className="w-5 h-5 text-blue-400" />
+                           <Banknote className="w-5 h-5 text-blue-400" />
                        </div>
                        <div className="space-y-3 relative z-10">
                            <div className="flex justify-between items-center">
@@ -628,7 +628,7 @@ export function PortfolioPage() {
                    <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg relative overflow-hidden group hover:border-purple-500/50 transition-all">
                        <div className="absolute top-0 left-0 w-20 h-20 bg-purple-500/5 rounded-full -ml-10 -mt-10 group-hover:bg-purple-500/10 transition-colors"></div>
                        <div className="flex justify-between items-start mb-4 relative z-10">
-                           <span className="text-slate-400 text-sm font-medium">تحلیل نسبت (Ratio)</span>
+                           <span className="text-slate-400 text-sm font-medium">تحلیل نسبت (Ratio) طلا/{symbol?.symbol}</span>
                            <Activity className="w-5 h-5 text-purple-400" />
                        </div>
                        <div className="space-y-3 relative z-10">
@@ -636,7 +636,7 @@ export function PortfolioPage() {
                                <div className="flex flex-col">
                                    <span className="text-[10px] text-slate-500">طلا / {symbol?.symbol}</span>
                                    <span className={`text-xs font-bold ${metrics.ratioGoldSymbolAboveMA ? 'text-amber-400' : 'text-emerald-400'}`}>
-                                       {metrics.ratioGoldSymbolAboveMA ? 'طلا قوی‌تر' : 'نماد قوی‌تر'}
+                                       {metrics.ratioGoldSymbolAboveMA ? 'طلا قوی‌تر' : `${symbol?.symbol} قوی‌تر`}
                                    </span>
                                </div>
                                {metrics.ratioGoldSymbolAboveMA ? <TrendingUp className="w-4 h-4 text-amber-500" /> : <TrendingDown className="w-4 h-4 text-emerald-500" />}
@@ -666,8 +666,8 @@ export function PortfolioPage() {
                            </div>
                            <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500">
                                <div className="bg-slate-900/50 p-1.5 rounded text-center">
-                                   <div className="mb-1">همبستگی ماهانه</div>
-                                   <div className="text-white font-mono">{metrics.corrMonth.toFixed(2)}</div>
+                                   <div className="mb-1">همبستگی ۲ ماهه</div>
+                                   <div className="text-white font-mono">{metrics.corr2Month.toFixed(2)}</div>
                                </div>
                                <div className="bg-slate-900/50 p-1.5 rounded text-center">
                                    <div className="mb-1">همبستگی سالانه</div>
