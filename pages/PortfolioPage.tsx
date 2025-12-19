@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
 import { calculateFullHistorySMA, toShamsi, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
-import { Search, Loader2, PieChart, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Banknote, Activity, ShieldAlert, Zap } from 'lucide-react';
+import { Search, Loader2, PieChart, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Banknote, Activity, ShieldAlert, Zap, InfoIcon } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -136,13 +136,21 @@ export function PortfolioPage() {
   const [status, setStatus] = useState<FetchStatus>(FetchStatus.IDLE);
   const [error, setError] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<StrategyResult | null>(null);
-  const [marketMetrics, setMarketMetrics] = useState<{ gold: AssetMetrics, index: AssetMetrics, anomaly: boolean, highCorr: boolean, safeCorr: boolean, ratioAboveMA: boolean } | null>(null);
+  const [marketMetrics, setMarketMetrics] = useState<{ 
+    gold: AssetMetrics, 
+    index: AssetMetrics, 
+    anomaly: boolean, 
+    highCorr: boolean, 
+    safeCorr: boolean, 
+    ratioAboveMA: boolean,
+    corr2M: number,
+    corr1Y: number
+  } | null>(null);
 
   // --- Core Strategy Logic ---
   const calculateStateHysteresis = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): MarketState => {
     let currentState: MarketState = 'Normal';
     
-    // We walk forward from the start of data (or a lookback) to maintain the state correctly
     for (let i = 100; i <= targetIndex; i++) {
       const point = data[i];
       const ma = maMap.get(point.date);
@@ -150,7 +158,6 @@ export function PortfolioPage() {
 
       const dev = ((point.close - ma) / ma) * 100;
 
-      // 1. Check Entry Ceiling (> 10% for 3 days)
       if (currentState !== 'Ceiling' && dev > 10) {
         let count = 0;
         for (let j = 0; j < 3; j++) {
@@ -161,7 +168,6 @@ export function PortfolioPage() {
         if (count === 3) currentState = 'Ceiling';
       }
 
-      // 2. Check Entry Floor (< -10% for 3 days)
       if (currentState !== 'Floor' && dev < -10) {
         let count = 0;
         for (let j = 0; j < 3; j++) {
@@ -172,7 +178,6 @@ export function PortfolioPage() {
         if (count === 3) currentState = 'Floor';
       }
 
-      // 3. Check Exit Ceiling (< 7% for 3 days)
       if (currentState === 'Ceiling' && dev < 7) {
         let count = 0;
         for (let j = 0; j < 3; j++) {
@@ -183,7 +188,6 @@ export function PortfolioPage() {
         if (count === 3) currentState = 'Normal';
       }
 
-      // 4. Check Exit Floor (> -7% for 3 days)
       if (currentState === 'Floor' && dev > -7) {
         let count = 0;
         for (let j = 0; j < 3; j++) {
@@ -218,7 +222,6 @@ export function PortfolioPage() {
       const goldIdx = goldData.findIndex(d => d.date === targetDateStr);
       if (stockIdx === -1 || goldIdx === -1) throw new Error('داده‌ای برای تاریخ انتخاب شده یافت نشد.');
 
-      // 1. Inputs
       const stockMA100 = calculateFullHistorySMA(stockData, 100);
       const goldMA100 = calculateFullHistorySMA(goldData, 100);
       
@@ -230,19 +233,16 @@ export function PortfolioPage() {
       const goldDev = ((goldPoint.close - goldMA) / goldMA) * 100;
       const stockDev = ((stockPoint.close - stockMA) / stockMA) * 100;
 
-      // 2. State Logic (Hysteresis)
       const goldState = calculateStateHysteresis(goldData, goldMA100, goldIdx);
       const stockState = calculateStateHysteresis(stockData, stockMA100, stockIdx);
 
-      // 3. Ratio & Trends
       const merged = alignDataByDate(stockData, goldData);
-      const ratioSeries = merged.map(m => ({ date: m.date, close: m.price2 / m.price1 })); // Gold / Index
+      const ratioSeries = merged.map(m => ({ date: m.date, close: m.price2 / m.price1 })); 
       const ratioMA100 = calculateFullHistorySMA(ratioSeries, 100);
       const currentRatio = goldPoint.close / stockPoint.close;
       const ratioMA = ratioMA100.get(targetDateStr)!;
       const ratioTrendAbove = currentRatio > ratioMA;
 
-      // 4. Filters (Anomaly, Risk)
       const mergedTargetIdx = merged.findIndex(m => m.date === targetDateStr);
       const slice2M = merged.slice(mergedTargetIdx - 60, mergedTargetIdx + 1);
       const slice1Y = merged.slice(mergedTargetIdx - 365, mergedTargetIdx + 1);
@@ -259,66 +259,62 @@ export function PortfolioPage() {
         anomaly: isAnomaly,
         highCorr: isHighCorrRisk,
         safeCorr: isSafeCorr,
-        ratioAboveMA: ratioTrendAbove
+        ratioAboveMA: ratioTrendAbove,
+        corr2M,
+        corr1Y
       });
 
-      // 5. Decision Matrix
+      // Decision Matrix
       let scenario = "صلح (وضعیت نرمال)";
       let description = "بازار در شرایط پایدار است. وزن‌دهی متعادل اعمال شد.";
       let alloc = [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
 
-      // SCENARIO 1: Combat (Ceiling vs Floor)
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
           scenario = "تقابل اکستریم (جنگی)";
           const cheap = goldState === 'Floor' ? 'gold' : 'index';
           if (isAnomaly) {
-              description = "ناهنجاری شناسایی شد! حمله سنگین به سمت دارایی ارزان (Floor).";
+              description = "ناهنجاری شناسایی شد! تضاد شدید بین همبستگی کوتاه‌مدت و بلندمدت نشان‌دهنده تغییر فاز احتمالی بازار است. حمله سنگین به سمت دارایی ارزان (Floor).";
               alloc = cheap === 'gold' 
                 ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
                 : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
           } else {
-              // Check Ratio Trend confirm
               const ratioConfirmsCheap = (cheap === 'gold' && ratioTrendAbove) || (cheap === 'index' && !ratioTrendAbove);
               if (ratioConfirmsCheap) {
-                description = "روند نسبت (Ratio) خرید دارایی ارزان را تایید می‌کند. حمله حداکثری.";
+                description = "روند نسبت (Ratio) خرید دارایی ارزان را تایید می‌کند. حمله حداکثری به دارایی در کف.";
                 alloc = cheap === 'gold' 
                     ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
                     : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
               } else {
-                description = "تضاد بین Ratio و دارایی ارزان. تخصیص احتیاطی.";
+                description = "تضاد بین Ratio و دارایی ارزان. با وجود قرارگیری در کف، قدرت نسبی هنوز چرخش نکرده است. تخصیص احتیاطی.";
                 alloc = [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
               }
           }
       } 
-      // SCENARIO 2: Bubble / Double Opp
       else if (goldState === 'Ceiling' && stockState === 'Ceiling') {
           scenario = "حباب دوطرفه (اشباع)";
-          description = "هر دو دارایی در سقف هستند. افزایش سهم نقدینگی (اوراق).";
+          description = "هر دو دارایی در سقف هستند. ریسک سیستماتیک بازار بالاست. افزایش سهم نقدینگی (اوراق) به ۵۰٪ برای آمادگی در اصلاح احتمالی.";
           alloc = ratioTrendAbove 
             ? [ { name: GOLD_SYMBOL, value: 30, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 50, fill: '#3b82f6' } ]
             : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 30, fill: '#10b981' }, { name: 'اوراق', value: 50, fill: '#3b82f6' } ];
       }
       else if (goldState === 'Floor' && stockState === 'Floor') {
           scenario = "فرصت دوطرفه (کف‌خوری)";
-          description = "هر دو دارایی زیر قیمت تعادلی هستند. خرید پله‌ای بر اساس قدرت نسبی.";
+          description = "هر دو دارایی زیر قیمت تعادلی هستند. فرصت عالی برای ورود پله‌ای. اولویت با دارایی است که روند نسبت (Ratio) تاییدش می‌کند.";
           alloc = ratioTrendAbove 
             ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ]
             : [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
       }
-      // SCENARIO 3: One Extreme, One Normal
       else if (goldState === 'Ceiling' || stockState === 'Ceiling') {
           scenario = "تک‌سقف (توزیع)";
           const highAsset = goldState === 'Ceiling' ? 'gold' : 'index';
-          const normalAsset = goldState === 'Ceiling' ? 'index' : 'gold';
-          // Check Ratio Confirming high asset drop
           const ratioConfirmsHighDrop = (highAsset === 'gold' && !ratioTrendAbove) || (highAsset === 'index' && ratioTrendAbove);
           if (ratioConfirmsHighDrop) {
-              description = "نسبت (Ratio) تاییدکننده ریزش دارایی گران است. خروج سنگین از سقف.";
+              description = "نسبت (Ratio) تاییدکننده تضعیف دارایی گران است. خروج سنگین از سقف و انتقال به دارایی نرمال.";
               alloc = highAsset === 'gold'
                 ? [ { name: GOLD_SYMBOL, value: 15, fill: '#fbbf24' }, { name: symbol.symbol, value: 50, fill: '#10b981' }, { name: 'اوراق', value: 35, fill: '#3b82f6' } ]
                 : [ { name: GOLD_SYMBOL, value: 50, fill: '#fbbf24' }, { name: symbol.symbol, value: 15, fill: '#10b981' }, { name: 'اوراق', value: 35, fill: '#3b82f6' } ];
           } else {
-              description = "تضاد در روند نسبت. توازن وزنی بین سقف و نرمال.";
+              description = "تضاد در روند نسبت. با وجود اشباع قیمتی، هنوز قدرت نسبی بالاست. توازن وزنی بین سقف و نرمال.";
               alloc = [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
           }
       }
@@ -326,35 +322,34 @@ export function PortfolioPage() {
           scenario = "تک‌کف (فرصت خرید)";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isHighCorrRisk) {
-              description = "ریسک همبستگی بالاست. خرید با احتیاط از دارایی ارزان.";
+              description = "ریسک همبستگی بالاست (هر دو دارایی هم‌جهت می‌روند). خرید با احتیاط از دارایی ارزان برای جلوگیری از ریسک جفتی.";
               alloc = cheapAsset === 'gold'
                 ? [ { name: GOLD_SYMBOL, value: 40, fill: '#fbbf24' }, { name: symbol.symbol, value: 30, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ]
                 : [ { name: GOLD_SYMBOL, value: 30, fill: '#fbbf24' }, { name: symbol.symbol, value: 40, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
           } else {
               const ratioConfirmsCheapRise = (cheapAsset === 'gold' && ratioTrendAbove) || (cheapAsset === 'index' && !ratioTrendAbove);
               if (ratioConfirmsCheapRise) {
-                  description = "روند نسبت صعود دارایی ارزان را تایید می‌کند. حمله وزنی.";
+                  description = "روند نسبت صعود دارایی ارزان را تایید می‌کند. حمله وزنی به کف شناسایی شده.";
                   alloc = cheapAsset === 'gold'
                     ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
                     : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
               } else {
-                  description = "روند نسبت خرید را تایید نمی‌کنید. وزن متعادل در کف.";
+                  description = "روند نسبت خرید را قطعی نمی‌داند. وزن متعادل در کف با سهم ۲۰٪ اوراق.";
                   alloc = [ { name: GOLD_SYMBOL, value: 40, fill: '#fbbf24' }, { name: symbol.symbol, value: 40, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
               }
           }
       } 
-      // SCENARIO 4: Peace (Normal)
       else {
           if (isHighCorrRisk) {
-              description = "همبستگی شدید مثبت. حالت تدافعی فعال شد.";
+              description = "همبستگی شدید مثبت (>0.5). دارایی‌ها هم‌حرکت هستند و تنوع‌بخشی پرتفوی کم است. حالت تدافعی با ۵۰٪ اوراق فعال شد.";
               alloc = [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: 'اوراق', value: 50, fill: '#3b82f6' } ];
           } else if (isSafeCorr) {
-              description = "همبستگی معکوس امن. وزن‌دهی به نفع روند برتر نسبت.";
+              description = "همبستگی معکوس امن (<-0.5). تنوع‌بخشی در بهترین حالت است. وزن‌دهی به نفع روند برتر نسبت (Ratio).";
               alloc = ratioTrendAbove
                 ? [ { name: GOLD_SYMBOL, value: 55, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 10, fill: '#3b82f6' } ]
                 : [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 55, fill: '#10b981' }, { name: 'اوراق', value: 10, fill: '#3b82f6' } ];
           } else {
-              description = "روند بازار عادی (صلح). وزن‌دهی بر اساس روند نسبت.";
+              description = "روند بازار عادی (صلح). دارایی‌ها در ناحیه تعادلی هستند. وزن‌دهی متعادل بر اساس روند نسبت انجام شد.";
               alloc = ratioTrendAbove
                 ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
                 : [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
@@ -413,7 +408,7 @@ export function PortfolioPage() {
                            <div key={idx} className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                                <div className="flex justify-between items-center mb-3">
                                    <span className="text-white font-bold">{m.symbol}</span>
-                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${m.state === 'Ceiling' ? 'bg-red-500 text-white' : m.state === 'Floor' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${m.state === 'Ceiling' ? 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.4)]' : m.state === 'Floor' ? 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-slate-700 text-slate-300'}`}>
                                        {m.state === 'Ceiling' ? 'سقف' : m.state === 'Floor' ? 'کف' : 'نرمال'}
                                    </span>
                                </div>
@@ -422,26 +417,65 @@ export function PortfolioPage() {
                                    <span className={m.dev > 0 ? 'text-red-400' : 'text-emerald-400'} dir="ltr">{m.dev.toFixed(1)}%</span>
                                </div>
                                <div className="h-1.5 bg-slate-950 rounded-full overflow-hidden">
-                                   <div className={`h-full transition-all ${m.dev > 0 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{width: `${Math.min(Math.abs(m.dev) * 4, 100)}%`}}></div>
+                                   <div className={`h-full transition-all duration-700 ${m.dev > 0 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{width: `${Math.min(Math.abs(m.dev) * 4, 100)}%`}}></div>
                                </div>
                            </div>
                         ))}
 
-                        <div className="grid grid-cols-2 gap-2 mt-4">
-                            <div className={`p-3 rounded-lg border flex flex-col items-center gap-1 ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/50 text-red-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
-                                <ShieldAlert className="w-4 h-4" />
-                                <span className="text-[10px] font-bold">ناهنجاری</span>
+                        {/* ANOMALY CARD */}
+                        <div className={`p-4 rounded-xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40 shadow-inner' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                    <ShieldAlert className={`w-4 h-4 ${marketMetrics.anomaly ? 'text-red-500' : 'text-slate-500'}`} />
+                                    <span className={`text-xs font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>ناهنجاری (Anomaly)</span>
+                                </div>
+                                {marketMetrics.anomaly && <span className="bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded animate-pulse">فعال</span>}
                             </div>
-                            <div className={`p-3 rounded-lg border flex flex-col items-center gap-1 ${marketMetrics.highCorr ? 'bg-orange-500/10 border-orange-500/50 text-orange-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
-                                <Zap className="w-4 h-4" />
-                                <span className="text-[10px] font-bold">ریسک همبستگی</span>
+                            <div className="space-y-2 mt-3">
+                                <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-500">همبستگی ۱ ساله:</span>
+                                    <span className="text-slate-300 font-mono">{marketMetrics.corr1Y.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-500">همبستگی ۶۰ روزه:</span>
+                                    <span className="text-slate-300 font-mono">{marketMetrics.corr2M.toFixed(2)}</span>
+                                </div>
+                                {marketMetrics.anomaly && (
+                                    <p className="text-[9px] text-red-400 leading-4 mt-2 border-t border-red-500/20 pt-2">
+                                        تضاد در روند بلندمدت و کوتاه‌مدت! احتمال واگرایی شدید یا تغییر رفتار بازار.
+                                    </p>
+                                )}
                             </div>
                         </div>
 
+                        {/* RISK CARD */}
+                        <div className={`p-4 rounded-xl border transition-all ${marketMetrics.highCorr ? 'bg-orange-500/10 border-orange-500/40' : 'bg-slate-900 border-slate-700'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                    <Zap className={`w-4 h-4 ${marketMetrics.highCorr ? 'text-orange-500' : 'text-slate-500'}`} />
+                                    <span className={`text-xs font-black ${marketMetrics.highCorr ? 'text-white' : 'text-slate-500'}`}>ریسک همبستگی</span>
+                                </div>
+                                <span className={`text-[10px] font-mono ${marketMetrics.highCorr ? 'text-orange-400' : 'text-slate-500'}`}>{marketMetrics.corr2M.toFixed(2)}</span>
+                            </div>
+                            <div className="h-1 bg-slate-950 rounded-full overflow-hidden mt-3">
+                                <div className={`h-full transition-all duration-700 ${marketMetrics.highCorr ? 'bg-orange-500' : 'bg-slate-600'}`} style={{width: `${Math.max(0, marketMetrics.corr2M) * 100}%`}}></div>
+                            </div>
+                            <p className="text-[9px] text-slate-500 mt-2 leading-4">
+                                {marketMetrics.highCorr 
+                                  ? 'همبستگی مثبت بالا (>0.5). سقوط همزمان دارایی‌ها محتمل است. ریسک تنوع‌بخشی پایین.' 
+                                  : marketMetrics.safeCorr 
+                                    ? 'همبستگی معکوس عالی. تنوع‌بخشی در وضعیت بهینه.' 
+                                    : 'همبستگی در محدوده خنثی. ریسک سیستماتیک پایین است.'}
+                            </p>
+                        </div>
+
                         <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 flex justify-between items-center text-xs">
-                            <span className="text-slate-400">روند نسبت (Ratio):</span>
+                            <div className="flex items-center gap-1.5">
+                                <Activity className="w-3 h-3 text-amber-500" />
+                                <span className="text-slate-400">روند نسبت (Ratio):</span>
+                            </div>
                             <span className={`font-bold ${marketMetrics.ratioAboveMA ? 'text-amber-400' : 'text-cyan-400'}`}>
-                                {marketMetrics.ratioAboveMA ? 'طلا قوی‌تر (صعودی)' : 'شاخص قوی‌تر (نزولی)'}
+                                {marketMetrics.ratioAboveMA ? 'طلا برتر' : 'شاخص برتر'}
                             </span>
                         </div>
                     </div>
@@ -458,38 +492,51 @@ export function PortfolioPage() {
                         </div>
                         <div className="bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-center">
                             <span className="text-[10px] text-slate-500 block">آخرین تاریخ دیتا</span>
-                            <span className="text-sm font-bold text-cyan-400" dir="ltr">{toShamsi(marketMetrics.gold.state === 'Ceiling' ? '20230101' : '20230101')}</span>
+                            <span className="text-sm font-bold text-cyan-400" dir="ltr">{toShamsi(dateMode === 'current' ? '20230101' : '20230101')}</span>
                         </div>
                     </div>
 
                     <div className="flex-1 flex flex-col lg:flex-row p-6 items-center">
-                        <div className="flex-1 h-[300px] w-full relative">
+                        <div className="flex-1 h-[340px] w-full relative">
                             <ResponsiveContainer>
                                 <RechartsPieChart>
-                                    <Pie data={strategy.allocation} cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={5} dataKey="value" stroke="none">
-                                        {strategy.allocation.map((entry, index) => <Cell key={index} fill={entry.fill} />)}
+                                    <Pie data={strategy.allocation} cx="50%" cy="50%" innerRadius={85} outerRadius={125} paddingAngle={5} dataKey="value" stroke="none">
+                                        {strategy.allocation.map((entry, index) => <Cell key={index} fill={entry.fill} className="hover:opacity-80 transition-opacity cursor-pointer" />)}
                                     </Pie>
-                                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }} />
-                                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} 
+                                        itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                                    />
+                                    <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={(value) => <span className="text-slate-300 font-bold text-xs">{value}</span>} />
                                 </RechartsPieChart>
                             </ResponsiveContainer>
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                                 <div className="text-center">
-                                    <span className="block text-2xl font-black text-white">پرتفوی</span>
-                                    <span className="text-[10px] text-slate-500">وزن‌های پیشنهادی</span>
+                                    <span className="block text-3xl font-black text-white">پرتفوی</span>
+                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest">Weighting</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="lg:w-1/3 mt-6 lg:mt-0 p-4 bg-slate-900/50 rounded-2xl border border-slate-700/50">
-                            <h5 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> اقدام استراتژیک</h5>
-                            <p className="text-sm text-slate-300 leading-7 text-justify">{strategy.description}</p>
-                            <div className="mt-4 space-y-2">
+                        <div className="lg:w-2/5 mt-6 lg:mt-0 p-5 bg-slate-900/40 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
+                            <h5 className="text-sm font-black text-white mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-3">
+                                <CheckCircle2 className="w-5 h-5 text-emerald-400" /> 
+                                اقدام استراتژیک پیشنهادی
+                            </h5>
+                            <p className="text-xs text-slate-300 leading-7 text-justify mb-6">{strategy.description}</p>
+                            <div className="space-y-3">
                                 {strategy.allocation.map((a, i) => (
-                                    <div key={i} className="flex justify-between items-center text-xs">
-                                        <span className="text-slate-500">{a.name}:</span>
-                                        <span className="font-bold text-white">{a.value}%</span>
+                                    <div key={i} className="flex justify-between items-center group">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full" style={{backgroundColor: a.fill}}></div>
+                                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">{a.name}:</span>
+                                        </div>
+                                        <span className="font-black text-sm text-white group-hover:text-cyan-400 transition-colors">{a.value}%</span>
                                     </div>
                                 ))}
+                            </div>
+                            <div className="mt-6 pt-4 border-t border-slate-800 flex items-center gap-2 text-[9px] text-slate-500 italic">
+                                <InfoIcon className="w-3 h-3" />
+                                مبنای محاسبات: میانگین متحرک ۱۰۰ روزه و نسبت طلا/شاخص
                             </div>
                         </div>
                     </div>
@@ -499,7 +546,7 @@ export function PortfolioPage() {
        )}
 
        {status === FetchStatus.IDLE && (
-         <div className="flex flex-col items-center justify-center p-20 bg-slate-800 rounded-3xl border border-slate-700 border-dashed opacity-50">
+         <div className="flex flex-col items-center justify-center p-20 bg-slate-800/50 rounded-3xl border border-slate-700 border-dashed opacity-50">
             <PieChart className="w-16 h-16 text-slate-600 mb-4" />
             <p className="text-slate-500">برای مشاهده استراتژی و وضعیت بازار، نماد را انتخاب و دکمه محاسبه را بزنید.</p>
          </div>
