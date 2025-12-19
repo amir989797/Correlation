@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
 import { calculateFullHistorySMA, toShamsi, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
-import { Search, Loader2, PieChart, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Banknote, Activity, ShieldAlert, Zap, InfoIcon, History, Target, Swords, BubbleChart, Sparkles } from 'lucide-react';
+import { Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, Zap, InfoIcon, History, Target, Swords, Boxes, Sparkles } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -263,7 +263,7 @@ export function PortfolioPage() {
         corr1Y
       });
 
-      // Strategy Matrix
+      // Strategy Matrix Logic
       let scenario = "صلح (وضعیت نرمال)";
       let sid = "peace";
       let description = "بازار در شرایط پایدار است. وزن‌دهی متعادل اعمال شد.";
@@ -315,7 +315,7 @@ export function PortfolioPage() {
 
   const StrategyGuide = [
     { id: 'combat', icon: Swords, title: 'تقابل اکستریم (جنگی)', desc: 'زمانی که یک دارایی در سقف (Ceiling) و دیگری در کف (Floor) است. استراتژی بر جابجایی وزن به سمت دارایی ارزان است.', color: 'red' },
-    { id: 'bubble', icon: BubbleChart, title: 'حباب دوطرفه (اشباع)', desc: 'هر دو دارایی بالای میانگین ۱۰۰ روزه و در وضعیت سقف هستند. ریسک خروج و نقدینگی بالا (۵۰٪ اوراق) اولویت دارد.', color: 'orange' },
+    { id: 'bubble', icon: Boxes, title: 'حباب دوطرفه (اشباع)', desc: 'هر دو دارایی بالای میانگین ۱۰۰ روزه و در وضعیت سقف هستند. ریسک خروج و نقدینگی بالا (۵۰٪ اوراق) اولویت دارد.', color: 'orange' },
     { id: 'opportunity', icon: Sparkles, title: 'فرصت دوطرفه (کف‌خوری)', desc: 'هر دو دارایی در وضعیت کف هستند. بهترین زمان برای خرید پله‌ای و کاهش سهم نقدینگی به نفع دارایی‌های ریسکی.', color: 'emerald' },
     { id: 'one-ceiling', icon: TrendingDown, title: 'تک‌سقف (توزیع)', desc: 'یکی از دارایی‌ها به اشباع رسیده اما دیگری وضعیت عادی دارد. فروش تدریجی دارایی گران و توازن پرتفوی.', color: 'purple' },
     { id: 'one-floor', icon: TrendingUp, title: 'تک‌کف (فرصت خرید)', desc: 'یکی از دارایی‌ها در کف قیمتی قرار دارد. افزایش وزن به نفع این دارایی برای کسب بازدهی در میان‌مدت.', color: 'cyan' },
@@ -356,10 +356,10 @@ export function PortfolioPage() {
          <div className="grid md:grid-cols-12 gap-6 items-stretch animate-fade-in">
             
             {/* Logic State Panel */}
-            <div className="md:col-span-4 flex flex-col gap-6">
+            <div className="md:col-span-4 flex flex-col">
                 <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg h-full flex flex-col">
                     <h4 className="font-bold text-white mb-6 border-b border-slate-700 pb-2 flex items-center gap-2"><Activity className="w-5 h-5 text-cyan-400" /> تشخیص وضعیت (State Logic)</h4>
-                    <div className="space-y-6 flex-1">
+                    <div className="space-y-6 flex-1 flex flex-col">
                         {[marketMetrics.gold, marketMetrics.index].map((m, idx) => (
                            <div key={idx} className="bg-slate-900 p-5 rounded-2xl border border-slate-700 relative overflow-hidden group">
                                <div className={`absolute top-0 right-0 w-1 h-full ${m.state === 'Ceiling' ? 'bg-red-500' : m.state === 'Floor' ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
@@ -369,8 +369,8 @@ export function PortfolioPage() {
                                        {/* HISTORY HOVER TRIGGER */}
                                        <div className="relative group/hist">
                                             <History className="w-4 h-4 text-slate-500 cursor-help hover:text-cyan-400 transition-colors" />
-                                            <div className="absolute left-full mr-2 top-0 w-32 bg-slate-950 border border-slate-800 p-3 rounded-xl shadow-2xl z-50 opacity-0 pointer-events-none group-hover/hist:opacity-100 transition-opacity">
-                                                <span className="text-[9px] text-slate-500 block mb-2 border-b border-slate-800 pb-1">پایداری ۳ روزه</span>
+                                            <div className="absolute left-full mr-2 top-0 w-36 bg-slate-950 border border-slate-800 p-3 rounded-xl shadow-2xl z-50 opacity-0 pointer-events-none group-hover/hist:opacity-100 transition-opacity">
+                                                <span className="text-[9px] text-slate-500 block mb-2 border-b border-slate-800 pb-1">پایداری ۳ روزه (Lock 3/3)</span>
                                                 <div className="flex flex-col gap-2">
                                                     {m.devHistory.map((d, i) => (
                                                         <div key={i} className="flex justify-between text-[10px]">
@@ -381,7 +381,7 @@ export function PortfolioPage() {
                                                 </div>
                                             </div>
                                        </div>
-                                       <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${m.state === 'Ceiling' ? 'bg-red-500 text-white' : m.state === 'Floor' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                                       <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${m.state === 'Ceiling' ? 'bg-red-500 text-white shadow-[0_0_8px_rgba(239,68,68,0.3)]' : m.state === 'Floor' ? 'bg-emerald-500 text-white shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-slate-700 text-slate-300'}`}>
                                            {m.state === 'Ceiling' ? 'سقف' : m.state === 'Floor' ? 'کف' : 'نرمال'}
                                        </span>
                                    </div>
@@ -392,25 +392,28 @@ export function PortfolioPage() {
                            </div>
                         ))}
 
+                        {/* ANOMALY AND RISK STACKED */}
                         <div className="flex flex-col gap-3">
-                            <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
-                                <div className="flex items-center gap-2 mb-2">
+                            <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40 shadow-inner' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
+                                <div className="flex items-center gap-2 mb-1">
                                     <ShieldAlert className={`w-4 h-4 ${marketMetrics.anomaly ? 'text-red-500' : 'text-slate-500'}`} />
                                     <span className={`text-[10px] font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>ناهنجاری</span>
                                 </div>
                                 <span className="text-[9px] text-slate-500 block">تضاد همبستگی کوتاه‌مدت و بلندمدت</span>
                             </div>
-                            <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.highCorr ? 'bg-orange-500/10 border-orange-500/40' : 'bg-slate-900 border-slate-700'}`}>
-                                <div className="flex items-center gap-2 mb-2">
+                            <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.highCorr ? 'bg-orange-500/10 border-orange-500/40 shadow-inner' : 'bg-slate-900 border-slate-700'}`}>
+                                <div className="flex items-center gap-2 mb-1">
                                     <Zap className={`w-4 h-4 ${marketMetrics.highCorr ? 'text-orange-500' : 'text-slate-500'}`} />
                                     <span className={`text-[10px] font-black ${marketMetrics.highCorr ? 'text-white' : 'text-slate-500'}`}>ریسک همبستگی</span>
                                 </div>
                                 <div className="h-1 bg-slate-950 rounded-full overflow-hidden mb-1">
                                     <div className={`h-full transition-all duration-700 ${marketMetrics.highCorr ? 'bg-orange-500' : 'bg-slate-600'}`} style={{width: `${Math.max(0, marketMetrics.corr2M) * 100}%`}}></div>
                                 </div>
+                                <span className="text-[8px] font-mono text-slate-500 text-left block" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
                             </div>
                         </div>
 
+                        {/* RATIO STATUS AT BOTTOM OF PANEL */}
                         <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700 flex justify-between items-center text-xs mt-auto">
                             <div className="flex items-center gap-1.5">
                                 <Activity className="w-3 h-3 text-amber-500" />
@@ -425,12 +428,12 @@ export function PortfolioPage() {
             </div>
 
             {/* Results Panel */}
-            <div className="md:col-span-8 flex flex-col gap-6">
+            <div className="md:col-span-8 flex flex-col">
                 <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
                     <div className="p-6 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
                         <div>
-                            <span className="text-xs text-slate-500 block mb-1">سناریوی شناسایی شده</span>
-                            <h3 className="text-xl font-black text-white">{strategy.scenario}</h3>
+                            <span className="text-xs text-slate-500 block mb-1 uppercase tracking-tighter">سناریوی جاری</span>
+                            <h3 className="text-2xl font-black text-white">{strategy.scenario}</h3>
                         </div>
                     </div>
 
@@ -438,24 +441,39 @@ export function PortfolioPage() {
                         <div className="flex-1 h-[340px] w-full relative">
                             <ResponsiveContainer>
                                 <RechartsPieChart>
-                                    <Pie data={strategy.allocation} cx="50%" cy="50%" innerRadius={85} outerRadius={125} paddingAngle={5} dataKey="value" stroke="none">
+                                    <Pie 
+                                      data={strategy.allocation} 
+                                      cx="50%" 
+                                      cy="50%" 
+                                      innerRadius={85} 
+                                      outerRadius={125} 
+                                      paddingAngle={5} 
+                                      dataKey="value" 
+                                      stroke="none"
+                                    >
                                         {strategy.allocation.map((entry, index) => <Cell key={index} fill={entry.fill} className="hover:opacity-80 transition-opacity cursor-pointer" />)}
                                     </Pie>
                                     <Tooltip 
-                                        contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} 
+                                        contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)', color: '#fff' }} 
                                         itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                                        labelStyle={{ color: '#fff' }}
                                     />
-                                    <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={(value) => <span className="text-slate-300 font-bold text-xs">{value}</span>} />
+                                    <Legend 
+                                      verticalAlign="bottom" 
+                                      height={36} 
+                                      iconType="circle" 
+                                      formatter={(value) => <span className="text-slate-300 font-bold text-xs">{value}</span>} 
+                                    />
                                 </RechartsPieChart>
                             </ResponsiveContainer>
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                                 <div className="text-center">
                                     <span className="block text-3xl font-black text-white">پرتفوی</span>
-                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest">Weights</span>
+                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest">Weighting</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="lg:w-2/5 p-6 bg-slate-900/40 rounded-3xl border border-slate-700/50 backdrop-blur-sm">
+                        <div className="lg:w-2/5 p-6 bg-slate-900/40 rounded-3xl border border-slate-700/50 backdrop-blur-sm shadow-inner">
                             <h5 className="text-sm font-black text-white mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-3">
                                 <CheckCircle2 className="w-5 h-5 text-emerald-400" /> اقدام استراتژیک
                             </h5>
@@ -463,10 +481,17 @@ export function PortfolioPage() {
                             <div className="space-y-3">
                                 {strategy.allocation.map((a, i) => (
                                     <div key={i} className="flex justify-between items-center group">
-                                        <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: a.fill}}></div><span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">{a.name}:</span></div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{backgroundColor: a.fill}}></div>
+                                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">{a.name}:</span>
+                                        </div>
                                         <span className="font-black text-sm text-white group-hover:text-cyan-400 transition-colors">{a.value}%</span>
                                     </div>
                                 ))}
+                            </div>
+                            <div className="mt-6 pt-4 border-t border-slate-800 flex items-center gap-2 text-[9px] text-slate-500 italic">
+                                <InfoIcon className="w-3 h-3" />
+                                مبنا: قفل ۳/۳ با آستانه ۱۰٪ ورود و ۷٪ خروج
                             </div>
                         </div>
                     </div>
@@ -483,13 +508,13 @@ export function PortfolioPage() {
                 {StrategyGuide.map((s) => {
                     const isActive = strategy.id === s.id;
                     return (
-                        <div key={s.id} className={`p-6 rounded-3xl border transition-all duration-500 flex flex-col relative overflow-hidden ${isActive ? 'bg-slate-800 border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/50' : 'bg-slate-900/50 border-slate-800 grayscale opacity-40 hover:grayscale-0 hover:opacity-100 hover:border-slate-700'}`}>
-                            {isActive && <div className="absolute top-4 left-4 bg-cyan-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">وضعیت فعلی</div>}
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${isActive ? 'bg-cyan-500/20 text-cyan-400' : 'bg-slate-800 text-slate-500'}`}>
+                        <div key={s.id} className={`p-6 rounded-3xl border transition-all duration-500 flex flex-col relative overflow-hidden ${isActive ? 'bg-slate-800 border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.1)] ring-1 ring-cyan-500/50' : 'bg-slate-900/50 border-slate-800 grayscale opacity-40 hover:grayscale-0 hover:opacity-100 hover:border-slate-700'}`}>
+                            {isActive && <div className="absolute top-4 left-4 bg-cyan-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse shadow-lg">استراتژی جاری</div>}
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${isActive ? 'bg-cyan-500/20 text-cyan-400 shadow-inner' : 'bg-slate-800 text-slate-500'}`}>
                                 <s.icon className="w-6 h-6" />
                             </div>
-                            <h4 className={`font-black mb-2 ${isActive ? 'text-white' : 'text-slate-400'}`}>{s.title}</h4>
-                            <p className="text-xs text-slate-500 leading-6">{s.desc}</p>
+                            <h4 className={`font-black mb-2 text-sm ${isActive ? 'text-white' : 'text-slate-400'}`}>{s.title}</h4>
+                            <p className="text-[11px] text-slate-500 leading-6 text-justify">{s.desc}</p>
                         </div>
                     );
                 })}
@@ -499,8 +524,15 @@ export function PortfolioPage() {
 
        {status === FetchStatus.IDLE && (
          <div className="flex flex-col items-center justify-center p-20 bg-slate-800/50 rounded-3xl border border-slate-700 border-dashed opacity-50">
-            <PieChart className="w-16 h-16 text-slate-600 mb-4" />
-            <p className="text-slate-500">نماد را انتخاب و دکمه محاسبه را بزنید.</p>
+            <Activity className="w-16 h-16 text-slate-600 mb-4" />
+            <p className="text-slate-500">لطفا نماد را انتخاب و دکمه محاسبه را بزنید تا وضعیت پرتفوی تحلیل شود.</p>
+         </div>
+       )}
+
+       {error && (
+         <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-xl text-red-400 text-sm flex items-center gap-3">
+             <AlertTriangle className="w-5 h-5" />
+             {error}
          </div>
        )}
     </div>
