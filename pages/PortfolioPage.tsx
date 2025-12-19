@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
 import { calculateFullHistorySMA, toShamsi, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
-import { Search, Loader2, PieChart, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Banknote, Activity, ShieldAlert, Zap, InfoIcon } from 'lucide-react';
+import { Search, Loader2, PieChart, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Banknote, Activity, ShieldAlert, Zap, InfoIcon, History } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -23,6 +23,7 @@ interface AssetMetrics {
   price: number;
   dev: number;
   state: MarketState;
+  devHistory: number[]; // Last 3 days of deviation
 }
 
 interface StrategyResult {
@@ -158,6 +159,7 @@ export function PortfolioPage() {
 
       const dev = ((point.close - ma) / ma) * 100;
 
+      // Entry Logic (Lock 3/3)
       if (currentState !== 'Ceiling' && dev > 10) {
         let count = 0;
         for (let j = 0; j < 3; j++) {
@@ -178,6 +180,7 @@ export function PortfolioPage() {
         if (count === 3) currentState = 'Floor';
       }
 
+      // Exit Logic (Lock 3/3)
       if (currentState === 'Ceiling' && dev < 7) {
         let count = 0;
         for (let j = 0; j < 3; j++) {
@@ -199,6 +202,19 @@ export function PortfolioPage() {
       }
     }
     return currentState;
+  };
+
+  const getDevHistory = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): number[] => {
+    const history: number[] = [];
+    for (let i = 0; i < 3; i++) {
+        const idx = targetIndex - i;
+        if (idx < 0) { history.push(0); continue; }
+        const p = data[idx];
+        const ma = maMap.get(p.date);
+        if (ma) history.push(((p.close - ma) / ma) * 100);
+        else history.push(0);
+    }
+    return history;
   };
 
   const runStrategy = async () => {
@@ -236,6 +252,9 @@ export function PortfolioPage() {
       const goldState = calculateStateHysteresis(goldData, goldMA100, goldIdx);
       const stockState = calculateStateHysteresis(stockData, stockMA100, stockIdx);
 
+      const goldHistory = getDevHistory(goldData, goldMA100, goldIdx);
+      const stockHistory = getDevHistory(stockData, stockMA100, stockIdx);
+
       const merged = alignDataByDate(stockData, goldData);
       const ratioSeries = merged.map(m => ({ date: m.date, close: m.price2 / m.price1 })); 
       const ratioMA100 = calculateFullHistorySMA(ratioSeries, 100);
@@ -254,8 +273,8 @@ export function PortfolioPage() {
       const isSafeCorr = corr2M < -0.5;
 
       setMarketMetrics({
-        gold: { symbol: 'طلا (عیار)', price: goldPoint.close, dev: goldDev, state: goldState },
-        index: { symbol: symbol.symbol, price: stockPoint.close, dev: stockDev, state: stockState },
+        gold: { symbol: 'طلا (عیار)', price: goldPoint.close, dev: goldDev, state: goldState, devHistory: goldHistory },
+        index: { symbol: symbol.symbol, price: stockPoint.close, dev: stockDev, state: stockState, devHistory: stockHistory },
         anomaly: isAnomaly,
         highCorr: isHighCorrRisk,
         safeCorr: isSafeCorr,
@@ -403,78 +422,84 @@ export function PortfolioPage() {
             <div className="md:col-span-4 space-y-6">
                 <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg h-full">
                     <h4 className="font-bold text-white mb-6 border-b border-slate-700 pb-2 flex items-center gap-2"><Activity className="w-5 h-5 text-cyan-400" /> منطق تشخیص وضعیت (State Logic)</h4>
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         {[marketMetrics.gold, marketMetrics.index].map((m, idx) => (
-                           <div key={idx} className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                               <div className="flex justify-between items-center mb-3">
-                                   <span className="text-white font-bold">{m.symbol}</span>
-                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${m.state === 'Ceiling' ? 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.4)]' : m.state === 'Floor' ? 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-slate-700 text-slate-300'}`}>
+                           <div key={idx} className="bg-slate-900 p-5 rounded-2xl border border-slate-700 relative overflow-hidden group">
+                               <div className={`absolute top-0 right-0 w-1 h-full ${m.state === 'Ceiling' ? 'bg-red-500' : m.state === 'Floor' ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
+                               <div className="flex justify-between items-center mb-4">
+                                   <span className="text-white font-black text-sm">{m.symbol}</span>
+                                   <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-sm ${m.state === 'Ceiling' ? 'bg-red-500 text-white' : m.state === 'Floor' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
                                        {m.state === 'Ceiling' ? 'سقف' : m.state === 'Floor' ? 'کف' : 'نرمال'}
                                    </span>
                                </div>
-                               <div className="flex justify-between text-xs text-slate-500 mb-1">
-                                   <span>فاصله از MA100:</span>
-                                   <span className={m.dev > 0 ? 'text-red-400' : 'text-emerald-400'} dir="ltr">{m.dev.toFixed(1)}%</span>
+                               
+                               {/* Deviation Bar */}
+                               <div className="space-y-2 mb-5">
+                                   <div className="flex justify-between text-[10px] text-slate-500">
+                                       <span>انحراف از میانگین</span>
+                                       <span className={m.dev > 0 ? 'text-red-400' : 'text-emerald-400'} dir="ltr">{m.dev.toFixed(2)}%</span>
+                                   </div>
+                                   <div className="h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                                       <div className={`h-full transition-all duration-700 ${m.dev > 0 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{width: `${Math.min(Math.abs(m.dev) * 4, 100)}%`}}></div>
+                                   </div>
                                </div>
-                               <div className="h-1.5 bg-slate-950 rounded-full overflow-hidden">
-                                   <div className={`h-full transition-all duration-700 ${m.dev > 0 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{width: `${Math.min(Math.abs(m.dev) * 4, 100)}%`}}></div>
+
+                               {/* Lock 3/3 Visualization */}
+                               <div className="pt-4 border-t border-slate-800/50">
+                                   <div className="flex items-center gap-2 mb-3">
+                                       <History className="w-3 h-3 text-slate-500" />
+                                       <span className="text-[10px] text-slate-400 font-bold">وضعیت پایداری (Lock 3/3)</span>
+                                   </div>
+                                   <div className="flex justify-between items-center px-2">
+                                       {m.devHistory.slice().reverse().map((d, i) => {
+                                           const isCeil = d > 10;
+                                           const isFloor = d < -10;
+                                           return (
+                                               <div key={i} className="flex flex-col items-center gap-1.5">
+                                                   <div className={`w-3 h-3 rounded-full border ${isCeil ? 'bg-red-500 border-red-400 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : isFloor ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-800 border-slate-700'}`}></div>
+                                                   <span className="text-[8px] font-mono text-slate-500" dir="ltr">{d.toFixed(1)}%</span>
+                                                   <span className="text-[7px] text-slate-600 font-bold">{i === 2 ? 'امروز' : `${2-i} روز قبل`}</span>
+                                               </div>
+                                           );
+                                       })}
+                                   </div>
                                </div>
                            </div>
                         ))}
 
-                        {/* ANOMALY CARD */}
-                        <div className={`p-4 rounded-xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40 shadow-inner' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-2 gap-3 mt-4">
+                            <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40 shadow-inner' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
+                                <div className="flex items-center gap-2 mb-3">
                                     <ShieldAlert className={`w-4 h-4 ${marketMetrics.anomaly ? 'text-red-500' : 'text-slate-500'}`} />
-                                    <span className={`text-xs font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>ناهنجاری (Anomaly)</span>
+                                    <span className={`text-[10px] font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>ناهنجاری</span>
                                 </div>
-                                {marketMetrics.anomaly && <span className="bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded animate-pulse">فعال</span>}
+                                <div className="text-[9px] text-slate-500 font-mono flex justify-between">
+                                    <span>۱ساله:</span>
+                                    <span>{marketMetrics.corr1Y.toFixed(2)}</span>
+                                </div>
+                                <div className="text-[9px] text-slate-500 font-mono flex justify-between">
+                                    <span>۶۰روزه:</span>
+                                    <span>{marketMetrics.corr2M.toFixed(2)}</span>
+                                </div>
                             </div>
-                            <div className="space-y-2 mt-3">
-                                <div className="flex justify-between text-[10px]">
-                                    <span className="text-slate-500">همبستگی ۱ ساله:</span>
-                                    <span className="text-slate-300 font-mono">{marketMetrics.corr1Y.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between text-[10px]">
-                                    <span className="text-slate-500">همبستگی ۶۰ روزه:</span>
-                                    <span className="text-slate-300 font-mono">{marketMetrics.corr2M.toFixed(2)}</span>
-                                </div>
-                                {marketMetrics.anomaly && (
-                                    <p className="text-[9px] text-red-400 leading-4 mt-2 border-t border-red-500/20 pt-2">
-                                        تضاد در روند بلندمدت و کوتاه‌مدت! احتمال واگرایی شدید یا تغییر رفتار بازار.
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* RISK CARD */}
-                        <div className={`p-4 rounded-xl border transition-all ${marketMetrics.highCorr ? 'bg-orange-500/10 border-orange-500/40' : 'bg-slate-900 border-slate-700'}`}>
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
+                            <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.highCorr ? 'bg-orange-500/10 border-orange-500/40' : 'bg-slate-900 border-slate-700'}`}>
+                                <div className="flex items-center gap-2 mb-3">
                                     <Zap className={`w-4 h-4 ${marketMetrics.highCorr ? 'text-orange-500' : 'text-slate-500'}`} />
-                                    <span className={`text-xs font-black ${marketMetrics.highCorr ? 'text-white' : 'text-slate-500'}`}>ریسک همبستگی</span>
+                                    <span className={`text-[10px] font-black ${marketMetrics.highCorr ? 'text-white' : 'text-slate-500'}`}>ریسک همبستگی</span>
                                 </div>
-                                <span className={`text-[10px] font-mono ${marketMetrics.highCorr ? 'text-orange-400' : 'text-slate-500'}`}>{marketMetrics.corr2M.toFixed(2)}</span>
+                                <div className="h-1 bg-slate-950 rounded-full overflow-hidden mb-2">
+                                    <div className={`h-full transition-all duration-700 ${marketMetrics.highCorr ? 'bg-orange-500' : 'bg-slate-600'}`} style={{width: `${Math.max(0, marketMetrics.corr2M) * 100}%`}}></div>
+                                </div>
+                                <span className="text-[9px] font-mono text-slate-500 block text-center">{marketMetrics.corr2M.toFixed(2)}</span>
                             </div>
-                            <div className="h-1 bg-slate-950 rounded-full overflow-hidden mt-3">
-                                <div className={`h-full transition-all duration-700 ${marketMetrics.highCorr ? 'bg-orange-500' : 'bg-slate-600'}`} style={{width: `${Math.max(0, marketMetrics.corr2M) * 100}%`}}></div>
-                            </div>
-                            <p className="text-[9px] text-slate-500 mt-2 leading-4">
-                                {marketMetrics.highCorr 
-                                  ? 'همبستگی مثبت بالا (>0.5). سقوط همزمان دارایی‌ها محتمل است. ریسک تنوع‌بخشی پایین.' 
-                                  : marketMetrics.safeCorr 
-                                    ? 'همبستگی معکوس عالی. تنوع‌بخشی در وضعیت بهینه.' 
-                                    : 'همبستگی در محدوده خنثی. ریسک سیستماتیک پایین است.'}
-                            </p>
                         </div>
 
-                        <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 flex justify-between items-center text-xs">
+                        <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700 flex justify-between items-center text-xs">
                             <div className="flex items-center gap-1.5">
                                 <Activity className="w-3 h-3 text-amber-500" />
                                 <span className="text-slate-400">روند نسبت (Ratio):</span>
                             </div>
-                            <span className={`font-bold ${marketMetrics.ratioAboveMA ? 'text-amber-400' : 'text-cyan-400'}`}>
+                            <span className={`font-black ${marketMetrics.ratioAboveMA ? 'text-amber-400' : 'text-cyan-400'}`}>
                                 {marketMetrics.ratioAboveMA ? 'طلا برتر' : 'شاخص برتر'}
                             </span>
                         </div>
@@ -517,17 +542,17 @@ export function PortfolioPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="lg:w-2/5 mt-6 lg:mt-0 p-5 bg-slate-900/40 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
+                        <div className="lg:w-2/5 mt-6 lg:mt-0 p-6 bg-slate-900/40 rounded-3xl border border-slate-700/50 backdrop-blur-sm">
                             <h5 className="text-sm font-black text-white mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-3">
                                 <CheckCircle2 className="w-5 h-5 text-emerald-400" /> 
                                 اقدام استراتژیک پیشنهادی
                             </h5>
-                            <p className="text-xs text-slate-300 leading-7 text-justify mb-6">{strategy.description}</p>
+                            <p className="text-xs text-slate-300 leading-7 text-justify mb-6 font-medium">{strategy.description}</p>
                             <div className="space-y-3">
                                 {strategy.allocation.map((a, i) => (
                                     <div key={i} className="flex justify-between items-center group">
                                         <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full" style={{backgroundColor: a.fill}}></div>
+                                            <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{backgroundColor: a.fill}}></div>
                                             <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">{a.name}:</span>
                                         </div>
                                         <span className="font-black text-sm text-white group-hover:text-cyan-400 transition-colors">{a.value}%</span>
@@ -536,7 +561,7 @@ export function PortfolioPage() {
                             </div>
                             <div className="mt-6 pt-4 border-t border-slate-800 flex items-center gap-2 text-[9px] text-slate-500 italic">
                                 <InfoIcon className="w-3 h-3" />
-                                مبنای محاسبات: میانگین متحرک ۱۰۰ روزه و نسبت طلا/شاخص
+                                مبنای محاسبات: منطق قفل ۳/۳ با انحراف ۱۰٪ و خروج ۷٪
                             </div>
                         </div>
                     </div>
