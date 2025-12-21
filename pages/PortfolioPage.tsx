@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
 import { calculateFullHistorySMA, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
-import { Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, Zap, History, Target, Swords, Boxes, Sparkles } from 'lucide-react';
+import { Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, Zap, Target, Swords, Boxes, Sparkles } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -24,6 +24,8 @@ interface AssetMetrics {
   dev: number;
   state: MarketState;
   devHistory: number[]; 
+  timer: number;
+  timerType: 'entry' | 'exit' | 'none';
 }
 
 interface StrategyResult {
@@ -130,6 +132,90 @@ const ShamsiDatePicker = ({ value, onChange }: { value: { jy: number; jm: number
   );
 };
 
+/**
+ * Visual Components for the new Asset Card design
+ */
+
+const DayVisualizer = ({ history }: { history: number[] }) => {
+  // Zone Color Logic
+  const getZoneColor = (dev: number) => {
+    if (dev > 10 || dev < -10) return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'; // Extreme
+    if ((dev >= 7 && dev <= 10) || (dev <= -7 && dev >= -10)) return 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]'; // Buffer
+    return 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'; // Normal
+  };
+
+  return (
+    <div className="flex gap-1.5 justify-center items-center">
+      {history.slice(0, 3).reverse().map((dev, i) => (
+        <div key={i} className={`w-3.5 h-3.5 rounded-full ${getZoneColor(dev)} transition-all duration-500`} title={`${dev.toFixed(1)}%`}></div>
+      ))}
+    </div>
+  );
+};
+
+const StateProgressBar = ({ currentDev }: { currentDev: number }) => {
+  // Clamp value for display within [-20, 20] range
+  const displayVal = Math.max(-20, Math.min(20, currentDev));
+  const percentage = ((displayVal + 20) / 40) * 100;
+
+  return (
+    <div className="relative h-6 w-full bg-slate-950/50 rounded-lg border border-slate-800 overflow-hidden flex items-center">
+      {/* Regions */}
+      <div className="absolute inset-0 flex h-full w-full">
+        <div className="h-full bg-red-500/20" style={{ width: '25%' }}></div> {/* -20 to -10 */}
+        <div className="h-full bg-orange-500/10" style={{ width: '7.5%' }}></div> {/* -10 to -7 */}
+        <div className="h-full bg-emerald-500/10" style={{ width: '35%' }}></div> {/* -7 to 7 */}
+        <div className="h-full bg-orange-500/10" style={{ width: '7.5%' }}></div> {/* 7 to 10 */}
+        <div className="h-full bg-red-500/20" style={{ width: '25%' }}></div> {/* 10 to 20 */}
+      </div>
+      
+      {/* Zero Line */}
+      <div className="absolute left-1/2 top-0 h-full w-px bg-slate-600/50 z-10"></div>
+      
+      {/* Current Pointer */}
+      <div 
+        className="absolute top-1/2 -translate-y-1/2 h-4 w-1 bg-white rounded-full z-20 shadow-[0_0_8px_white] transition-all duration-700 ease-out"
+        style={{ left: `${percentage}%` }}
+      ></div>
+    </div>
+  );
+};
+
+const SmartLogicText = ({ metrics }: { metrics: AssetMetrics }) => {
+  const { state, timer, timerType, dev } = metrics;
+  
+  if (state === 'Normal') {
+    if (timerType === 'entry') {
+      const target = dev > 0 ? 'سقف' : 'کف';
+      const zone = dev > 0 ? 'بالای ۱۰٪' : 'زیر ۱۰-٪';
+      return <span className="text-orange-400 font-bold">تایمر ورود به {target}: {timer} از ۳ روز ({zone})</span>;
+    }
+    return <span className="text-slate-500">قیمت در محدوده تعادلی (Normal) است.</span>;
+  }
+
+  if (state === 'Ceiling') {
+    if (timerType === 'exit') {
+      return <span className="text-emerald-400 font-bold">تایمر خروج فعال: {timer} از ۳ روز (زیر ۷٪)</span>;
+    }
+    if (dev >= 7 && dev <= 10) {
+      return <span className="text-slate-400">قیمت در ناحیه بافر ({dev.toFixed(1)}٪)؛ وضعیت سقف حفظ شد.</span>;
+    }
+    return <span className="text-red-400 font-bold">وضعیت سقف تایید شده (Extreme High)</span>;
+  }
+
+  if (state === 'Floor') {
+    if (timerType === 'exit') {
+      return <span className="text-emerald-400 font-bold">تایمر خروج فعال: {timer} از ۳ روز (بالای ۷-٪)</span>;
+    }
+    if (dev <= -7 && dev >= -10) {
+      return <span className="text-slate-400">قیمت در ناحیه بافر ({dev.toFixed(1)}٪)؛ وضعیت کف حفظ شد.</span>;
+    }
+    return <span className="text-emerald-400 font-bold">وضعیت کف تایید شده (Extreme Low)</span>;
+  }
+
+  return null;
+};
+
 export function PortfolioPage() {
   const [symbol, setSymbol] = useState<SearchResult | null>(null);
   const [dateMode, setDateMode] = useState<'current' | 'custom'>('current');
@@ -149,17 +235,17 @@ export function PortfolioPage() {
   } | null>(null);
 
   /**
-   * Refined Hysteresis Simulation
-   * Following user requirements for 3-day confirmation on entry and exit.
+   * Enhanced Hysteresis State Machine
+   * Returns current state and active timer info
+   * Explicit return type added to prevent incorrect type narrowing in runStrategy
    */
-  const calculateStateHysteresis = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): MarketState => {
+  const calculateStateHysteresis = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): { state: MarketState; timer: number; timerType: 'entry' | 'exit' | 'none' } => {
     let currentState: MarketState = 'Normal';
     let ceilingEntryCounter = 0;
     let ceilingExitCounter = 0;
     let floorEntryCounter = 0;
     let floorExitCounter = 0;
 
-    // Simulate history to accurately determine state at targetIndex
     for (let i = 100; i <= targetIndex; i++) {
       const point = data[i];
       const ma = maMap.get(point.date);
@@ -167,54 +253,44 @@ export function PortfolioPage() {
       const dev = ((point.close - ma) / ma) * 100;
 
       if (currentState === 'Normal') {
-        // Entry logic for Ceiling
         if (dev > 10) {
           ceilingEntryCounter++;
-          if (ceilingEntryCounter >= 3) {
-            currentState = 'Ceiling';
-            ceilingEntryCounter = 0;
-          }
-        } else {
-          ceilingEntryCounter = 0;
-        }
+          if (ceilingEntryCounter >= 3) { currentState = 'Ceiling'; ceilingEntryCounter = 0; }
+        } else { ceilingEntryCounter = 0; }
 
-        // Entry logic for Floor
         if (dev < -10) {
           floorEntryCounter++;
-          if (floorEntryCounter >= 3) {
-            currentState = 'Floor';
-            floorEntryCounter = 0;
-          }
-        } else {
-          floorEntryCounter = 0;
-        }
+          if (floorEntryCounter >= 3) { currentState = 'Floor'; floorEntryCounter = 0; }
+        } else { floorEntryCounter = 0; }
       } 
       else if (currentState === 'Ceiling') {
-        // Exit logic for Ceiling (back to Normal)
         if (dev < 7) {
           ceilingExitCounter++;
-          if (ceilingExitCounter >= 3) {
-            currentState = 'Normal';
-            ceilingExitCounter = 0;
-          }
-        } else {
-          ceilingExitCounter = 0;
-        }
+          if (ceilingExitCounter >= 3) { currentState = 'Normal'; ceilingExitCounter = 0; }
+        } else { ceilingExitCounter = 0; }
       } 
       else if (currentState === 'Floor') {
-        // Exit logic for Floor (back to Normal)
         if (dev > -7) {
           floorExitCounter++;
-          if (floorExitCounter >= 3) {
-            currentState = 'Normal';
-            floorExitCounter = 0;
-          }
-        } else {
-          floorExitCounter = 0;
-        }
+          if (floorExitCounter >= 3) { currentState = 'Normal'; floorExitCounter = 0; }
+        } else { floorExitCounter = 0; }
       }
     }
-    return currentState;
+
+    // Determine current active timer
+    let timer = 0;
+    let timerType: 'entry' | 'exit' | 'none' = 'none';
+
+    if (currentState === 'Normal') {
+        if (ceilingEntryCounter > 0) { timer = ceilingEntryCounter; timerType = 'entry'; }
+        else if (floorEntryCounter > 0) { timer = floorEntryCounter; timerType = 'entry'; }
+    } else if (currentState === 'Ceiling') {
+        if (ceilingExitCounter > 0) { timer = ceilingExitCounter; timerType = 'exit'; }
+    } else if (currentState === 'Floor') {
+        if (floorExitCounter > 0) { timer = floorExitCounter; timerType = 'exit'; }
+    }
+
+    return { state: currentState, timer, timerType };
   };
 
   const getDevHistory = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): number[] => {
@@ -257,10 +333,13 @@ export function PortfolioPage() {
       const stockMA = stockMA100.get(targetDateStr)!;
       const goldDev = ((goldPoint.close - goldMA) / goldMA) * 100;
       const stockDev = ((stockPoint.close - stockMA) / stockMA) * 100;
-      const goldState = calculateStateHysteresis(goldData, goldMA100, goldIdx);
-      const stockState = calculateStateHysteresis(stockData, stockMA100, stockIdx);
+      
+      const goldLogic = calculateStateHysteresis(goldData, goldMA100, goldIdx);
+      const stockLogic = calculateStateHysteresis(stockData, stockMA100, stockIdx);
+
       const goldHistory = getDevHistory(goldData, goldMA100, goldIdx);
       const stockHistory = getDevHistory(stockData, stockMA100, stockIdx);
+      
       const merged = alignDataByDate(stockData, goldData);
       const ratioSeries = merged.map(m => ({ date: m.date, close: m.price2 / m.price1 })); 
       const ratioMA100 = calculateFullHistorySMA(ratioSeries, 100);
@@ -277,8 +356,8 @@ export function PortfolioPage() {
       const isSafeCorr = corr2M < -0.5;
 
       setMarketMetrics({
-        gold: { symbol: 'طلا (عیار)', price: goldPoint.close, dev: goldDev, state: goldState, devHistory: goldHistory },
-        index: { symbol: symbol.symbol, price: stockPoint.close, dev: stockDev, state: stockState, devHistory: stockHistory },
+        gold: { symbol: 'طلا (عیار)', price: goldPoint.close, dev: goldDev, state: goldLogic.state, devHistory: goldHistory, timer: goldLogic.timer, timerType: goldLogic.timerType },
+        index: { symbol: symbol.symbol, price: stockPoint.close, dev: stockDev, state: stockLogic.state, devHistory: stockHistory, timer: stockLogic.timer, timerType: stockLogic.timerType },
         anomaly: isAnomaly,
         highCorr: isHighCorrRisk,
         safeCorr: isSafeCorr,
@@ -292,7 +371,10 @@ export function PortfolioPage() {
       let description = "";
       let alloc: { name: string; value: number; fill: string }[] = [];
 
-      // Logic matrix based on identified states
+      // Logic matrix based on states - Added explicit types to prevent narrowing errors
+      const goldState: MarketState = goldLogic.state;
+      const stockState: MarketState = stockLogic.state;
+
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
           scenario = "تقابل اکستریم (جنگی)";
           sid = "combat";
@@ -426,76 +508,70 @@ export function PortfolioPage() {
          <div className="grid md:grid-cols-12 gap-6 items-stretch animate-fade-in">
             
             {/* Logic State Panel */}
-            <div className="md:col-span-4 flex flex-col">
+            <div className="md:col-span-5 flex flex-col">
                 <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg h-full flex flex-col">
-                    <h4 className="font-bold text-white mb-6 border-b border-slate-700 pb-2 flex items-center gap-2"><Activity className="w-5 h-5 text-cyan-400" /> تشخیص وضعیت (State Logic)</h4>
+                    <h4 className="font-bold text-white mb-6 border-b border-slate-700 pb-2 flex items-center gap-2"><Activity className="w-5 h-5 text-cyan-400" /> تشخیص وضعیت ماشه</h4>
                     <div className="space-y-6 flex-1 flex flex-col">
                         {[marketMetrics.gold, marketMetrics.index].map((m, idx) => (
                            <div key={idx} className="bg-slate-900 p-5 rounded-2xl border border-slate-700 relative overflow-hidden group">
                                <div className={`absolute top-0 right-0 w-1 h-full ${m.state === 'Ceiling' ? 'bg-red-500' : m.state === 'Floor' ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
-                               <div className="flex justify-between items-center mb-4">
-                                   <span className="text-white font-black text-sm">{m.symbol}</span>
-                                   <div className="flex items-center gap-3">
-                                       <div className="relative group/hist">
-                                            <History className="w-4 h-4 text-slate-500 cursor-help hover:text-cyan-400 transition-colors" />
-                                            <div className="absolute left-full mr-2 top-0 w-44 bg-slate-950 border border-slate-800 p-3 rounded-xl shadow-2xl z-50 opacity-0 pointer-events-none group-hover/hist:opacity-100 transition-opacity">
-                                                <span className="text-[9px] text-slate-500 block mb-2 border-b border-slate-800 pb-1">پایداری (روزهای گذشته)</span>
-                                                <div className="flex flex-col gap-2">
-                                                    {m.devHistory.slice(1, 3).map((d, i) => (
-                                                        <div key={i} className="flex justify-between text-[10px]">
-                                                            <span className="text-slate-600">{i === 0 ? 'دیروز' : 'پریروز'}</span>
-                                                            <span className={d > 0 ? 'text-emerald-400' : 'text-red-400'}>{d.toFixed(1)}%</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <div className="mt-2 pt-1 border-t border-slate-900 text-[8px] text-slate-700 italic">مبنای قفل ۳/۳</div>
-                                            </div>
+                               
+                               <div className="flex justify-between items-center mb-6">
+                                   <div className="flex flex-col">
+                                       <span className="text-white font-black text-sm">{m.symbol}</span>
+                                       <span className={`text-xl font-black mt-1 ${m.dev > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                          {m.dev > 0 ? '+' : ''}{m.dev.toFixed(1)}%
+                                       </span>
+                                   </div>
+                                   
+                                   <div className="flex flex-col items-end gap-2">
+                                       <div className="flex items-center gap-3">
+                                           <span className="text-[10px] text-slate-500 font-bold">وضعیت ماشه (۳ روز):</span>
+                                           <DayVisualizer history={m.devHistory} />
                                        </div>
-                                       <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${m.state === 'Ceiling' ? 'bg-red-500 text-white shadow-[0_0_8px_rgba(239,68,68,0.3)]' : m.state === 'Floor' ? 'bg-emerald-500 text-white shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-slate-700 text-slate-300'}`}>
+                                       <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${m.state === 'Ceiling' ? 'bg-red-500 text-white' : m.state === 'Floor' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
                                            {m.state === 'Ceiling' ? 'سقف' : m.state === 'Floor' ? 'کف' : 'نرمال'}
                                        </span>
                                    </div>
                                </div>
-                               
-                               <div className="flex flex-col items-center justify-center py-2 bg-slate-950/30 rounded-xl border border-slate-800/50">
-                                   <span className="text-[9px] text-slate-500 mb-1">انحراف از میانگین ۱۰۰ روزه</span>
-                                   {/* Color Logic updated: Positive = Green (Emerald), Negative = Red */}
-                                   <span className={`text-2xl font-black ${m.dev > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                       {m.dev > 0 ? '+' : ''}{m.dev.toFixed(1)}%
-                                   </span>
+
+                               <div className="mb-4">
+                                   <StateProgressBar currentDev={m.dev} />
+                                   <div className="flex justify-between text-[8px] text-slate-600 mt-1 font-bold">
+                                       <span>۲۰-٪</span>
+                                       <span>۱۰-٪</span>
+                                       <span>۷-٪</span>
+                                       <span>۰</span>
+                                       <span>۷٪</span>
+                                       <span>۱۰٪</span>
+                                       <span>۲۰٪</span>
+                                   </div>
+                               </div>
+
+                               <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/50 text-[10px] text-center">
+                                   <SmartLogicText metrics={m} />
                                </div>
                            </div>
                         ))}
 
-                        <div className="flex flex-col gap-3">
-                            <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40 shadow-inner' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
                                 <div className="flex items-center gap-2 mb-1">
                                     <ShieldAlert className={`w-4 h-4 ${marketMetrics.anomaly ? 'text-red-500' : 'text-slate-500'}`} />
                                     <span className={`text-[10px] font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>ناهنجاری</span>
                                 </div>
-                                <span className="text-[9px] text-slate-500 block">تضاد همبستگی کوتاه‌مدت و بلندمدت</span>
+                                <span className="text-[9px] text-slate-500 block">تضاد همبستگی</span>
                             </div>
 
-                            <div className={`p-4 rounded-2xl border bg-slate-900 border-slate-700 transition-all`}>
-                                <div className="flex justify-between items-center mb-2">
+                            <div className="p-4 rounded-2xl border bg-slate-900 border-slate-700">
+                                <div className="flex justify-between items-center mb-1">
                                     <div className="flex items-center gap-2">
                                         <Zap className="w-4 h-4 text-orange-500" />
-                                        <span className="text-[10px] font-black text-white">مدیریت ریسک همبستگی</span>
+                                        <span className="text-[10px] font-black text-white">ریسک</span>
                                     </div>
                                     <span className="text-[10px] font-mono text-slate-400" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
                                 </div>
-                                
-                                <div className="relative h-4 mt-4 mb-2">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-red-500/40 via-slate-700 to-emerald-500/40 rounded-full border border-slate-800"></div>
-                                    <div className="absolute left-1/2 top-0 h-full w-px bg-slate-400/50 z-10"></div>
-                                    <div 
-                                        className="absolute top-0 w-2.5 h-full bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)] z-20 transition-all duration-1000 ease-out border border-slate-900"
-                                        style={{ left: `${((1 - marketMetrics.corr2M) / 2) * 100}%`, transform: 'translateX(-50%)' }}
-                                    ></div>
-                                    <div className="absolute -top-4 left-0 text-[8px] text-red-400 font-black">۱+ (ریسک)</div>
-                                    <div className="absolute -top-4 right-0 text-[8px] text-emerald-400 font-black">۱- (امن)</div>
-                                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-slate-500">۰</div>
-                                </div>
+                                <span className="text-[9px] text-slate-500 block">همبستگی کوتاه‌مدت</span>
                             </div>
                         </div>
 
@@ -513,7 +589,7 @@ export function PortfolioPage() {
             </div>
 
             {/* Results Panel */}
-            <div className="md:col-span-8 flex flex-col">
+            <div className="md:col-span-7 flex flex-col">
                 <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
                     <div className="p-6 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
                         <div>
