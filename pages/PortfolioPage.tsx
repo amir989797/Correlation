@@ -6,7 +6,7 @@ import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
 import { 
   Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, 
   TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, 
-  Zap, Target, Swords, Boxes, Sparkles, Timer, ShieldCheck 
+  Zap, Target, Swords, Boxes, Sparkles, ShieldCheck 
 } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
@@ -49,9 +49,10 @@ const MarketStateCard = ({ metrics }: { metrics: AssetMetrics }) => {
 
   // Determine Dot Colors for Lock Visualizer
   const getDotColor = (val: number) => {
-    if (val > 10 || val < -10) return 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.6)]';
-    if ((val >= 7 && val <= 10) || (val <= -7 && val >= -10)) return 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]';
-    return 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]';
+    const absVal = Math.abs(val);
+    if (absVal > 10) return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]';
+    if (absVal >= 7 && absVal <= 10) return 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]';
+    return 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]';
   };
 
   const isInBuffer = (state === 'Ceiling' && dev >= 7 && dev <= 10) || 
@@ -65,7 +66,7 @@ const MarketStateCard = ({ metrics }: { metrics: AssetMetrics }) => {
       {/* State Indicator Bar */}
       <div className={`absolute top-0 right-0 w-1.5 h-full ${stateColor} ${state !== 'Normal' ? 'animate-pulse' : ''}`}></div>
 
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-5">
         {/* Header Section */}
         <div className="flex justify-between items-start">
           <div>
@@ -82,38 +83,31 @@ const MarketStateCard = ({ metrics }: { metrics: AssetMetrics }) => {
           </div>
         </div>
 
-        {/* Lock Visualizer */}
-        <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800/50">
-          <div className="flex justify-between items-center mb-4">
-             <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1.5">
-               <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-               قفل ۳ روزه (Entry/Exit Lock)
-             </span>
+        {/* Compact Lock Visualizer - Aligned Horizontally */}
+        <div className="bg-slate-950/50 px-4 py-3 rounded-2xl border border-slate-800/50 flex items-center justify-between">
+           <div className="flex items-center gap-2">
+             <ShieldCheck className="w-4 h-4 text-cyan-400" />
+             <span className="text-[10px] text-slate-300 font-bold whitespace-nowrap">قفل ۳ روزه:</span>
              {timerType !== 'none' && (
-               <span className="text-[9px] text-amber-400 animate-pulse font-black">
-                 {timer} روز از ۳ روز تایید شد
-               </span>
+               <span className="text-[9px] text-amber-400 animate-pulse font-black">({timer}/۳)</span>
              )}
-          </div>
-          <div className="flex justify-center gap-4 py-2">
-            {devHistory.slice(0, 3).reverse().map((val, idx) => (
-              <div key={idx} className="flex flex-col items-center gap-2">
-                <div className={`w-4 h-4 rounded-full ${getDotColor(val)} transition-all duration-700`}></div>
-                <span className="text-[8px] text-slate-600">{idx === 0 ? 'پریروز' : idx === 1 ? 'دیروز' : 'امروز'}</span>
-              </div>
-            ))}
-          </div>
+           </div>
+           <div className="flex gap-2.5">
+              {devHistory.slice(0, 3).reverse().map((val, idx) => (
+                <div key={idx} className={`w-3.5 h-3.5 rounded-full ${getDotColor(val)} transition-all duration-700`} title={`${val.toFixed(1)}%`}></div>
+              ))}
+           </div>
         </div>
 
         {/* Timeline & Persistence */}
         <div className="flex items-center justify-between py-3 border-y border-slate-800/50">
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-slate-500" />
-            <span className="text-[10px] text-slate-400">تاریخ شروع وضعیت:</span>
+            <Calendar className="w-3.5 h-3.5 text-slate-500" />
+            <span className="text-[10px] text-slate-400">شروع:</span>
             <span className="text-[10px] text-white font-bold">{stateSince}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-slate-500" />
+            <Clock className="w-3.5 h-3.5 text-slate-500" />
             <span className="text-[10px] text-white font-black">({daysActive} روز)</span>
           </div>
         </div>
@@ -124,21 +118,21 @@ const MarketStateCard = ({ metrics }: { metrics: AssetMetrics }) => {
             <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl flex items-center gap-3">
               <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
               <p className="text-[10px] text-amber-200 leading-relaxed font-medium">
-                قیمت در محدوده بافر (۷٪ تا ۱۰٪) قرار دارد. خروج از وضعیت {stateLabel} نیازمند ۳ روز پایداری در محدوده نرمال است.
+                قیمت در محدوده بافر است. خروج از {stateLabel} نیازمند ۳ روز پایداری در محدوده نرمال است.
               </p>
             </div>
           ) : state !== 'Normal' ? (
             <div className="bg-slate-950/30 p-3 rounded-xl flex items-center gap-3 border border-slate-800/30">
                <Activity className="w-4 h-4 text-cyan-400 shrink-0" />
                <p className="text-[10px] text-slate-400 leading-relaxed">
-                 وضعیت {stateLabel} به دلیل عبور از آستانه ۱۰٪ در ۳ روز متوالی تایید شده و پایدار است.
+                 وضعیت {stateLabel} به دلیل عبور از آستانه ۱۰٪ در ۳ روز متوالی تایید شده است.
                </p>
             </div>
           ) : (
             <div className="bg-emerald-500/5 p-3 rounded-xl flex items-center gap-3 border border-emerald-500/10">
                <Zap className="w-4 h-4 text-emerald-500 shrink-0" />
                <p className="text-[10px] text-slate-500 leading-relaxed">
-                 بازار در محدوده تعادلی است. هیچ ماشه فعالی برای ورود به وضعیت اکستریم شناسایی نشده است.
+                 بازار در محدوده تعادلی است و هیچ ماشه فعالی شناسایی نشده است.
                </p>
             </div>
           )}
@@ -574,7 +568,7 @@ export function PortfolioPage() {
                 </div>
             </div>
 
-            {/* Results Display Panel */}
+            {/* Results Display Panel - Vertical Layout for Action Below Chart */}
             <div className="md:col-span-7 flex flex-col">
                 <div className="bg-slate-800 rounded-3xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
                     <div className="p-6 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
@@ -587,16 +581,17 @@ export function PortfolioPage() {
                         </div>
                     </div>
 
-                    <div className="flex-1 flex flex-col lg:flex-row p-8 items-center gap-8">
-                        <div className="flex-1 h-[340px] w-full relative group">
+                    <div className="flex-1 flex flex-col p-6 items-center gap-6">
+                        {/* Chart Area */}
+                        <div className="w-full h-[320px] relative group">
                             <ResponsiveContainer>
                                 <RechartsPieChart>
                                     <Pie 
                                       data={strategy.allocation} 
                                       cx="50%" 
                                       cy="50%" 
-                                      innerRadius={90} 
-                                      outerRadius={135} 
+                                      innerRadius={80} 
+                                      outerRadius={120} 
                                       paddingAngle={8} 
                                       dataKey="value" 
                                       stroke="none"
@@ -620,27 +615,27 @@ export function PortfolioPage() {
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                                 <div className="text-center">
                                     <span className="block text-4xl font-black text-white drop-shadow-lg">۱۰۰٪</span>
-                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">تخصیص بهینه</span>
+                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">تخصیص</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="lg:w-2/5 p-7 bg-slate-900/60 rounded-[32px] border border-slate-700/50 backdrop-blur-xl shadow-2xl space-y-6">
-                            <h5 className="text-sm font-black text-white flex items-center gap-2 border-b border-slate-700/50 pb-4">
-                                <CheckCircle2 className="w-5 h-5 text-emerald-400" /> اقدام عملیاتی
-                            </h5>
-                            <p className="text-[11px] text-slate-300 leading-7 text-justify font-medium">{strategy.description}</p>
-                            
-                            <div className="space-y-4 pt-2">
-                                {strategy.allocation.map((a, i) => (
-                                    <div key={i} className="flex justify-between items-center group">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-3 h-3 rounded-full shadow-[0_0_8px_currentColor] transition-all" style={{backgroundColor: a.fill, color: a.fill}}></div>
-                                            <span className="text-xs text-slate-400 group-hover:text-slate-100 transition-colors font-bold">{a.name}</span>
-                                        </div>
-                                        <span className="font-black text-sm text-white group-hover:text-cyan-400 transition-colors">{a.value}%</span>
-                                    </div>
-                                ))}
+                        
+                        {/* Action Description - Moved Below the Chart */}
+                        <div className="w-full p-6 bg-slate-900/60 rounded-[28px] border border-slate-700/50 backdrop-blur-xl shadow-2xl space-y-5">
+                            <div className="flex flex-col sm:flex-row justify-between items-center border-b border-slate-700/50 pb-4 gap-4">
+                                <h5 className="text-sm font-black text-white flex items-center gap-2">
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-400" /> اقدام عملیاتی
+                                </h5>
+                                <div className="flex gap-4">
+                                  {strategy.allocation.map((a, i) => (
+                                      <div key={i} className="flex items-center gap-2">
+                                          <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: a.fill}}></div>
+                                          <span className="font-black text-[11px] text-white">{a.value}%</span>
+                                      </div>
+                                  ))}
+                                </div>
                             </div>
+                            <p className="text-[12px] text-slate-300 leading-7 text-justify font-medium">{strategy.description}</p>
                         </div>
                     </div>
                 </div>
