@@ -1,9 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
-import { calculateFullHistorySMA, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson } from '../utils/mathUtils';
+import { calculateFullHistorySMA, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson, toShamsi } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
-import { Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, Zap, Target, Swords, Boxes, Sparkles } from 'lucide-react';
+import { 
+  Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, 
+  TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, 
+  Zap, Target, Swords, Boxes, Sparkles, Timer, ShieldCheck 
+} from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -24,6 +28,8 @@ interface AssetMetrics {
   dev: number;
   state: MarketState;
   devHistory: number[]; 
+  stateSince: string; // Shamsi date string
+  daysActive: number;
   timer: number;
   timerType: 'entry' | 'exit' | 'none';
 }
@@ -34,6 +40,113 @@ interface StrategyResult {
   id: string; 
   description: string;
 }
+
+/**
+ * MarketStateCard - Visualizes the 3/3 Hysteresis Lock logic for an asset
+ */
+const MarketStateCard = ({ metrics }: { metrics: AssetMetrics }) => {
+  const { symbol, dev, state, devHistory, stateSince, daysActive, timer, timerType } = metrics;
+
+  // Determine Dot Colors for Lock Visualizer
+  const getDotColor = (val: number) => {
+    if (val > 10 || val < -10) return 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.6)]';
+    if ((val >= 7 && val <= 10) || (val <= -7 && val >= -10)) return 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]';
+    return 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]';
+  };
+
+  const isInBuffer = (state === 'Ceiling' && dev >= 7 && dev <= 10) || 
+                     (state === 'Floor' && dev <= -7 && dev >= -10);
+
+  const stateLabel = state === 'Ceiling' ? 'سقف (Ceiling)' : state === 'Floor' ? 'کف (Floor)' : 'تعادلی (Normal)';
+  const stateColor = state === 'Ceiling' ? 'bg-red-500' : state === 'Floor' ? 'bg-emerald-500' : 'bg-slate-700';
+
+  return (
+    <div className="bg-slate-900 rounded-3xl border border-slate-700 overflow-hidden group hover:border-slate-500 transition-all duration-500 shadow-2xl relative">
+      {/* State Indicator Bar */}
+      <div className={`absolute top-0 right-0 w-1.5 h-full ${stateColor} ${state !== 'Normal' ? 'animate-pulse' : ''}`}></div>
+
+      <div className="p-6 space-y-6">
+        {/* Header Section */}
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-white font-black text-lg">{symbol}</h3>
+            <span className={`inline-block mt-2 px-3 py-1 rounded-full text-[10px] font-bold text-white uppercase tracking-wider ${stateColor} ${state !== 'Normal' ? 'animate-pulse' : ''}`}>
+              {stateLabel}
+            </span>
+          </div>
+          <div className="text-right">
+             <div className="text-[10px] text-slate-500 mb-1 font-bold">انحراف از میانگین ۱۰۰ روزه</div>
+             <div className={`text-3xl font-black ${dev > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+               {dev > 0 ? '+' : ''}{dev.toFixed(1)}%
+             </div>
+          </div>
+        </div>
+
+        {/* Lock Visualizer */}
+        <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800/50">
+          <div className="flex justify-between items-center mb-4">
+             <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1.5">
+               <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+               قفل ۳ روزه (Entry/Exit Lock)
+             </span>
+             {timerType !== 'none' && (
+               <span className="text-[9px] text-amber-400 animate-pulse font-black">
+                 {timer} روز از ۳ روز تایید شد
+               </span>
+             )}
+          </div>
+          <div className="flex justify-center gap-4 py-2">
+            {devHistory.slice(0, 3).reverse().map((val, idx) => (
+              <div key={idx} className="flex flex-col items-center gap-2">
+                <div className={`w-4 h-4 rounded-full ${getDotColor(val)} transition-all duration-700`}></div>
+                <span className="text-[8px] text-slate-600">{idx === 0 ? 'پریروز' : idx === 1 ? 'دیروز' : 'امروز'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Timeline & Persistence */}
+        <div className="flex items-center justify-between py-3 border-y border-slate-800/50">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-slate-500" />
+            <span className="text-[10px] text-slate-400">تاریخ شروع وضعیت:</span>
+            <span className="text-[10px] text-white font-bold">{stateSince}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-slate-500" />
+            <span className="text-[10px] text-white font-black">({daysActive} روز)</span>
+          </div>
+        </div>
+
+        {/* Buffer Warning or Logic Feedback */}
+        <div className="min-h-[44px]">
+          {isInBuffer ? (
+            <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl flex items-center gap-3">
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+              <p className="text-[10px] text-amber-200 leading-relaxed font-medium">
+                قیمت در محدوده بافر (۷٪ تا ۱۰٪) قرار دارد. خروج از وضعیت {stateLabel} نیازمند ۳ روز پایداری در محدوده نرمال است.
+              </p>
+            </div>
+          ) : state !== 'Normal' ? (
+            <div className="bg-slate-950/30 p-3 rounded-xl flex items-center gap-3 border border-slate-800/30">
+               <Activity className="w-4 h-4 text-cyan-400 shrink-0" />
+               <p className="text-[10px] text-slate-400 leading-relaxed">
+                 وضعیت {stateLabel} به دلیل عبور از آستانه ۱۰٪ در ۳ روز متوالی تایید شده و پایدار است.
+               </p>
+            </div>
+          ) : (
+            <div className="bg-emerald-500/5 p-3 rounded-xl flex items-center gap-3 border border-emerald-500/10">
+               <Zap className="w-4 h-4 text-emerald-500 shrink-0" />
+               <p className="text-[10px] text-slate-500 leading-relaxed">
+                 بازار در محدوده تعادلی است. هیچ ماشه فعالی برای ورود به وضعیت اکستریم شناسایی نشده است.
+               </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const SearchInput = ({ label, value, onSelect }: { label: string; value: SearchResult | null; onSelect: (val: SearchResult | null) => void; }) => {
   const [query, setQuery] = useState('');
@@ -132,90 +245,6 @@ const ShamsiDatePicker = ({ value, onChange }: { value: { jy: number; jm: number
   );
 };
 
-/**
- * Visual Components for the new Asset Card design
- */
-
-const DayVisualizer = ({ history }: { history: number[] }) => {
-  // Zone Color Logic
-  const getZoneColor = (dev: number) => {
-    if (dev > 10 || dev < -10) return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'; // Extreme
-    if ((dev >= 7 && dev <= 10) || (dev <= -7 && dev >= -10)) return 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]'; // Buffer
-    return 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'; // Normal
-  };
-
-  return (
-    <div className="flex gap-1.5 justify-center items-center">
-      {history.slice(0, 3).reverse().map((dev, i) => (
-        <div key={i} className={`w-3.5 h-3.5 rounded-full ${getZoneColor(dev)} transition-all duration-500`} title={`${dev.toFixed(1)}%`}></div>
-      ))}
-    </div>
-  );
-};
-
-const StateProgressBar = ({ currentDev }: { currentDev: number }) => {
-  // Clamp value for display within [-20, 20] range
-  const displayVal = Math.max(-20, Math.min(20, currentDev));
-  const percentage = ((displayVal + 20) / 40) * 100;
-
-  return (
-    <div className="relative h-6 w-full bg-slate-950/50 rounded-lg border border-slate-800 overflow-hidden flex items-center">
-      {/* Regions */}
-      <div className="absolute inset-0 flex h-full w-full">
-        <div className="h-full bg-red-500/20" style={{ width: '25%' }}></div> {/* -20 to -10 */}
-        <div className="h-full bg-orange-500/10" style={{ width: '7.5%' }}></div> {/* -10 to -7 */}
-        <div className="h-full bg-emerald-500/10" style={{ width: '35%' }}></div> {/* -7 to 7 */}
-        <div className="h-full bg-orange-500/10" style={{ width: '7.5%' }}></div> {/* 7 to 10 */}
-        <div className="h-full bg-red-500/20" style={{ width: '25%' }}></div> {/* 10 to 20 */}
-      </div>
-      
-      {/* Zero Line */}
-      <div className="absolute left-1/2 top-0 h-full w-px bg-slate-600/50 z-10"></div>
-      
-      {/* Current Pointer */}
-      <div 
-        className="absolute top-1/2 -translate-y-1/2 h-4 w-1 bg-white rounded-full z-20 shadow-[0_0_8px_white] transition-all duration-700 ease-out"
-        style={{ left: `${percentage}%` }}
-      ></div>
-    </div>
-  );
-};
-
-const SmartLogicText = ({ metrics }: { metrics: AssetMetrics }) => {
-  const { state, timer, timerType, dev } = metrics;
-  
-  if (state === 'Normal') {
-    if (timerType === 'entry') {
-      const target = dev > 0 ? 'سقف' : 'کف';
-      const zone = dev > 0 ? 'بالای ۱۰٪' : 'زیر ۱۰-٪';
-      return <span className="text-orange-400 font-bold">تایمر ورود به {target}: {timer} از ۳ روز ({zone})</span>;
-    }
-    return <span className="text-slate-500">قیمت در محدوده تعادلی (Normal) است.</span>;
-  }
-
-  if (state === 'Ceiling') {
-    if (timerType === 'exit') {
-      return <span className="text-emerald-400 font-bold">تایمر خروج فعال: {timer} از ۳ روز (زیر ۷٪)</span>;
-    }
-    if (dev >= 7 && dev <= 10) {
-      return <span className="text-slate-400">قیمت در ناحیه بافر ({dev.toFixed(1)}٪)؛ وضعیت سقف حفظ شد.</span>;
-    }
-    return <span className="text-red-400 font-bold">وضعیت سقف تایید شده (Extreme High)</span>;
-  }
-
-  if (state === 'Floor') {
-    if (timerType === 'exit') {
-      return <span className="text-emerald-400 font-bold">تایمر خروج فعال: {timer} از ۳ روز (بالای ۷-٪)</span>;
-    }
-    if (dev <= -7 && dev >= -10) {
-      return <span className="text-slate-400">قیمت در ناحیه بافر ({dev.toFixed(1)}٪)؛ وضعیت کف حفظ شد.</span>;
-    }
-    return <span className="text-emerald-400 font-bold">وضعیت کف تایید شده (Extreme Low)</span>;
-  }
-
-  return null;
-};
-
 export function PortfolioPage() {
   const [symbol, setSymbol] = useState<SearchResult | null>(null);
   const [dateMode, setDateMode] = useState<'current' | 'custom'>('current');
@@ -235,12 +264,11 @@ export function PortfolioPage() {
   } | null>(null);
 
   /**
-   * Enhanced Hysteresis State Machine
-   * Returns current state and active timer info
-   * Explicit return type added to prevent incorrect type narrowing in runStrategy
+   * Enhanced Hysteresis State Machine with Tracking
    */
-  const calculateStateHysteresis = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): { state: MarketState; timer: number; timerType: 'entry' | 'exit' | 'none' } => {
+  const calculateStateHysteresis = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): { state: MarketState; stateSince: string; daysActive: number; timer: number; timerType: 'entry' | 'exit' | 'none' } => {
     let currentState: MarketState = 'Normal';
+    let stateStartDate = data[0].date;
     let ceilingEntryCounter = 0;
     let ceilingExitCounter = 0;
     let floorEntryCounter = 0;
@@ -251,6 +279,7 @@ export function PortfolioPage() {
       const ma = maMap.get(point.date);
       if (!ma) continue;
       const dev = ((point.close - ma) / ma) * 100;
+      const prevState = currentState;
 
       if (currentState === 'Normal') {
         if (dev > 10) {
@@ -275,22 +304,28 @@ export function PortfolioPage() {
           if (floorExitCounter >= 3) { currentState = 'Normal'; floorExitCounter = 0; }
         } else { floorExitCounter = 0; }
       }
+
+      // If state changed, update the start date
+      if (prevState !== currentState) {
+        stateStartDate = point.date;
+      }
     }
 
-    // Determine current active timer
-    let timer = 0;
-    let timerType: 'entry' | 'exit' | 'none' = 'none';
+    const timer = (currentState === 'Normal') ? (ceilingEntryCounter || floorEntryCounter) : (ceilingExitCounter || floorExitCounter);
+    const timerType = (currentState === 'Normal' && (ceilingEntryCounter || floorEntryCounter)) ? 'entry' : (currentState !== 'Normal' && (ceilingExitCounter || floorExitCounter)) ? 'exit' : 'none';
 
-    if (currentState === 'Normal') {
-        if (ceilingEntryCounter > 0) { timer = ceilingEntryCounter; timerType = 'entry'; }
-        else if (floorEntryCounter > 0) { timer = floorEntryCounter; timerType = 'entry'; }
-    } else if (currentState === 'Ceiling') {
-        if (ceilingExitCounter > 0) { timer = ceilingExitCounter; timerType = 'exit'; }
-    } else if (currentState === 'Floor') {
-        if (floorExitCounter > 0) { timer = floorExitCounter; timerType = 'exit'; }
-    }
+    // Calculate days active from start date to target date
+    const targetDateStr = data[targetIndex].date;
+    const startIndex = data.findIndex(d => d.date === stateStartDate);
+    const daysActive = targetIndex - startIndex + 1;
 
-    return { state: currentState, timer, timerType };
+    return { 
+      state: currentState, 
+      stateSince: toShamsi(stateStartDate), 
+      daysActive,
+      timer,
+      timerType
+    };
   };
 
   const getDevHistory = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): number[] => {
@@ -356,8 +391,8 @@ export function PortfolioPage() {
       const isSafeCorr = corr2M < -0.5;
 
       setMarketMetrics({
-        gold: { symbol: 'طلا (عیار)', price: goldPoint.close, dev: goldDev, state: goldLogic.state, devHistory: goldHistory, timer: goldLogic.timer, timerType: goldLogic.timerType },
-        index: { symbol: symbol.symbol, price: stockPoint.close, dev: stockDev, state: stockLogic.state, devHistory: stockHistory, timer: stockLogic.timer, timerType: stockLogic.timerType },
+        gold: { symbol: 'طلا (عیار)', price: goldPoint.close, dev: goldDev, state: goldLogic.state, devHistory: goldHistory, stateSince: goldLogic.stateSince, daysActive: goldLogic.daysActive, timer: goldLogic.timer, timerType: goldLogic.timerType },
+        index: { symbol: symbol.symbol, price: stockPoint.close, dev: stockDev, state: stockLogic.state, devHistory: stockHistory, stateSince: stockLogic.stateSince, daysActive: stockLogic.daysActive, timer: stockLogic.timer, timerType: stockLogic.timerType },
         anomaly: isAnomaly,
         highCorr: isHighCorrRisk,
         safeCorr: isSafeCorr,
@@ -371,10 +406,10 @@ export function PortfolioPage() {
       let description = "";
       let alloc: { name: string; value: number; fill: string }[] = [];
 
-      // Logic matrix based on states - Added explicit types to prevent narrowing errors
-      const goldState: MarketState = goldLogic.state;
-      const stockState: MarketState = stockLogic.state;
+      const goldState = goldLogic.state;
+      const stockState = stockLogic.state;
 
+      // Strategy selection logic
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
           scenario = "تقابل اکستریم (جنگی)";
           sid = "combat";
@@ -481,6 +516,7 @@ export function PortfolioPage() {
           <p className="text-slate-400">سیستم تصمیم‌گیر هوشمند بر اساس قفل ۳/۳ و ماتریس سناریوهای بازار</p>
        </header>
 
+       {/* Analysis Settings */}
        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
           <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2 border-b border-slate-700 pb-4">
              <Info className="w-5 h-5 text-cyan-400" /> تنظیمات تحلیل
@@ -507,144 +543,99 @@ export function PortfolioPage() {
        {status === FetchStatus.SUCCESS && marketMetrics && strategy && (
          <div className="grid md:grid-cols-12 gap-6 items-stretch animate-fade-in">
             
-            {/* Logic State Panel */}
-            <div className="md:col-span-5 flex flex-col">
-                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg h-full flex flex-col">
-                    <h4 className="font-bold text-white mb-6 border-b border-slate-700 pb-2 flex items-center gap-2"><Activity className="w-5 h-5 text-cyan-400" /> تشخیص وضعیت ماشه</h4>
-                    <div className="space-y-6 flex-1 flex flex-col">
-                        {[marketMetrics.gold, marketMetrics.index].map((m, idx) => (
-                           <div key={idx} className="bg-slate-900 p-5 rounded-2xl border border-slate-700 relative overflow-hidden group">
-                               <div className={`absolute top-0 right-0 w-1 h-full ${m.state === 'Ceiling' ? 'bg-red-500' : m.state === 'Floor' ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
-                               
-                               <div className="flex justify-between items-center mb-6">
-                                   <div className="flex flex-col">
-                                       <span className="text-white font-black text-sm">{m.symbol}</span>
-                                       <span className={`text-xl font-black mt-1 ${m.dev > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                          {m.dev > 0 ? '+' : ''}{m.dev.toFixed(1)}%
-                                       </span>
-                                   </div>
-                                   
-                                   <div className="flex flex-col items-end gap-2">
-                                       <div className="flex items-center gap-3">
-                                           <span className="text-[10px] text-slate-500 font-bold">وضعیت ماشه (۳ روز):</span>
-                                           <DayVisualizer history={m.devHistory} />
-                                       </div>
-                                       <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${m.state === 'Ceiling' ? 'bg-red-500 text-white' : m.state === 'Floor' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
-                                           {m.state === 'Ceiling' ? 'سقف' : m.state === 'Floor' ? 'کف' : 'نرمال'}
-                                       </span>
-                                   </div>
-                               </div>
-
-                               <div className="mb-4">
-                                   <StateProgressBar currentDev={m.dev} />
-                                   <div className="flex justify-between text-[8px] text-slate-600 mt-1 font-bold">
-                                       <span>۲۰-٪</span>
-                                       <span>۱۰-٪</span>
-                                       <span>۷-٪</span>
-                                       <span>۰</span>
-                                       <span>۷٪</span>
-                                       <span>۱۰٪</span>
-                                       <span>۲۰٪</span>
-                                   </div>
-                               </div>
-
-                               <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/50 text-[10px] text-center">
-                                   <SmartLogicText metrics={m} />
-                               </div>
-                           </div>
-                        ))}
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <ShieldAlert className={`w-4 h-4 ${marketMetrics.anomaly ? 'text-red-500' : 'text-slate-500'}`} />
-                                    <span className={`text-[10px] font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>ناهنجاری</span>
-                                </div>
-                                <span className="text-[9px] text-slate-500 block">تضاد همبستگی</span>
+            {/* Asset State Grid */}
+            <div className="md:col-span-5 flex flex-col gap-6">
+                <MarketStateCard metrics={marketMetrics.gold} />
+                <MarketStateCard metrics={marketMetrics.index} />
+                
+                {/* Secondary Indicators Block */}
+                <div className="bg-slate-800 p-5 rounded-3xl border border-slate-700 shadow-lg mt-auto">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                                <ShieldAlert className={`w-4 h-4 ${marketMetrics.anomaly ? 'text-red-500' : 'text-slate-500'}`} />
+                                <span className={`text-[10px] font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>ناهنجاری همبستگی</span>
                             </div>
-
-                            <div className="p-4 rounded-2xl border bg-slate-900 border-slate-700">
-                                <div className="flex justify-between items-center mb-1">
-                                    <div className="flex items-center gap-2">
-                                        <Zap className="w-4 h-4 text-orange-500" />
-                                        <span className="text-[10px] font-black text-white">ریسک</span>
-                                    </div>
-                                    <span className="text-[10px] font-mono text-slate-400" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
-                                </div>
-                                <span className="text-[9px] text-slate-500 block">همبستگی کوتاه‌مدت</span>
-                            </div>
+                            <span className="text-[9px] text-slate-500 block leading-relaxed">تضاد بین رفتارهای کوتاه‌مدت و بلندمدت</span>
                         </div>
-
-                        <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700 flex justify-between items-center text-xs mt-auto">
-                            <div className="flex items-center gap-1.5">
-                                <Activity className="w-3 h-3 text-amber-500" />
-                                <span className="text-slate-400">فیلتر Ratio:</span>
+                        <div className="p-4 rounded-2xl border bg-slate-900 border-slate-700">
+                            <div className="flex justify-between items-center mb-1">
+                                <div className="flex items-center gap-2">
+                                    <Zap className="w-4 h-4 text-orange-500" />
+                                    <span className="text-[10px] font-black text-white">ریسک (Correlation)</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-slate-400" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
                             </div>
-                            <span className={`font-black ${marketMetrics.ratioAboveMA ? 'text-amber-400' : 'text-cyan-400'}`}>
-                                {marketMetrics.ratioAboveMA ? 'طلا برتر' : 'شاخص برتر'}
-                            </span>
+                            <div className="bg-slate-800 h-1.5 rounded-full overflow-hidden mt-2">
+                               <div className="h-full bg-orange-500" style={{ width: `${(marketMetrics.corr2M + 1) * 50}%` }}></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Results Panel */}
+            {/* Results Display Panel */}
             <div className="md:col-span-7 flex flex-col">
-                <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
+                <div className="bg-slate-800 rounded-3xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
                     <div className="p-6 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
                         <div>
-                            <span className="text-xs text-slate-500 block mb-1 uppercase tracking-tighter">سناریوی جاری شناسایی شده</span>
-                            <h3 className="text-2xl font-black text-white">{strategy.scenario}</h3>
+                            <span className="text-xs text-slate-500 block mb-1 uppercase tracking-tighter">سناریوی استراتژیک شناسایی شده</span>
+                            <h3 className="text-2xl font-black text-white flex items-center gap-3">
+                                {strategy.scenario}
+                                <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></div>
+                            </h3>
                         </div>
                     </div>
 
-                    <div className="flex-1 flex flex-col lg:flex-row p-6 items-center">
-                        <div className="flex-1 h-[340px] w-full relative">
+                    <div className="flex-1 flex flex-col lg:flex-row p-8 items-center gap-8">
+                        <div className="flex-1 h-[340px] w-full relative group">
                             <ResponsiveContainer>
                                 <RechartsPieChart>
                                     <Pie 
                                       data={strategy.allocation} 
                                       cx="50%" 
                                       cy="50%" 
-                                      innerRadius={85} 
-                                      outerRadius={125} 
-                                      paddingAngle={5} 
+                                      innerRadius={90} 
+                                      outerRadius={135} 
+                                      paddingAngle={8} 
                                       dataKey="value" 
                                       stroke="none"
                                     >
-                                        {strategy.allocation.map((entry, index) => <Cell key={index} fill={entry.fill} className="hover:opacity-80 transition-opacity cursor-pointer" />)}
+                                        {strategy.allocation.map((entry, index) => (
+                                          <Cell key={index} fill={entry.fill} className="hover:opacity-90 transition-opacity cursor-pointer shadow-2xl" />
+                                        ))}
                                     </Pie>
                                     <Tooltip 
-                                        contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)', color: '#fff' }} 
-                                        itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
-                                        labelStyle={{ color: '#fff' }}
+                                        contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '16px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', color: '#fff' }} 
+                                        itemStyle={{ color: '#fff', fontSize: '13px', fontWeight: 'bold' }}
                                     />
                                     <Legend 
                                       verticalAlign="bottom" 
                                       height={36} 
                                       iconType="circle" 
-                                      formatter={(value) => <span className="text-slate-300 font-bold text-xs">{value}</span>} 
+                                      formatter={(value) => <span className="text-slate-400 font-bold text-xs hover:text-white transition-colors">{value}</span>} 
                                     />
                                 </RechartsPieChart>
                             </ResponsiveContainer>
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                                 <div className="text-center">
-                                    <span className="block text-3xl font-black text-white">پرتفوی</span>
-                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest">Weights</span>
+                                    <span className="block text-4xl font-black text-white drop-shadow-lg">۱۰۰٪</span>
+                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">تخصیص بهینه</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="lg:w-2/5 p-6 bg-slate-900/40 rounded-3xl border border-slate-700/50 backdrop-blur-sm shadow-inner">
-                            <h5 className="text-sm font-black text-white mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-3">
-                                <CheckCircle2 className="w-5 h-5 text-emerald-400" /> اقدام استراتژیک
+                        <div className="lg:w-2/5 p-7 bg-slate-900/60 rounded-[32px] border border-slate-700/50 backdrop-blur-xl shadow-2xl space-y-6">
+                            <h5 className="text-sm font-black text-white flex items-center gap-2 border-b border-slate-700/50 pb-4">
+                                <CheckCircle2 className="w-5 h-5 text-emerald-400" /> اقدام عملیاتی
                             </h5>
-                            <p className="text-xs text-slate-300 leading-7 text-justify mb-6 font-medium">{strategy.description}</p>
-                            <div className="space-y-3">
+                            <p className="text-[11px] text-slate-300 leading-7 text-justify font-medium">{strategy.description}</p>
+                            
+                            <div className="space-y-4 pt-2">
                                 {strategy.allocation.map((a, i) => (
                                     <div key={i} className="flex justify-between items-center group">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{backgroundColor: a.fill}}></div>
-                                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">{a.name}:</span>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-3 h-3 rounded-full shadow-[0_0_8px_currentColor] transition-all" style={{backgroundColor: a.fill, color: a.fill}}></div>
+                                            <span className="text-xs text-slate-400 group-hover:text-slate-100 transition-colors font-bold">{a.name}</span>
                                         </div>
                                         <span className="font-black text-sm text-white group-hover:text-cyan-400 transition-colors">{a.value}%</span>
                                     </div>
@@ -657,10 +648,10 @@ export function PortfolioPage() {
          </div>
        )}
 
-       {/* STRATEGY GUIDE SECTION */}
+       {/* Scenario Guide Section */}
        {status === FetchStatus.SUCCESS && strategy && (
          <section className="animate-fade-in mt-12">
-            <h3 className="text-xl font-black text-white mb-6 flex items-center gap-2"><Target className="w-6 h-6 text-amber-500" /> راهنمای جامع استراتژی‌های بازار</h3>
+            <h3 className="text-xl font-black text-white mb-8 flex items-center gap-3"><Target className="w-7 h-7 text-amber-500" /> ماتریس تصمیم‌گیری استراتژیک</h3>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[
                   { id: 'combat', icon: Swords, title: 'تقابل اکستریم (جنگی)', desc: 'تضاد شدید سقف و کف. در صورت ناهنجاری یا تایید Ratio، ۶۰٪ به سمت دارایی ارزان متمایل می‌شود.' },
@@ -672,13 +663,17 @@ export function PortfolioPage() {
                 ].map((s) => {
                     const isActive = strategy.id === s.id;
                     return (
-                        <div key={s.id} className={`p-6 rounded-3xl border transition-all duration-500 flex flex-col relative overflow-hidden ${isActive ? 'bg-slate-800 border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.1)] ring-1 ring-cyan-500/50' : 'bg-slate-900/50 border-slate-800 grayscale opacity-40 hover:grayscale-0 hover:opacity-100 hover:border-slate-700'}`}>
-                            {isActive && <div className="absolute top-4 left-4 bg-cyan-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse shadow-lg">استراتژی جاری</div>}
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${isActive ? 'bg-cyan-500/20 text-cyan-400 shadow-inner' : 'bg-slate-800 text-slate-500'}`}>
-                                <s.icon className="w-6 h-6" />
+                        <div key={s.id} className={`group p-6 rounded-3xl border transition-all duration-500 flex flex-col relative overflow-hidden ${isActive ? 'bg-slate-800 border-cyan-500/50 shadow-[0_20px_50px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/50 scale-[1.02]' : 'bg-slate-900/40 border-slate-800 grayscale hover:grayscale-0 opacity-40 hover:opacity-100 hover:border-slate-700'}`}>
+                            {isActive && (
+                              <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-cyan-500 text-white text-[8px] font-black px-2.5 py-1 rounded-full animate-bounce shadow-lg uppercase">
+                                <Activity className="w-2.5 h-2.5" /> وضعیت فعال
+                              </div>
+                            )}
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-5 transition-all duration-500 ${isActive ? 'bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)]' : 'bg-slate-800 text-slate-500 group-hover:bg-slate-700'}`}>
+                                <s.icon className="w-7 h-7" />
                             </div>
-                            <h4 className={`font-black mb-2 text-sm ${isActive ? 'text-white' : 'text-slate-400'}`}>{s.title}</h4>
-                            <p className="text-[11px] text-slate-500 leading-6 text-justify">{s.desc}</p>
+                            <h4 className={`font-black mb-3 text-sm transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{s.title}</h4>
+                            <p className="text-[11px] text-slate-500 leading-7 text-justify transition-colors group-hover:text-slate-400">{s.desc}</p>
                         </div>
                     );
                 })}
@@ -686,17 +681,24 @@ export function PortfolioPage() {
          </section>
        )}
 
+       {/* Initial State Helper */}
        {status === FetchStatus.IDLE && (
-         <div className="flex flex-col items-center justify-center p-20 bg-slate-800/50 rounded-3xl border border-slate-700 border-dashed opacity-50">
-            <Activity className="w-16 h-16 text-slate-600 mb-4" />
-            <p className="text-slate-500">لطفا نماد را انتخاب و دکمه محاسبه را بزنید تا وضعیت پرتفوی تحلیل شود.</p>
+         <div className="flex flex-col items-center justify-center p-24 bg-slate-800/40 rounded-[40px] border border-slate-700 border-dashed opacity-40 group hover:opacity-100 transition-opacity">
+            <Activity className="w-20 h-20 text-slate-700 mb-6 group-hover:text-cyan-500 transition-colors animate-pulse" />
+            <p className="text-slate-500 font-medium group-hover:text-slate-300 transition-colors text-center max-w-sm leading-relaxed">
+              سیستم در انتظار ورودی... لطفا نماد و تاریخ مورد نظر را برای تحلیل سناریو و تخصیص پرتفوی انتخاب کنید.
+            </p>
          </div>
        )}
 
+       {/* Error Handler */}
        {error && (
-         <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-xl text-red-400 text-sm flex items-center gap-3">
-             <AlertTriangle className="w-5 h-5" />
-             {error}
+         <div className="bg-red-500/10 border border-red-500/30 p-5 rounded-2xl text-red-400 text-sm flex items-center gap-4 animate-shake">
+             <AlertTriangle className="w-6 h-6 shrink-0" />
+             <div className="flex-1">
+               <span className="font-bold block mb-0.5">خطای محاسباتی</span>
+               {error}
+             </div>
          </div>
        )}
     </div>
