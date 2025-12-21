@@ -148,48 +148,70 @@ export function PortfolioPage() {
     corr1Y: number
   } | null>(null);
 
+  /**
+   * Refined Hysteresis Simulation
+   * Following user requirements for 3-day confirmation on entry and exit.
+   */
   const calculateStateHysteresis = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): MarketState => {
     let currentState: MarketState = 'Normal';
+    let ceilingEntryCounter = 0;
+    let ceilingExitCounter = 0;
+    let floorEntryCounter = 0;
+    let floorExitCounter = 0;
+
+    // Simulate history to accurately determine state at targetIndex
     for (let i = 100; i <= targetIndex; i++) {
       const point = data[i];
       const ma = maMap.get(point.date);
       if (!ma) continue;
       const dev = ((point.close - ma) / ma) * 100;
-      if (currentState !== 'Ceiling' && dev > 10) {
-        let count = 0;
-        for (let j = 0; j < 3; j++) {
-          const p = data[i - j];
-          const m = maMap.get(p.date);
-          if (m && ((p.close - m) / m) * 100 > 10) count++;
+
+      if (currentState === 'Normal') {
+        // Entry logic for Ceiling
+        if (dev > 10) {
+          ceilingEntryCounter++;
+          if (ceilingEntryCounter >= 3) {
+            currentState = 'Ceiling';
+            ceilingEntryCounter = 0;
+          }
+        } else {
+          ceilingEntryCounter = 0;
         }
-        if (count === 3) currentState = 'Ceiling';
-      }
-      if (currentState !== 'Floor' && dev < -10) {
-        let count = 0;
-        for (let j = 0; j < 3; j++) {
-          const p = data[i - j];
-          const m = maMap.get(p.date);
-          if (m && ((p.close - m) / m) * 100 < -10) count++;
+
+        // Entry logic for Floor
+        if (dev < -10) {
+          floorEntryCounter++;
+          if (floorEntryCounter >= 3) {
+            currentState = 'Floor';
+            floorEntryCounter = 0;
+          }
+        } else {
+          floorEntryCounter = 0;
         }
-        if (count === 3) currentState = 'Floor';
-      }
-      if (currentState === 'Ceiling' && dev < 7) {
-        let count = 0;
-        for (let j = 0; j < 3; j++) {
-          const p = data[i - j];
-          const m = maMap.get(p.date);
-          if (m && ((p.close - m) / m) * 100 < 7) count++;
+      } 
+      else if (currentState === 'Ceiling') {
+        // Exit logic for Ceiling (back to Normal)
+        if (dev < 7) {
+          ceilingExitCounter++;
+          if (ceilingExitCounter >= 3) {
+            currentState = 'Normal';
+            ceilingExitCounter = 0;
+          }
+        } else {
+          ceilingExitCounter = 0;
         }
-        if (count === 3) currentState = 'Normal';
-      }
-      if (currentState === 'Floor' && dev > -7) {
-        let count = 0;
-        for (let j = 0; j < 3; j++) {
-          const p = data[i - j];
-          const m = maMap.get(p.date);
-          if (m && ((p.close - m) / m) * 100 < -7) count++;
+      } 
+      else if (currentState === 'Floor') {
+        // Exit logic for Floor (back to Normal)
+        if (dev > -7) {
+          floorExitCounter++;
+          if (floorExitCounter >= 3) {
+            currentState = 'Normal';
+            floorExitCounter = 0;
+          }
+        } else {
+          floorExitCounter = 0;
         }
-        if (count === 3) currentState = 'Normal';
       }
     }
     return currentState;
@@ -265,89 +287,78 @@ export function PortfolioPage() {
         corr1Y
       });
 
-      // ---------------------------------------------------------
-      // START: REFINED STRATEGY LOGIC MATRIX
-      // ---------------------------------------------------------
-
       let scenario = "";
       let sid = "";
       let description = "";
       let alloc: { name: string; value: number; fill: string }[] = [];
 
-      // 1. COMBAT (War) Scenario
+      // Logic matrix based on identified states
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
           scenario = "تقابل اکستریم (جنگی)";
           sid = "combat";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
-          
           if (isAnomaly) {
-              description = "ناهنجاری همبستگی تشخیص داده شد (تضاد کوتاه‌مدت و بلندمدت). حمله به سمت دارایی ارزان برای شکار بازگشت قیمت.";
+              description = "ناهنجاری همبستگی تشخیص داده شد. حمله به سمت دارایی ارزان برای شکار بازگشت قیمت.";
               alloc = cheapAsset === 'gold'
                   ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
                   : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
           } else {
               const ratioSupportsCheap = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
               if (ratioSupportsCheap) {
-                   description = "روند Ratio با دارایی ارزان هم‌سو است. حمله تهاجمی به سمت دارایی کف قیمتی انجام شد.";
+                   description = "روند Ratio با دارایی ارزان هم‌سو است. حمله تهاجمی به سمت دارایی کف قیمتی.";
                    alloc = cheapAsset === 'gold'
                       ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
                       : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
               } else {
-                   description = "تضاد بین وضعیت تکنیکال و روند Ratio. به دلیل عدم وجود ناهنجاری، استراتژی محتاطانه برابر اعمال شد.";
+                   description = "تضاد بین وضعیت تکنیکال و روند Ratio. استراتژی محتاطانه برابر اعمال شد.";
                    alloc = [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
               }
           }
       } 
-      // 2. BUBBLE (Both Ceiling)
       else if (goldState === 'Ceiling' && stockState === 'Ceiling') {
           scenario = "حباب دوطرفه (خطر ریزش)";
           sid = "bubble";
-          description = "هر دو دارایی در سقف هستند. نقدینگی به ۵۰٪ افزایش یافت. تخصیص باقی‌مانده بر اساس روند قدرت نسبی (Ratio) انجام شد.";
+          description = "هر دو دارایی در سقف هستند. نقدینگی به ۵۰٪ افزایش یافت.";
           alloc = ratioTrendAbove
               ? [ { name: GOLD_SYMBOL, value: 30, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 50, fill: '#3b82f6' } ]
               : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 30, fill: '#10b981' }, { name: 'اوراق', value: 50, fill: '#3b82f6' } ];
       }
-      // 3. OPPORTUNITY (Both Floor)
       else if (goldState === 'Floor' && stockState === 'Floor') {
           scenario = "فرصت دوطرفه (کف‌خوری)";
           sid = "opportunity";
-          description = "هر دو دارایی در کف ارزنده هستند. خرید تهاجمی با ۳۰٪ اوراق و تمرکز وزن بر دارایی دارای قدرت نسبی برتر.";
+          description = "هر دو دارایی در کف ارزنده هستند. خرید تهاجمی با ۳۰٪ اوراق.";
           alloc = ratioTrendAbove 
             ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ]
             : [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
       }
-      // 4. ONE-CEILING (Distribution)
       else if (goldState === 'Ceiling' || stockState === 'Ceiling') {
           scenario = "تک‌سقف (توزیع)";
           sid = "one-ceiling";
           const highAsset = goldState === 'Ceiling' ? 'gold' : 'index';
           const ratioConfirmsSell = highAsset === 'gold' ? !ratioTrendAbove : ratioTrendAbove; 
-
           if (ratioConfirmsSell) {
-             description = `روند Ratio ضعف ${highAsset === 'gold' ? 'طلا' : symbol.symbol} را تایید می‌کند. خروج سنگین و جابجایی به دارایی نرمال.`;
+             description = `روند Ratio ضعف ${highAsset === 'gold' ? 'طلا' : symbol.symbol} را تایید می‌کند. خروج سنگین.`;
              alloc = highAsset === 'gold'
                 ? [ { name: GOLD_SYMBOL, value: 15, fill: '#fbbf24' }, { name: symbol.symbol, value: 50, fill: '#10b981' }, { name: 'اوراق', value: 35, fill: '#3b82f6' } ]
                 : [ { name: GOLD_SYMBOL, value: 50, fill: '#fbbf24' }, { name: symbol.symbol, value: 15, fill: '#10b981' }, { name: 'اوراق', value: 35, fill: '#3b82f6' } ];
           } else {
-             description = "دارایی در سقف است اما Ratio هنوز معکوس نشده. سیو سود پله‌ای و محتاطانه با نقدینگی ۳۰٪.";
+             description = "دارایی در سقف است اما Ratio هنوز معکوس نشده. سیو سود پله‌ای.";
              alloc = [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
           }
       }
-      // 5. ONE-FLOOR (Accumulation)
       else if (goldState === 'Floor' || stockState === 'Floor') {
           scenario = "تک‌کف (شکار فرصت)";
           sid = "one-floor";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
-          
           if (isHighCorrRisk) {
-              description = "هشدار: همبستگی مثبت شدید است. با وجود قیمت ارزان، به دلیل ریسک سیستماتیک خرید به ۴۰٪ محدود شد.";
+              description = "هشدار: همبستگی مثبت شدید است. خرید به ۴۰٪ محدود شد.";
               alloc = cheapAsset === 'gold'
                 ? [ { name: GOLD_SYMBOL, value: 40, fill: '#fbbf24' }, { name: symbol.symbol, value: 30, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ]
                 : [ { name: GOLD_SYMBOL, value: 30, fill: '#fbbf24' }, { name: symbol.symbol, value: 40, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
           } else {
               const ratioSupportsBuy = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
               if (ratioSupportsBuy) {
-                 description = "قیمت ارزان + روند Ratio موافق + همبستگی امن. خرید تهاجمی ۶۰ درصدی انجام شد.";
+                 description = "قیمت ارزان + روند Ratio موافق. خرید تهاجمی ۶۰ درصدی.";
                  alloc = cheapAsset === 'gold'
                     ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
                     : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
@@ -357,21 +368,19 @@ export function PortfolioPage() {
               }
           }
       }
-      // 6. PEACE (Normal)
       else {
           scenario = "صلح (وضعیت نرمال)";
           sid = "peace";
-          
           if (isHighCorrRisk) {
-              description = "هشدار همبستگی مثبت شدید (بالای ۰.۵): تنوع‌بخشی ناکارآمد است. نقدینگی به ۵۰٪ افزایش یافت.";
+              description = "هشدار همبستگی مثبت شدید: نقدینگی به ۵۰٪ افزایش یافت.";
               alloc = [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: 'اوراق', value: 50, fill: '#3b82f6' } ];
           } else if (isSafeCorr) {
-              description = "همبستگی معکوس امن (زیر ۰.۵-): فرصت عالی برای کاهش نقدینگی به ۱۰٪ و سوار شدن بر روند Ratio.";
+              description = "همبستگی معکوس امن: فرصت عالی برای کاهش نقدینگی به ۱۰٪.";
               alloc = ratioTrendAbove
                  ? [ { name: GOLD_SYMBOL, value: 55, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 10, fill: '#3b82f6' } ]
                  : [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 55, fill: '#10b981' }, { name: 'اوراق', value: 10, fill: '#3b82f6' } ];
           } else {
-              description = "وضعیت تعادلی بازار و همبستگی خنثی. سهم اوراق ۲۰٪ و وزن‌دهی بر اساس روند Ratio.";
+              description = "وضعیت تعادلی بازار و همبستگی خنثی. سهم اوراق ۲۰٪.";
               alloc = ratioTrendAbove
                  ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
                  : [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
@@ -435,7 +444,7 @@ export function PortfolioPage() {
                                                     {m.devHistory.slice(1, 3).map((d, i) => (
                                                         <div key={i} className="flex justify-between text-[10px]">
                                                             <span className="text-slate-600">{i === 0 ? 'دیروز' : 'پریروز'}</span>
-                                                            <span className={d > 0 ? 'text-red-400' : 'text-emerald-400'}>{d.toFixed(1)}%</span>
+                                                            <span className={d > 0 ? 'text-emerald-400' : 'text-red-400'}>{d.toFixed(1)}%</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -450,7 +459,8 @@ export function PortfolioPage() {
                                
                                <div className="flex flex-col items-center justify-center py-2 bg-slate-950/30 rounded-xl border border-slate-800/50">
                                    <span className="text-[9px] text-slate-500 mb-1">انحراف از میانگین ۱۰۰ روزه</span>
-                                   <span className={`text-2xl font-black ${m.dev > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                   {/* Color Logic updated: Positive = Green (Emerald), Negative = Red */}
+                                   <span className={`text-2xl font-black ${m.dev > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                                        {m.dev > 0 ? '+' : ''}{m.dev.toFixed(1)}%
                                    </span>
                                </div>
