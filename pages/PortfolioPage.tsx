@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
-import { calculateFullHistorySMA, toShamsi, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson } from '../utils/mathUtils';
+import { calculateFullHistorySMA, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
-import { Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, Zap, InfoIcon, History, Target, Swords, Boxes, Sparkles } from 'lucide-react';
+import { Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, Zap, History, Target, Swords, Boxes, Sparkles } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -23,17 +23,16 @@ interface AssetMetrics {
   price: number;
   dev: number;
   state: MarketState;
-  devHistory: number[]; // Last 3 days of deviation
+  devHistory: number[]; 
 }
 
 interface StrategyResult {
   allocation: { name: string; value: number; fill: string }[];
   scenario: string;
-  id: string; // To match with guide
+  id: string; 
   description: string;
 }
 
-// --- Reusable Search Input ---
 const SearchInput = ({ label, value, onSelect }: { label: string; value: SearchResult | null; onSelect: (val: SearchResult | null) => void; }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -188,7 +187,7 @@ export function PortfolioPage() {
         for (let j = 0; j < 3; j++) {
           const p = data[i - j];
           const m = maMap.get(p.date);
-          if (m && ((p.close - m) / m) * 100 > -7) count++;
+          if (m && ((p.close - m) / m) * 100 < -7) count++;
         }
         if (count === 3) currentState = 'Normal';
       }
@@ -218,13 +217,16 @@ export function PortfolioPage() {
       const stockData = stockRes.data;
       const goldData = goldRes.data;
       if (stockData.length < 400 || goldData.length < 400) throw new Error('سابقه معاملاتی کافی نیست.');
+      
       const targetDateStr = dateMode === 'current' ? stockData[stockData.length - 1].date : (() => {
         const { gy, gm, gd } = jalaliToGregorian(shamsiDate.jy, shamsiDate.jm, shamsiDate.jd);
         return `${gy}${gm < 10 ? '0'+gm : gm}${gd < 10 ? '0'+gd : gd}`;
       })();
+      
       const stockIdx = stockData.findIndex(d => d.date === targetDateStr);
       const goldIdx = goldData.findIndex(d => d.date === targetDateStr);
-      if (stockIdx === -1 || goldIdx === -1) throw new Error('داده‌ای یافت نشد.');
+      if (stockIdx === -1 || goldIdx === -1) throw new Error('داده‌ای برای تاریخ انتخابی یافت نشد.');
+
       const stockMA100 = calculateFullHistorySMA(stockData, 100);
       const goldMA100 = calculateFullHistorySMA(goldData, 100);
       const goldPoint = goldData[goldIdx];
@@ -263,64 +265,123 @@ export function PortfolioPage() {
         corr1Y
       });
 
-      // Strategy Matrix Logic
-      let scenario = "صلح (وضعیت نرمال)";
-      let sid = "peace";
-      let description = "بازار در شرایط پایدار است. وزن‌دهی متعادل اعمال شد.";
-      let alloc = [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
+      // ---------------------------------------------------------
+      // START: REFINED STRATEGY LOGIC MATRIX
+      // ---------------------------------------------------------
 
+      let scenario = "";
+      let sid = "";
+      let description = "";
+      let alloc: { name: string; value: number; fill: string }[] = [];
+
+      // 1. COMBAT (War) Scenario
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
           scenario = "تقابل اکستریم (جنگی)";
           sid = "combat";
-          description = "تضاد شدید بین طلا و شاخص. فرصت عالی برای جابجایی سرمایه به سمت دارایی ارزان‌تر.";
-          alloc = goldState === 'Floor' 
-            ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
-            : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
+          const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
+          
+          if (isAnomaly) {
+              description = "ناهنجاری همبستگی تشخیص داده شد (تضاد کوتاه‌مدت و بلندمدت). حمله به سمت دارایی ارزان برای شکار بازگشت قیمت.";
+              alloc = cheapAsset === 'gold'
+                  ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
+                  : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
+          } else {
+              const ratioSupportsCheap = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
+              if (ratioSupportsCheap) {
+                   description = "روند Ratio با دارایی ارزان هم‌سو است. حمله تهاجمی به سمت دارایی کف قیمتی انجام شد.";
+                   alloc = cheapAsset === 'gold'
+                      ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
+                      : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
+              } else {
+                   description = "تضاد بین وضعیت تکنیکال و روند Ratio. به دلیل عدم وجود ناهنجاری، استراتژی محتاطانه برابر اعمال شد.";
+                   alloc = [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
+              }
+          }
       } 
+      // 2. BUBBLE (Both Ceiling)
       else if (goldState === 'Ceiling' && stockState === 'Ceiling') {
-          scenario = "حباب دوطرفه (اشباع)";
+          scenario = "حباب دوطرفه (خطر ریزش)";
           sid = "bubble";
-          description = "هر دو دارایی در سقف هستند. افزایش سهم نقدینگی برای مقابله با اصلاح احتمالی.";
-          alloc = [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: 'اوراق', value: 50, fill: '#3b82f6' } ];
+          description = "هر دو دارایی در سقف هستند. نقدینگی به ۵۰٪ افزایش یافت. تخصیص باقی‌مانده بر اساس روند قدرت نسبی (Ratio) انجام شد.";
+          alloc = ratioTrendAbove
+              ? [ { name: GOLD_SYMBOL, value: 30, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 50, fill: '#3b82f6' } ]
+              : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 30, fill: '#10b981' }, { name: 'اوراق', value: 50, fill: '#3b82f6' } ];
       }
+      // 3. OPPORTUNITY (Both Floor)
       else if (goldState === 'Floor' && stockState === 'Floor') {
           scenario = "فرصت دوطرفه (کف‌خوری)";
           sid = "opportunity";
-          description = "هر دو دارایی زیر ارزش تعادلی هستند. خرید پله‌ای بر اساس قدرت نسبی.";
+          description = "هر دو دارایی در کف ارزنده هستند. خرید تهاجمی با ۳۰٪ اوراق و تمرکز وزن بر دارایی دارای قدرت نسبی برتر.";
           alloc = ratioTrendAbove 
             ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ]
             : [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
       }
+      // 4. ONE-CEILING (Distribution)
       else if (goldState === 'Ceiling' || stockState === 'Ceiling') {
           scenario = "تک‌سقف (توزیع)";
           sid = "one-ceiling";
           const highAsset = goldState === 'Ceiling' ? 'gold' : 'index';
-          alloc = highAsset === 'gold'
-            ? [ { name: GOLD_SYMBOL, value: 15, fill: '#fbbf24' }, { name: symbol.symbol, value: 50, fill: '#10b981' }, { name: 'اوراق', value: 35, fill: '#3b82f6' } ]
-            : [ { name: GOLD_SYMBOL, value: 50, fill: '#fbbf24' }, { name: symbol.symbol, value: 15, fill: '#10b981' }, { name: 'اوراق', value: 35, fill: '#3b82f6' } ];
+          const ratioConfirmsSell = highAsset === 'gold' ? !ratioTrendAbove : ratioTrendAbove; 
+
+          if (ratioConfirmsSell) {
+             description = `روند Ratio ضعف ${highAsset === 'gold' ? 'طلا' : symbol.symbol} را تایید می‌کند. خروج سنگین و جابجایی به دارایی نرمال.`;
+             alloc = highAsset === 'gold'
+                ? [ { name: GOLD_SYMBOL, value: 15, fill: '#fbbf24' }, { name: symbol.symbol, value: 50, fill: '#10b981' }, { name: 'اوراق', value: 35, fill: '#3b82f6' } ]
+                : [ { name: GOLD_SYMBOL, value: 50, fill: '#fbbf24' }, { name: symbol.symbol, value: 15, fill: '#10b981' }, { name: 'اوراق', value: 35, fill: '#3b82f6' } ];
+          } else {
+             description = "دارایی در سقف است اما Ratio هنوز معکوس نشده. سیو سود پله‌ای و محتاطانه با نقدینگی ۳۰٪.";
+             alloc = [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
+          }
       }
+      // 5. ONE-FLOOR (Accumulation)
       else if (goldState === 'Floor' || stockState === 'Floor') {
-          scenario = "تک‌کف (فرصت خرید)";
+          scenario = "تک‌کف (شکار فرصت)";
           sid = "one-floor";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
-          alloc = cheapAsset === 'gold'
-            ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
-            : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
+          
+          if (isHighCorrRisk) {
+              description = "هشدار: همبستگی مثبت شدید است. با وجود قیمت ارزان، به دلیل ریسک سیستماتیک خرید به ۴۰٪ محدود شد.";
+              alloc = cheapAsset === 'gold'
+                ? [ { name: GOLD_SYMBOL, value: 40, fill: '#fbbf24' }, { name: symbol.symbol, value: 30, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ]
+                : [ { name: GOLD_SYMBOL, value: 30, fill: '#fbbf24' }, { name: symbol.symbol, value: 40, fill: '#10b981' }, { name: 'اوراق', value: 30, fill: '#3b82f6' } ];
+          } else {
+              const ratioSupportsBuy = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
+              if (ratioSupportsBuy) {
+                 description = "قیمت ارزان + روند Ratio موافق + همبستگی امن. خرید تهاجمی ۶۰ درصدی انجام شد.";
+                 alloc = cheapAsset === 'gold'
+                    ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
+                    : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
+              } else {
+                 description = "قیمت ارزان است اما Ratio هنوز سیگنال موافق قطعی نمی‌دهد. خرید متعادل ۴۰/۴۰.";
+                 alloc = [ { name: GOLD_SYMBOL, value: 40, fill: '#fbbf24' }, { name: symbol.symbol, value: 40, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
+              }
+          }
+      }
+      // 6. PEACE (Normal)
+      else {
+          scenario = "صلح (وضعیت نرمال)";
+          sid = "peace";
+          
+          if (isHighCorrRisk) {
+              description = "هشدار همبستگی مثبت شدید (بالای ۰.۵): تنوع‌بخشی ناکارآمد است. نقدینگی به ۵۰٪ افزایش یافت.";
+              alloc = [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: 'اوراق', value: 50, fill: '#3b82f6' } ];
+          } else if (isSafeCorr) {
+              description = "همبستگی معکوس امن (زیر ۰.۵-): فرصت عالی برای کاهش نقدینگی به ۱۰٪ و سوار شدن بر روند Ratio.";
+              alloc = ratioTrendAbove
+                 ? [ { name: GOLD_SYMBOL, value: 55, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 10, fill: '#3b82f6' } ]
+                 : [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 55, fill: '#10b981' }, { name: 'اوراق', value: 10, fill: '#3b82f6' } ];
+          } else {
+              description = "وضعیت تعادلی بازار و همبستگی خنثی. سهم اوراق ۲۰٪ و وزن‌دهی بر اساس روند Ratio.";
+              alloc = ratioTrendAbove
+                 ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ]
+                 : [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: 'اوراق', value: 20, fill: '#3b82f6' } ];
+          }
       }
 
       setStrategy({ allocation: alloc, scenario, id: sid, description });
       setStatus(FetchStatus.SUCCESS);
     } catch (err: any) { setError(err.message); setStatus(FetchStatus.ERROR); }
   };
-
-  const StrategyGuide = [
-    { id: 'combat', icon: Swords, title: 'تقابل اکستریم (جنگی)', desc: 'زمانی که یک دارایی در سقف (Ceiling) و دیگری در کف (Floor) است. استراتژی بر جابجایی وزن به سمت دارایی ارزان است.', color: 'red' },
-    { id: 'bubble', icon: Boxes, title: 'حباب دوطرفه (اشباع)', desc: 'هر دو دارایی بالای میانگین ۱۰۰ روزه و در وضعیت سقف هستند. ریسک خروج و نقدینگی بالا (۵۰٪ اوراق) اولویت دارد.', color: 'orange' },
-    { id: 'opportunity', icon: Sparkles, title: 'فرصت دوطرفه (کف‌خوری)', desc: 'هر دو دارایی در وضعیت کف هستند. بهترین زمان برای خرید پله‌ای و کاهش سهم نقدینگی به نفع دارایی‌های ریسکی.', color: 'emerald' },
-    { id: 'one-ceiling', icon: TrendingDown, title: 'تک‌سقف (توزیع)', desc: 'یکی از دارایی‌ها به اشباع رسیده اما دیگری وضعیت عادی دارد. فروش تدریجی دارایی گران و توازن پرتفوی.', color: 'purple' },
-    { id: 'one-floor', icon: TrendingUp, title: 'تک‌کف (فرصت خرید)', desc: 'یکی از دارایی‌ها در کف قیمتی قرار دارد. افزایش وزن به نفع این دارایی برای کسب بازدهی در میان‌مدت.', color: 'cyan' },
-    { id: 'peace', icon: CheckCircle2, title: 'صلح (وضعیت نرمال)', desc: 'بازار در محدوده تعادلی است. وزن‌دهی بر اساس قدرت نسبی (Ratio) و همبستگی جفت‌ارزها انجام می‌شود.', color: 'slate' },
-  ];
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">
@@ -366,19 +427,19 @@ export function PortfolioPage() {
                                <div className="flex justify-between items-center mb-4">
                                    <span className="text-white font-black text-sm">{m.symbol}</span>
                                    <div className="flex items-center gap-3">
-                                       {/* HISTORY HOVER TRIGGER */}
                                        <div className="relative group/hist">
                                             <History className="w-4 h-4 text-slate-500 cursor-help hover:text-cyan-400 transition-colors" />
-                                            <div className="absolute left-full mr-2 top-0 w-36 bg-slate-950 border border-slate-800 p-3 rounded-xl shadow-2xl z-50 opacity-0 pointer-events-none group-hover/hist:opacity-100 transition-opacity">
-                                                <span className="text-[9px] text-slate-500 block mb-2 border-b border-slate-800 pb-1">پایداری ۳ روزه (Lock 3/3)</span>
+                                            <div className="absolute left-full mr-2 top-0 w-44 bg-slate-950 border border-slate-800 p-3 rounded-xl shadow-2xl z-50 opacity-0 pointer-events-none group-hover/hist:opacity-100 transition-opacity">
+                                                <span className="text-[9px] text-slate-500 block mb-2 border-b border-slate-800 pb-1">پایداری (روزهای گذشته)</span>
                                                 <div className="flex flex-col gap-2">
-                                                    {m.devHistory.map((d, i) => (
+                                                    {m.devHistory.slice(1, 3).map((d, i) => (
                                                         <div key={i} className="flex justify-between text-[10px]">
-                                                            <span className="text-slate-600">{i === 0 ? 'امروز' : `${i} روز قبل`}</span>
+                                                            <span className="text-slate-600">{i === 0 ? 'دیروز' : 'پریروز'}</span>
                                                             <span className={d > 0 ? 'text-red-400' : 'text-emerald-400'}>{d.toFixed(1)}%</span>
                                                         </div>
                                                     ))}
                                                 </div>
+                                                <div className="mt-2 pt-1 border-t border-slate-900 text-[8px] text-slate-700 italic">مبنای قفل ۳/۳</div>
                                             </div>
                                        </div>
                                        <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${m.state === 'Ceiling' ? 'bg-red-500 text-white shadow-[0_0_8px_rgba(239,68,68,0.3)]' : m.state === 'Floor' ? 'bg-emerald-500 text-white shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-slate-700 text-slate-300'}`}>
@@ -386,13 +447,16 @@ export function PortfolioPage() {
                                        </span>
                                    </div>
                                </div>
-                               <div className="h-1.5 bg-slate-950 rounded-full overflow-hidden">
-                                   <div className={`h-full transition-all duration-700 ${m.dev > 0 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{width: `${Math.min(Math.abs(m.dev) * 4, 100)}%`}}></div>
+                               
+                               <div className="flex flex-col items-center justify-center py-2 bg-slate-950/30 rounded-xl border border-slate-800/50">
+                                   <span className="text-[9px] text-slate-500 mb-1">انحراف از میانگین ۱۰۰ روزه</span>
+                                   <span className={`text-2xl font-black ${m.dev > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                       {m.dev > 0 ? '+' : ''}{m.dev.toFixed(1)}%
+                                   </span>
                                </div>
                            </div>
                         ))}
 
-                        {/* ANOMALY AND RISK STACKED */}
                         <div className="flex flex-col gap-3">
                             <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40 shadow-inner' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
                                 <div className="flex items-center gap-2 mb-1">
@@ -401,23 +465,34 @@ export function PortfolioPage() {
                                 </div>
                                 <span className="text-[9px] text-slate-500 block">تضاد همبستگی کوتاه‌مدت و بلندمدت</span>
                             </div>
-                            <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.highCorr ? 'bg-orange-500/10 border-orange-500/40 shadow-inner' : 'bg-slate-900 border-slate-700'}`}>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Zap className={`w-4 h-4 ${marketMetrics.highCorr ? 'text-orange-500' : 'text-slate-500'}`} />
-                                    <span className={`text-[10px] font-black ${marketMetrics.highCorr ? 'text-white' : 'text-slate-500'}`}>ریسک همبستگی</span>
+
+                            <div className={`p-4 rounded-2xl border bg-slate-900 border-slate-700 transition-all`}>
+                                <div className="flex justify-between items-center mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <Zap className="w-4 h-4 text-orange-500" />
+                                        <span className="text-[10px] font-black text-white">مدیریت ریسک همبستگی</span>
+                                    </div>
+                                    <span className="text-[10px] font-mono text-slate-400" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
                                 </div>
-                                <div className="h-1 bg-slate-950 rounded-full overflow-hidden mb-1">
-                                    <div className={`h-full transition-all duration-700 ${marketMetrics.highCorr ? 'bg-orange-500' : 'bg-slate-600'}`} style={{width: `${Math.max(0, marketMetrics.corr2M) * 100}%`}}></div>
+                                
+                                <div className="relative h-4 mt-4 mb-2">
+                                    <div className="absolute inset-0 bg-gradient-to-r from-red-500/40 via-slate-700 to-emerald-500/40 rounded-full border border-slate-800"></div>
+                                    <div className="absolute left-1/2 top-0 h-full w-px bg-slate-400/50 z-10"></div>
+                                    <div 
+                                        className="absolute top-0 w-2.5 h-full bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)] z-20 transition-all duration-1000 ease-out border border-slate-900"
+                                        style={{ left: `${((1 - marketMetrics.corr2M) / 2) * 100}%`, transform: 'translateX(-50%)' }}
+                                    ></div>
+                                    <div className="absolute -top-4 left-0 text-[8px] text-red-400 font-black">۱+ (ریسک)</div>
+                                    <div className="absolute -top-4 right-0 text-[8px] text-emerald-400 font-black">۱- (امن)</div>
+                                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-slate-500">۰</div>
                                 </div>
-                                <span className="text-[8px] font-mono text-slate-500 text-left block" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
                             </div>
                         </div>
 
-                        {/* RATIO STATUS AT BOTTOM OF PANEL */}
                         <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700 flex justify-between items-center text-xs mt-auto">
                             <div className="flex items-center gap-1.5">
                                 <Activity className="w-3 h-3 text-amber-500" />
-                                <span className="text-slate-400">روند نسبت (Ratio):</span>
+                                <span className="text-slate-400">فیلتر Ratio:</span>
                             </div>
                             <span className={`font-black ${marketMetrics.ratioAboveMA ? 'text-amber-400' : 'text-cyan-400'}`}>
                                 {marketMetrics.ratioAboveMA ? 'طلا برتر' : 'شاخص برتر'}
@@ -432,7 +507,7 @@ export function PortfolioPage() {
                 <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
                     <div className="p-6 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
                         <div>
-                            <span className="text-xs text-slate-500 block mb-1 uppercase tracking-tighter">سناریوی جاری</span>
+                            <span className="text-xs text-slate-500 block mb-1 uppercase tracking-tighter">سناریوی جاری شناسایی شده</span>
                             <h3 className="text-2xl font-black text-white">{strategy.scenario}</h3>
                         </div>
                     </div>
@@ -469,7 +544,7 @@ export function PortfolioPage() {
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                                 <div className="text-center">
                                     <span className="block text-3xl font-black text-white">پرتفوی</span>
-                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest">Weighting</span>
+                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest">Weights</span>
                                 </div>
                             </div>
                         </div>
@@ -489,10 +564,6 @@ export function PortfolioPage() {
                                     </div>
                                 ))}
                             </div>
-                            <div className="mt-6 pt-4 border-t border-slate-800 flex items-center gap-2 text-[9px] text-slate-500 italic">
-                                <InfoIcon className="w-3 h-3" />
-                                مبنا: قفل ۳/۳ با آستانه ۱۰٪ ورود و ۷٪ خروج
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -505,7 +576,14 @@ export function PortfolioPage() {
          <section className="animate-fade-in mt-12">
             <h3 className="text-xl font-black text-white mb-6 flex items-center gap-2"><Target className="w-6 h-6 text-amber-500" /> راهنمای جامع استراتژی‌های بازار</h3>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {StrategyGuide.map((s) => {
+                {[
+                  { id: 'combat', icon: Swords, title: 'تقابل اکستریم (جنگی)', desc: 'تضاد شدید سقف و کف. در صورت ناهنجاری یا تایید Ratio، ۶۰٪ به سمت دارایی ارزان متمایل می‌شود.' },
+                  { id: 'bubble', icon: Boxes, title: 'حباب دوطرفه (اشباع)', desc: 'اشباع خرید کامل. ۵۰٪ اوراق اجباری و توزیع باقی‌مانده ۳۰/۲۰ بر اساس قدرت نسبی (Ratio).' },
+                  { id: 'opportunity', icon: Sparkles, title: 'فرصت دوطرفه (کف‌خوری)', desc: 'ارزندگی کل بازار. نقدینگی ۳۰٪ و تمرکز ۴۵ درصدی بر دارایی پیشرو در چارت نسبت.' },
+                  { id: 'one-ceiling', icon: TrendingDown, title: 'تک‌سقف (توزیع)', desc: 'اشباع یک دارایی. اگر Ratio تایید کند خروج سنگین (۱۵٪ وزن) و در غیر این صورت خروج پله‌ای.' },
+                  { id: 'one-floor', icon: TrendingUp, title: 'تک‌کف (فرصت خرید)', desc: 'ارزندگی یک دارایی. در صورت همبستگی خطرناک حجم ورود به ۴۰٪ محدود و در حالت امن تا ۶۰٪ افزایش می‌یابد.' },
+                  { id: 'peace', icon: CheckCircle2, title: 'صلح (وضعیت نرمال)', desc: 'وضعیت تعادلی. سهم نقدینگی بین ۱۰٪ تا ۵۰٪ متغیر و تابع مستقیم ریسک همبستگی و Ratio است.' },
+                ].map((s) => {
                     const isActive = strategy.id === s.id;
                     return (
                         <div key={s.id} className={`p-6 rounded-3xl border transition-all duration-500 flex flex-col relative overflow-hidden ${isActive ? 'bg-slate-800 border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.1)] ring-1 ring-cyan-500/50' : 'bg-slate-900/50 border-slate-800 grayscale opacity-40 hover:grayscale-0 hover:opacity-100 hover:border-slate-700'}`}>
