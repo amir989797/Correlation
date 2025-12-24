@@ -6,16 +6,16 @@ import { CorrelationChart } from '../components/CorrelationChart';
 import { PriceChart } from '../components/PriceChart';
 import { DistanceChart } from '../components/DistanceChart';
 import { ChartDataPoint, FetchStatus, TsetmcDataPoint, SearchResult } from '../types';
-import { Upload, FileText, X, Search, Loader2, Link2, Info, BarChart3, ArrowLeftRight } from 'lucide-react';
+import { Upload, FileText, X, Search, Loader2 } from 'lucide-react';
 
-type InputMode = 'database' | 'file' | 'link';
+type InputMode = 'database' | 'file';
 
 const WINDOW_OPTIONS = [
-  { val: 7, label: '۷ روزه (کوتاه مدت)', color: '#f59e0b' },   
-  { val: 30, label: '۳۰ روزه (میان مدت)', color: '#3b82f6' }, 
-  { val: 60, label: '۶۰ روزه (فصلی)', color: '#10b981' }, 
-  { val: 90, label: '۹۰ روزه', color: '#8b5cf6' }, 
-  { val: 365, label: '۱ ساله (روند بلندمدت)', color: '#ec4899' }, 
+  { val: 7, label: '۷ روزه', color: '#f59e0b' },   // Amber
+  { val: 30, label: '۳۰ روزه', color: '#3b82f6' }, // Blue
+  { val: 60, label: '۶۰ روزه', color: '#10b981' }, // Emerald
+  { val: 90, label: '۹۰ روزه', color: '#8b5cf6' }, // Violet
+  { val: 365, label: '۳۶۵ روزه (سالانه)', color: '#ec4899' }, // Pink
 ];
 
 // --- Sub-components ---
@@ -35,6 +35,7 @@ const SearchInput = ({
   const [loading, setLoading] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
+  // Debounce search
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (query.length >= 2) {
@@ -48,9 +49,11 @@ const SearchInput = ({
         setIsOpen(false);
       }
     }, 500);
+
     return () => clearTimeout(timer);
   }, [query]);
 
+  // Click outside to close
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
@@ -65,17 +68,17 @@ const SearchInput = ({
     return (
       <div className="space-y-2">
         <label className="block text-sm font-medium text-slate-400">{label}</label>
-        <div className="flex items-center justify-between p-3 bg-slate-900/80 border border-emerald-500/30 rounded-xl text-emerald-400 backdrop-blur-md">
+        <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-600 rounded-lg text-emerald-400">
            <div className="flex items-center gap-3">
-             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                <FileText className="w-5 h-5" />
+             <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <FileText className="w-4 h-4" />
              </div>
              <div>
-               <span className="block font-black text-sm">{value.symbol}</span>
-               <span className="block text-[10px] opacity-60 font-medium">{value.name}</span>
+               <span className="block font-bold text-sm">{value.symbol}</span>
+               <span className="block text-xs opacity-70">{value.name}</span>
              </div>
            </div>
-           <button onClick={() => { onSelect(null); setQuery(''); }} className="p-2 hover:bg-red-500/10 rounded-lg text-slate-500 hover:text-red-400 transition-all">
+           <button onClick={() => { onSelect(null); setQuery(''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400 transition-colors">
              <X className="w-5 h-5" />
            </button>
         </div>
@@ -86,31 +89,37 @@ const SearchInput = ({
   return (
     <div className="space-y-2" ref={wrapperRef}>
       <label className="block text-sm font-medium text-slate-400">{label}</label>
-      <div className="relative group">
+      <div className="relative">
         <input 
           type="text" 
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="جستجوی نام یا نماد..." 
-          className="w-full bg-slate-900/50 border border-slate-700 rounded-xl pl-4 pr-11 py-3.5 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 outline-none text-sm text-right transition-all group-hover:border-slate-600" 
+          placeholder="جستجوی نماد (مثلا: فولاد)..." 
+          className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-4 pr-10 py-3 focus:ring-2 focus:ring-cyan-500 outline-none text-sm text-right" 
         />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-500 transition-colors">
-          {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+          {loading ? <Loader2 className="w-5 h-5 animate-spin text-cyan-500" /> : <Search className="w-5 h-5" />}
         </div>
 
         {isOpen && results.length > 0 && (
-          <div className="absolute top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl z-50 max-h-72 overflow-y-auto custom-scrollbar backdrop-blur-xl">
+          <div className="absolute top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
              {results.map((item, idx) => (
                <button 
                 key={idx}
                 type="button"
                 onClick={() => { onSelect(item); setIsOpen(false); }}
-                className="w-full text-right px-5 py-4 hover:bg-slate-700/50 border-b border-slate-700/50 last:border-0 flex justify-between items-center group transition-all"
+                className="w-full text-right px-4 py-3 hover:bg-slate-700 border-b border-slate-700/50 last:border-0 flex justify-between items-center group transition-colors"
                >
-                 <span className="font-black text-white group-hover:text-cyan-400 transition-colors">{item.symbol}</span>
-                 <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">{item.name}</span>
+                 <span className="font-bold text-white group-hover:text-cyan-400">{item.symbol}</span>
+                 <span className="text-xs text-slate-400">{item.name}</span>
                </button>
              ))}
+          </div>
+        )}
+        
+        {isOpen && results.length === 0 && !loading && (
+          <div className="absolute top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 p-4 text-center text-slate-500 text-sm">
+             نمادی یافت نشد
           </div>
         )}
       </div>
@@ -130,37 +139,98 @@ const FileDropzone = ({
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
-  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); };
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
   const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault(); setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) onFileSelect(e.dataTransfer.files[0]);
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      onFileSelect(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleClick = () => {
+    inputRef.current?.click();
+  };
+
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onFileSelect(null);
+    if (inputRef.current) inputRef.current.value = '';
   };
 
   return (
     <div className="space-y-2">
       <label className="block text-sm font-medium text-slate-400">{label}</label>
+      
       <div 
-        onClick={() => inputRef.current?.click()}
-        onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
-        className={`relative group cursor-pointer border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-all duration-300 min-h-[160px] ${isDragging ? 'border-cyan-500 bg-cyan-500/10 scale-[1.02]' : file ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-700 bg-slate-900/30 hover:border-cyan-500/50 hover:bg-slate-800/50'}`}
+        onClick={handleClick}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`
+          relative group cursor-pointer
+          border-2 border-dashed rounded-xl p-8
+          flex flex-col items-center justify-center text-center
+          transition-all duration-300 min-h-[160px]
+          ${isDragging 
+              ? 'border-cyan-500 bg-cyan-500/10 scale-[1.02]' 
+              : file 
+                ? 'border-emerald-500/50 bg-emerald-500/5' 
+                : 'border-slate-600 bg-slate-900/50 hover:border-cyan-400 hover:bg-slate-800'
+          }
+        `}
       >
-        <input ref={inputRef} type="file" accept=".csv,.txt" className="hidden" onChange={(e) => { if (e.target.files && e.target.files[0]) onFileSelect(e.target.files[0]); }} />
+        <input 
+          ref={inputRef}
+          type="file" 
+          accept=".csv,.txt" 
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+               onFileSelect(e.target.files[0]);
+            }
+          }}
+        />
+
         {file ? (
           <div className="flex flex-col items-center animate-fade-in w-full">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3 border border-emerald-500/20">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3">
                <FileText className="w-6 h-6" />
             </div>
-            <p className="text-emerald-200 font-bold text-xs truncate max-w-full px-4 mb-1" dir="ltr">{file.name}</p>
-            <button onClick={(e) => { e.stopPropagation(); onFileSelect(null); }} className="mt-3 px-4 py-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg text-[10px] font-black transition-all border border-slate-700">حذف فایل</button>
+            <p className="text-emerald-200 font-medium text-sm truncate max-w-full px-4 mb-1" dir="ltr">
+              {file.name}
+            </p>
+            <p className="text-slate-500 text-xs mb-4">
+              {(file.size / 1024).toFixed(1)} KB
+            </p>
+            <button 
+              onClick={handleRemove}
+              className="px-4 py-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg text-xs flex items-center gap-2 transition-colors border border-slate-700 hover:border-red-500/30 z-10"
+            >
+              <X className="w-3.5 h-3.5" />
+              حذف فایل
+            </button>
           </div>
         ) : (
           <div className="flex flex-col items-center text-slate-400 group-hover:text-cyan-400 transition-colors">
-            <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center mb-3 group-hover:bg-cyan-500/10 transition-all">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-all ${isDragging ? 'bg-cyan-500/20 text-cyan-400' : 'bg-slate-800 text-slate-500 group-hover:bg-cyan-500/10 group-hover:text-cyan-400'}`}>
                <Upload className="w-6 h-6" />
             </div>
-            <p className="font-bold text-sm mb-1">بارگذاری فایل CSV</p>
-            <p className="text-[10px] text-slate-500">یا فایل را به اینجا بکشید</p>
+            <p className="font-bold text-sm mb-2">
+              برای آپلود کلیک کنید یا فایل را اینجا رها کنید
+            </p>
+            <p className="text-xs text-slate-500">
+              فرمت مجاز: CSV یا TXT (حداکثر ۲ مگابایت)
+            </p>
           </div>
         )}
       </div>
@@ -168,249 +238,459 @@ const FileDropzone = ({
   );
 };
 
-const LinkInput = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => (
-  <div className="space-y-2">
-    <label className="block text-sm font-medium text-slate-400">{label}</label>
-    <div className="relative group">
-      <input 
-        type="text" 
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="https://tsetmc.com/loader.aspx?i=..." 
-        className="w-full bg-slate-900/50 border border-slate-700 rounded-xl pl-4 pr-11 py-3.5 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 outline-none text-xs text-left transition-all font-mono" 
-        dir="ltr"
-      />
-      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-500">
-        <Link2 className="w-5 h-5" />
-      </div>
-    </div>
+// Component for background titles
+const ChartBackgroundLabel = ({ text }: { text: string }) => (
+  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
+     <h3 className="text-[12vw] sm:text-6xl md:text-8xl font-black text-slate-800/30 select-none whitespace-nowrap">{text}</h3>
   </div>
 );
 
-const ChartBackgroundLabel = ({ text }: { text: string }) => (
-  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
-     <h3 className="text-[10vw] sm:text-5xl md:text-7xl font-black text-slate-800/20 select-none whitespace-nowrap uppercase tracking-widest">{text}</h3>
-  </div>
-);
 
 export function CorrelationPage() {
   const [mode, setMode] = useState<InputMode>('database');
+  
+  // Database Mode State
   const [selectedSymbol1, setSelectedSymbol1] = useState<SearchResult | null>(null);
   const [selectedSymbol2, setSelectedSymbol2] = useState<SearchResult | null>(null);
+  
+  // File Mode State
   const [file1, setFile1] = useState<File | null>(null);
   const [file2, setFile2] = useState<File | null>(null);
-  const [link1, setLink1] = useState('');
-  const [link2, setLink2] = useState('');
 
+  // Calculation State
   const [selectedWindows, setSelectedWindows] = useState<number[]>([60]);
-  const [showMa100, setShowMa100] = useState(false);
-  const [showMa200, setShowMa200] = useState(false);
-  const [showDistActive, setShowDistActive] = useState(false);
-  const [showDistBoth, setShowDistBoth] = useState(false);
-  
+  const [showMa100, setShowMa100] = useState<boolean>(false);
+  const [showMa200, setShowMa200] = useState<boolean>(false);
   const [cachedData, setCachedData] = useState<{d1: TsetmcDataPoint[], d2: TsetmcDataPoint[]} | null>(null);
-  const [symbolNames, setSymbolNames] = useState({ s1: 'نماد اول', s2: 'نماد دوم' });
+  
+  // Indicator State (Distance from MA)
+  const [showDistActive, setShowDistActive] = useState<boolean>(false);
+  const [showDistBoth, setShowDistBoth] = useState<boolean>(false);
+
+  // Symbol Names
+  const [symbolNames, setSymbolNames] = useState<{s1: string, s2: string}>({ s1: 'نماد اول', s2: 'نماد دوم' });
+
+  // Price Chart Selection State
   const [priceDisplaySide, setPriceDisplaySide] = useState<'price1' | 'price2'>('price1');
+
+  const [errorContent, setErrorContent] = useState<React.ReactNode | null>(null);
   const [status, setStatus] = useState<FetchStatus>(FetchStatus.IDLE);
-  const [error, setError] = useState<string | null>(null);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
 
-  const extractIdFromLink = (url: string) => {
-    try {
-      const parsed = new URL(url);
-      return parsed.searchParams.get('i');
-    } catch { return null; }
+  const handleError = (message: string) => {
+    console.error(message);
+    setStatus(FetchStatus.ERROR);
+    setErrorContent(<p>{message}</p>);
   };
 
   const performCalculation = (d1: TsetmcDataPoint[], d2: TsetmcDataPoint[], wSizes: number[]) => {
-    if (wSizes.length === 0) { setChartData([]); return; }
+    if (wSizes.length === 0) {
+      setChartData([]); // No windows selected, show empty
+      return;
+    }
+
     const minWindow = Math.min(...wSizes);
-    if (d1.length < minWindow || d2.length < minWindow) throw new Error(`داده‌های تاریخی کافی (حداقل ${minWindow} روز) یافت نشد.`);
+
+    if (d1.length < minWindow || d2.length < minWindow) {
+      throw new Error(`داده‌های تاریخی کافی برای محاسبه همبستگی (حداقل ${minWindow} روز معاملاتی) وجود ندارد.`);
+    }
+
+    const mergedData = alignDataByDate(d1, d2);
+    
+    if (mergedData.length < minWindow) {
+      throw new Error(`تعداد روزهای معاملاتی مشترک (${mergedData.length}) کمتر از حداقل بازه انتخابی (${minWindow} روز) است.`);
+    }
+
     const analysisData = generateAnalysisData(d1, d2, wSizes);
-    if (analysisData.length === 0) throw new Error('هیچ بازه زمانی مشترکی بین دو نماد یافت نشد.');
     setChartData(analysisData);
   };
 
-  const handleCalculate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setStatus(FetchStatus.LOADING);
+  const processData = (data1: TsetmcDataPoint[], data2: TsetmcDataPoint[]) => {
+    setCachedData({ d1: data1, d2: data2 });
     try {
-      let d1: TsetmcDataPoint[] = [], d2: TsetmcDataPoint[] = [];
-      let name1 = 'نماد ۱', name2 = 'نماد ۲';
-
-      if (mode === 'database') {
-        if (!selectedSymbol1 || !selectedSymbol2) throw new Error('لطفا هر دو نماد را انتخاب کنید.');
-        const [res1, res2] = await Promise.all([fetchStockHistory(selectedSymbol1.symbol), fetchStockHistory(selectedSymbol2.symbol)]);
-        d1 = res1.data; d2 = res2.data; name1 = selectedSymbol1.symbol; name2 = selectedSymbol2.symbol;
-      } else if (mode === 'file') {
-        if (!file1 || !file2) throw new Error('لطفا هر دو فایل را انتخاب کنید.');
-        const read = (f: File) => new Promise<string>(r => { const fr = new FileReader(); fr.onload = (ev) => r(ev.target?.result as string); fr.readAsText(f); });
-        // Fixed: Argument of type 'Promise<string>' is not assignable to parameter of type 'File' by removing nested read() call.
-        const [t1, t2] = await Promise.all([read(file1), read(file2)]);
-        const p1 = parseTsetmcCsv(t1), p2 = parseTsetmcCsv(t2);
-        d1 = p1.data; d2 = p2.data; name1 = p1.name; name2 = p2.name;
-      } else {
-        const id1 = extractIdFromLink(link1), id2 = extractIdFromLink(link2);
-        if (!id1 || !id2) throw new Error('لینک‌های وارد شده معتبر نیستند. لطفا لینک کامل صفحه نماد در TSETMC را وارد کنید.');
-        const [res1, res2] = await Promise.all([fetchStockHistory(id1), fetchStockHistory(id2)]);
-        d1 = res1.data; d2 = res2.data; name1 = id1; name2 = id2;
-      }
-
-      setSymbolNames({ s1: name1, s2: name2 });
-      setCachedData({ d1, d2 });
-      performCalculation(d1, d2, selectedWindows);
+      performCalculation(data1, data2, selectedWindows);
       setStatus(FetchStatus.SUCCESS);
-    } catch (err: any) { setError(err.message); setStatus(FetchStatus.ERROR); }
+    } catch (err: any) {
+      handleError(err.message);
+    }
   };
 
-  useEffect(() => {
-    if (cachedData) {
-      try { performCalculation(cachedData.d1, cachedData.d2, selectedWindows); } 
-      catch (err: any) { setError(err.message); }
+  const handleWindowChange = (val: number, checked: boolean) => {
+    let newWindows: number[];
+    if (checked) {
+      newWindows = [...selectedWindows, val].sort((a, b) => a - b);
+    } else {
+      newWindows = selectedWindows.filter(w => w !== val);
     }
-  }, [selectedWindows, cachedData]);
+    
+    setSelectedWindows(newWindows);
 
-  const activeWindowConfigs = useMemo(() => WINDOW_OPTIONS.filter(opt => selectedWindows.includes(opt.val)), [selectedWindows]);
+    if (cachedData) {
+      try {
+        setErrorContent(null);
+        performCalculation(cachedData.d1, cachedData.d2, newWindows);
+        if (newWindows.length > 0) {
+            setStatus(FetchStatus.SUCCESS);
+        }
+      } catch (err: any) {
+        handleError(err.message);
+      }
+    }
+  };
+
+  const handleCalculateDatabase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedSymbol1 || !selectedSymbol2) {
+      handleError('لطفا هر دو نماد را انتخاب کنید.');
+      return;
+    }
+
+    if (selectedSymbol1.symbol === selectedSymbol2.symbol) {
+      handleError('لطفا دو نماد متفاوت را انتخاب کنید.');
+      return;
+    }
+
+    setStatus(FetchStatus.LOADING);
+    setErrorContent(null);
+    setChartData([]);
+    setCachedData(null); 
+
+    try {
+      const [res1, res2] = await Promise.all([
+        fetchStockHistory(selectedSymbol1.symbol),
+        fetchStockHistory(selectedSymbol2.symbol)
+      ]);
+      setSymbolNames({ s1: selectedSymbol1.symbol, s2: selectedSymbol2.symbol });
+      processData(res1.data, res2.data);
+    } catch (err: any) {
+      handleError(err.message || 'خطای ناشناخته در ارتباط با سرور.');
+    }
+  };
+
+  const validateFile = (file: File): string | null => {
+    const lowerName = file.name.toLowerCase();
+    if (!lowerName.endsWith('.csv') && !lowerName.endsWith('.txt')) {
+      return `فایل ${file.name} معتبر نیست. لطفا فایل CSV یا TXT آپلود کنید.`;
+    }
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxSize) {
+      return `حجم فایل ${file.name} بیشتر از ۲ مگابایت است.`;
+    }
+    return null;
+  };
+
+  const readFileAsText = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const error = validateFile(file);
+      if (error) {
+        reject(new Error(error));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = (e) => reject(new Error('خطا در خواندن فایل'));
+      reader.readAsText(file);
+    });
+  };
+
+  const handleCalculateFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file1 || !file2) {
+      handleError('لطفا هر دو فایل را انتخاب کنید.');
+      return;
+    }
+
+    setStatus(FetchStatus.LOADING);
+    setErrorContent(null);
+    setChartData([]);
+    setCachedData(null); 
+
+    try {
+      const [text1, text2] = await Promise.all([
+        readFileAsText(file1),
+        readFileAsText(file2)
+      ]);
+
+      const res1 = parseTsetmcCsv(text1);
+      const res2 = parseTsetmcCsv(text2);
+      
+      setSymbolNames({ s1: res1.name || 'نماد اول', s2: res2.name || 'نماد دوم' });
+
+      if (res1.data.length === 0 || res2.data.length === 0) {
+        throw new Error('فرمت فایل‌ها صحیح نیست یا داده‌ای یافت نشد.');
+      }
+
+      processData(res1.data, res2.data);
+    } catch (err: any) {
+      handleError(err.message || 'خطا در پردازش فایل‌ها.');
+    }
+  };
+
+  const activeWindowConfigs = useMemo(() => {
+    return WINDOW_OPTIONS.filter(opt => selectedWindows.includes(opt.val));
+  }, [selectedWindows]);
+
+  // Determine Distance Chart visibility and content
   const isDistanceVisible = showDistActive || showDistBoth;
+  const showDistS1 = showDistBoth || (showDistActive && priceDisplaySide === 'price1');
+  const showDistS2 = showDistBoth || (showDistActive && priceDisplaySide === 'price2');
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-8 animate-fade-in pb-20">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <h2 className="text-4xl font-black text-white mb-3">تحلیل هوشمند همبستگی</h2>
-              <p className="text-slate-400 font-medium">«لینک دو نماد از سایت TSETMC را وارد کنید تا ضریب همبستگی تاریخی بین آنها را مشاهده کنید»</p>
-            </div>
-            <div className="flex bg-slate-800/50 p-1.5 rounded-2xl border border-slate-700/50 backdrop-blur-xl">
-              <button onClick={() => setMode('database')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${mode === 'database' ? 'bg-cyan-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>دیتابیس</button>
-              <button onClick={() => setMode('link')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${mode === 'link' ? 'bg-cyan-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>لینک TSETMC</button>
-              <button onClick={() => setMode('file')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${mode === 'file' ? 'bg-cyan-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>فایل CSV</button>
-            </div>
+    <div className="w-full max-w-5xl mx-auto space-y-8 animate-fade-in">
+        <header className="mb-6">
+            <h2 className="text-3xl font-bold text-white mb-2">محاسبه همبستگی نمادها</h2>
+            <p className="text-slate-400">تحلیل همبستگی تاریخی و ابزارهای تکنیکال مقایسه‌ای</p>
         </header>
-
-        <div className="bg-slate-800/40 p-8 rounded-[32px] border border-slate-700/50 shadow-2xl backdrop-blur-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 blur-[120px] rounded-full -mr-32 -mt-32"></div>
-          
-          <div className="grid lg:grid-cols-12 gap-10">
-            <div className="lg:col-span-8 space-y-8">
-              {mode === 'database' && (
-                <div className="grid md:grid-cols-2 gap-6">
-                   <SearchInput label="جستجوی نماد اول (پایه)" value={selectedSymbol1} onSelect={setSelectedSymbol1} />
-                   <SearchInput label="جستجوی نماد دوم (مقایسه)" value={selectedSymbol2} onSelect={setSelectedSymbol2} />
-                </div>
-              )}
-              {mode === 'link' && (
-                <div className="grid md:grid-cols-2 gap-6">
-                   <LinkInput label="لینک TSETMC نماد اول" value={link1} onChange={setLink1} />
-                   <LinkInput label="لینک TSETMC نماد دوم" value={link2} onChange={setLink2} />
-                </div>
-              )}
-              {mode === 'file' && (
-                <div className="grid md:grid-cols-2 gap-6">
-                   <FileDropzone label="فایل نماد اول" file={file1} onFileSelect={setFile1} />
-                   <FileDropzone label="فایل نماد دوم" file={file2} onFileSelect={setFile2} />
-                </div>
-              )}
-
-              <button onClick={handleCalculate} disabled={status === FetchStatus.LOADING} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-black py-4 rounded-2xl shadow-xl shadow-cyan-500/20 transition-all border-none flex items-center justify-center gap-3 active:scale-[0.98]">
-                {status === FetchStatus.LOADING ? <Loader2 className="w-6 h-6 animate-spin" /> : <><ArrowLeftRight className="w-5 h-5" /> شروع تحلیل مقایسه‌ای</>}
-              </button>
-            </div>
-
-            <div className="lg:col-span-4 bg-slate-900/40 p-6 rounded-3xl border border-slate-700/50 space-y-6">
-               <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-3">تنظیمات پیشرفته</h4>
-               <div className="space-y-5">
-                  <div className="space-y-3">
-                    <span className="text-[10px] font-bold text-slate-400 block">بازه محاسباتی همبستگی:</span>
-                    <div className="flex flex-wrap gap-2">
-                       {WINDOW_OPTIONS.map(opt => (
-                         <button key={opt.val} onClick={() => setSelectedWindows(prev => prev.includes(opt.val) ? prev.filter(w => w !== opt.val) : [...prev, opt.val].sort((a,b)=>a-b))} className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border ${selectedWindows.includes(opt.val) ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'}`}>
-                           {opt.label}
-                         </button>
-                       ))}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <input type="checkbox" checked={showMa100} onChange={(e)=>setShowMa100(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-700 text-cyan-500" />
-                      <span className="text-[10px] font-bold text-slate-400 group-hover:text-slate-200">نمایش MA100</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <input type="checkbox" checked={showMa200} onChange={(e)=>setShowMa200(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-700 text-cyan-500" />
-                      <span className="text-[10px] font-bold text-slate-400 group-hover:text-slate-200">نمایش MA200</span>
-                    </label>
-                  </div>
-               </div>
-            </div>
+        
+        {/* Input Method Toggle */}
+        <div className="flex justify-start mb-6">
+          <div className="bg-slate-800 p-1 rounded-xl flex shadow-lg border border-slate-700">
+            <button
+              onClick={() => { setMode('database'); setErrorContent(null); }}
+              className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
+                mode === 'database' 
+                  ? 'bg-slate-900 text-white shadow-lg border border-slate-600' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              جستجو از دیتابیس
+            </button>
+            <button
+              onClick={() => { setMode('file'); setErrorContent(null); }}
+              className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
+                mode === 'file' 
+                  ? 'bg-slate-900 text-white shadow-lg border border-slate-600' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              آپلود فایل (دستی)
+            </button>
           </div>
         </div>
 
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/30 p-5 rounded-2xl text-red-400 text-sm flex items-center gap-4 animate-shake">
-             <X className="w-6 h-6 shrink-0" />
-             <p className="font-bold">{error}</p>
+        {/* Normal Form Logic */}
+        <div className="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
+          {/* Common Settings Area */}
+          <div className="mb-6 p-4 bg-slate-900/50 rounded-xl border border-slate-700/50 space-y-4">
+              
+              {/* Correlation Windows */}
+              <div className="border-b border-slate-700 pb-4">
+                <label className="block text-sm font-medium text-slate-400 mb-3">
+                  بازه‌های زمانی همبستگی
+                </label>
+                <div className="flex flex-wrap gap-4">
+                  {WINDOW_OPTIONS.map((opt) => (
+                    <label key={opt.val} className="flex items-center gap-2 cursor-pointer group">
+                      <input 
+                          type="checkbox" 
+                          checked={selectedWindows.includes(opt.val)}
+                          onChange={(e) => handleWindowChange(opt.val, e.target.checked)}
+                          className="peer h-4 w-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-offset-slate-900"
+                      />
+                      <span className={`text-sm transition-colors ${selectedWindows.includes(opt.val) ? 'text-white' : 'text-slate-500'}`}>
+                        {opt.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Technical Indicators */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-3">
+                      اندیکاتورهای قیمت (MA)
+                    </label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={showMa100} onChange={(e) => setShowMa100(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-purple-600"/>
+                          <span className={`text-sm ${showMa100 ? 'text-purple-400' : 'text-slate-500'}`}>MA100</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={showMa200} onChange={(e) => setShowMa200(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-orange-600"/>
+                          <span className={`text-sm ${showMa200 ? 'text-orange-400' : 'text-slate-500'}`}>MA200</span>
+                      </label>
+                    </div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-3">
+                      فاصله از میانگین (MA100)
+                    </label>
+                    <div className="flex flex-wrap gap-4">
+                        {/* Option 1: Active Symbol */}
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={showDistActive} 
+                            onChange={(e) => {
+                                setShowDistActive(e.target.checked);
+                                if (e.target.checked) setShowDistBoth(false);
+                            }} 
+                            className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-cyan-500"
+                          />
+                          <span className={`text-sm ${showDistActive ? 'text-cyan-400' : 'text-slate-500'}`}>
+                            نماد فعال
+                          </span>
+                        </label>
+
+                        {/* Option 2: Both Symbols */}
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={showDistBoth} 
+                            onChange={(e) => {
+                                setShowDistBoth(e.target.checked);
+                                if (e.target.checked) setShowDistActive(false);
+                            }} 
+                            className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-purple-500"
+                          />
+                          <span className={`text-sm ${showDistBoth ? 'text-purple-400' : 'text-slate-500'}`}>
+                            هر دو نماد
+                          </span>
+                        </label>
+                    </div>
+                </div>
+              </div>
+          </div>
+
+          {mode === 'database' ? (
+            <form onSubmit={handleCalculateDatabase} className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-6">
+                 <SearchInput 
+                    label="جستجوی نماد اول" 
+                    value={selectedSymbol1} 
+                    onSelect={setSelectedSymbol1} 
+                 />
+                 <SearchInput 
+                    label="جستجوی نماد دوم" 
+                    value={selectedSymbol2} 
+                    onSelect={setSelectedSymbol2} 
+                 />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                <button type="submit" disabled={status === FetchStatus.LOADING || selectedWindows.length === 0} className="flex-1 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 px-6 rounded-lg shadow-lg shadow-cyan-500/20 transition-all hover:scale-[1.02] disabled:opacity-50 border-none">
+                  {status === FetchStatus.LOADING ? 'در حال دریافت اطلاعات...' : 'محاسبه همبستگی'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleCalculateFile} className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <FileDropzone 
+                    label="فایل نماد اول" 
+                    file={file1} 
+                    onFileSelect={setFile1} 
+                  />
+                  <FileDropzone 
+                    label="فایل نماد دوم" 
+                    file={file2} 
+                    onFileSelect={setFile2} 
+                  />
+                </div>
+                <button type="submit" disabled={status === FetchStatus.LOADING} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 rounded-lg shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50 border-none">محاسبه</button>
+            </form>
+          )}
+        </div>
+
+        {/* Error Message */}
+        {errorContent && (
+          <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-4 rounded-xl flex items-center gap-3 animate-fade-in">
+             <div className="font-bold">خطا:</div>
+             <div>{errorContent}</div>
           </div>
         )}
 
+        {/* Results Section */}
         {status === FetchStatus.SUCCESS && chartData.length > 0 && (
-          <div className="space-y-6 animate-fade-in">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-               {[
-                 { label: 'روزهای مشترک', value: `${chartData.length} روز`, icon: BarChart3 },
-                 { label: 'بازه تاریخی', value: `${chartData[0].date} تا ${chartData[chartData.length-1].date}`, icon: FileText },
-                 { label: 'نماد پایه', value: symbolNames.s1, icon: Search },
-                 { label: 'نماد مقایسه', value: symbolNames.s2, icon: Search }
-               ].map((item, i) => (
-                 <div key={i} className="bg-slate-800/40 p-5 rounded-3xl border border-slate-700/50 flex flex-col items-center text-center gap-2">
-                    <item.icon className="w-5 h-5 text-cyan-500/50 mb-1" />
-                    <span className="text-[10px] font-bold text-slate-500">{item.label}</span>
-                    <span className="text-sm font-black text-white">{item.value}</span>
-                 </div>
-               ))}
+          <div className="animate-fade-in space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+                <span className="block text-slate-400 text-sm mb-1">نقاط مشترک</span>
+                <span className="text-2xl font-bold text-white">{chartData.length} روز</span>
+              </div>
+              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+                <span className="block text-slate-400 text-sm mb-1">نمادها</span>
+                <span className="text-sm font-bold text-white">{symbolNames.s1} <span className="text-slate-500 mx-1">vs</span> {symbolNames.s2}</span>
+              </div>
+              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+                <span className="block text-slate-400 text-sm mb-1">آخرین تاریخ</span>
+                <span className="text-lg font-bold text-white">{chartData[chartData.length - 1].date}</span>
+              </div>
             </div>
 
-            <div className="bg-slate-800/80 rounded-[40px] border border-slate-700/50 shadow-[0_32px_64px_rgba(0,0,0,0.4)] overflow-hidden">
-                <div className="p-8 border-b border-slate-700/50 flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div className="flex items-center gap-4">
-                       <div className="w-12 h-12 rounded-2xl bg-cyan-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                          <BarChart3 className="text-white w-6 h-6" />
-                       </div>
-                       <div>
-                          <h3 className="text-xl font-black text-white">نمودار ترکیبی و واگرایی</h3>
-                          <p className="text-[10px] text-slate-500 font-bold">بررسی همزمان قیمت و ضریب همبستگی</p>
-                       </div>
-                    </div>
-                    <div className="bg-slate-900/80 p-1.5 rounded-2xl border border-slate-700 flex">
-                        <button onClick={() => setPriceDisplaySide('price1')} className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${priceDisplaySide === 'price1' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{symbolNames.s1}</button>
-                        <button onClick={() => setPriceDisplaySide('price2')} className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${priceDisplaySide === 'price2' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{symbolNames.s2}</button>
-                    </div>
+            {/* UNIFIED CHART CONTAINER */}
+            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-2xl m-8">
+                {/* Toolbar */}
+                <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-b border-slate-700 bg-slate-800/50">
+                   <h3 className="font-bold text-slate-200">نمودار ترکیبی</h3>
+                   
+                   <div className="flex items-center gap-4">
+                     <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-700">
+                       <button onClick={() => setPriceDisplaySide('price1')} className={`px-3 py-1 text-sm rounded ${priceDisplaySide === 'price1' ? 'bg-slate-700 text-white font-bold' : 'text-slate-400'}`}>
+                         {symbolNames.s1}
+                       </button>
+                       <div className="w-px h-4 bg-slate-700"></div>
+                       <button onClick={() => setPriceDisplaySide('price2')} className={`px-3 py-1 text-sm rounded ${priceDisplaySide === 'price2' ? 'bg-slate-700 text-white font-bold' : 'text-slate-400'}`}>
+                         {symbolNames.s2}
+                       </button>
+                     </div>
+                   </div>
                 </div>
 
-                <div className="p-8 space-y-12">
-                   <div className="h-[400px] relative">
-                      <PriceChart data={chartData} dataKey={priceDisplaySide} syncId="master" color="#06b6d4" showMa100={showMa100} showMa200={showMa200} />
+                {/* Chart Area with Padding Left (8px) for Axis Labels */}
+                {/* Added pb-10 and space-y-8 for margin from bottom and separation */}
+                <div className="p-4 pl-2 pb-10 space-y-8">
+                   {/* 1. Price Chart */}
+                   <div className="h-[350px] relative transition-all duration-300 ease-in-out">
+                      <PriceChart 
+                          data={chartData} 
+                          dataKey={priceDisplaySide} 
+                          syncId="unified-view"
+                          color="#10b981"
+                          showMa100={showMa100}
+                          showMa200={showMa200}
+                      />
                    </div>
-                   <div className="h-[250px] relative border-t border-slate-700/50 pt-10">
-                      <ChartBackgroundLabel text="Correlation" />
-                      <CorrelationChart data={chartData} syncId="master" activeWindows={activeWindowConfigs} showBrush={!isDistanceVisible} showXAxis={!isDistanceVisible} />
+
+                   {/* 2. Correlation Chart */}
+                   <div className="border-t border-slate-700/50 pt-6 relative flex flex-col h-[200px]">
+                      <div className="relative bg-slate-800 w-full h-full">
+                        <ChartBackgroundLabel text="ضریب همبستگی" />
+                        <div className="relative z-10 w-full h-full">
+                            <CorrelationChart 
+                                data={chartData} 
+                                syncId="unified-view"
+                                activeWindows={activeWindowConfigs}
+                                showBrush={!isDistanceVisible}
+                                showXAxis={!isDistanceVisible}
+                            />
+                        </div>
+                      </div>
                    </div>
+
+                   {/* 3. Distance Chart (Conditional) */}
                    {isDistanceVisible && (
-                     <div className="h-[250px] relative border-t border-slate-700/50 pt-10">
-                        <ChartBackgroundLabel text="Deviation" />
-                        <DistanceChart data={chartData} syncId="master" showSymbol1={showDistBoth || (showDistActive && priceDisplaySide === 'price1')} showSymbol2={showDistBoth || (showDistActive && priceDisplaySide === 'price2')} name1={symbolNames.s1} name2={symbolNames.s2} showBrush={true} />
+                     <div className="border-t border-slate-700/50 pt-6 relative flex flex-col h-[200px]">
+                        <div className="relative bg-slate-800 w-full h-full">
+                            <ChartBackgroundLabel text="فاصله از میانگین" />
+                            <div className="relative z-10 w-full h-full">
+                            <DistanceChart
+                                data={chartData}
+                                syncId="unified-view"
+                                showSymbol1={showDistS1}
+                                showSymbol2={showDistS2}
+                                name1={symbolNames.s1}
+                                name2={symbolNames.s2}
+                                showBrush={true}
+                            />
+                            </div>
+                        </div>
                      </div>
                    )}
                 </div>
             </div>
-          </div>
-        )}
-
-        {status === FetchStatus.IDLE && (
-          <div className="flex flex-col items-center justify-center p-24 bg-slate-800/20 rounded-[48px] border border-slate-700/30 border-dashed opacity-50 group hover:opacity-100 transition-opacity">
-             <BarChart3 className="w-20 h-20 text-slate-700 mb-6 group-hover:text-cyan-500 transition-colors animate-pulse" />
-             <p className="text-slate-500 font-black group-hover:text-slate-300 transition-colors text-center max-w-sm leading-relaxed">
-               آماده برای شروع تحلیل... لطفا دو نماد را انتخاب کرده یا لینک‌های TSETMC را وارد نمایید.
-             </p>
           </div>
         )}
     </div>
