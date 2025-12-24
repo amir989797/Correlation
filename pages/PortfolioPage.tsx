@@ -90,7 +90,7 @@ const MarketStateCard = ({ metrics }: { metrics: AssetMetrics }) => {
           </div>
         </div>
 
-        {/* Compact Lock Visualizer - Aligned Horizontally */}
+        {/* Compact Lock Visualizer - Aligned Horizontally with Day Labels */}
         <div className="bg-slate-950/50 px-4 py-3 rounded-2xl border border-slate-800/50 flex items-center justify-between">
            <div className="flex items-center gap-2">
              <ShieldCheck className="w-4 h-4 text-cyan-400" />
@@ -99,9 +99,12 @@ const MarketStateCard = ({ metrics }: { metrics: AssetMetrics }) => {
                <span className="text-[9px] text-amber-400 animate-pulse font-black">({timer}/۳)</span>
              )}
            </div>
-           <div className="flex gap-2.5">
+           <div className="flex gap-4">
               {devHistory.slice(0, 3).reverse().map((val, idx) => (
-                <div key={idx} className={`w-3.5 h-3.5 rounded-full ${getDotColor(val)} transition-all duration-700`} title={`${val.toFixed(1)}%`}></div>
+                <div key={idx} className="flex items-center gap-1.5">
+                   <span className="text-[8px] text-slate-500 font-bold">روز {idx + 1}</span>
+                   <div className={`w-3.5 h-3.5 rounded-full ${getDotColor(val)} transition-all duration-700`} title={`${val.toFixed(1)}%`}></div>
+                </div>
               ))}
            </div>
         </div>
@@ -410,28 +413,15 @@ export function PortfolioPage() {
           scenario = "فرصت نوسان‌گیری (واگرایی)";
           sid = "combat";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
-          if (isAnomaly) {
-              description = "تضاد قیمت‌ها فرصت‌ساز شد. یکی از دارایی‌ها حباب مثبت و دیگری حباب منفی دارد. پیشنهاد: جابجایی سریع سرمایه به سمت دارایی ارزان.";
-              alloc = cheapAsset === 'gold'
-                  ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
-                  : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
-          } else {
-              const ratioSupportsCheap = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
-              if (ratioSupportsCheap) {
-                   description = "تضاد قیمت‌ها فرصت‌ساز شد. یکی از دارایی‌ها حباب مثبت و دیگری حباب منفی دارد. پیشنهاد: جابجایی سریع سرمایه به سمت دارایی ارزان.";
-                   alloc = cheapAsset === 'gold'
-                      ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
-                      : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
-              } else {
-                   description = "تضاد جهت‌گیری پول هوشمند در کوتاه‌مدت و بلندمدت. استراتژی محتاطانه برابر اعمال شد.";
-                   alloc = [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
-              }
-          }
+          description = "واگرایی طلا با سهام مدنظر فرصت نوسان گیری ایجاد کرده است، یکی حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: جابجایی سریع سرمایه به سمت حباب منفی";
+          alloc = cheapAsset === 'gold'
+              ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
+              : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
       } 
       else if (goldState === 'Ceiling' && stockState === 'Ceiling') {
-          scenario = "هشدار ریزش (نقد شوید)";
+          scenario = "هشدار ریزش";
           sid = "bubble";
-          description = "خطر در کمین است. هر دو بازار گران هستند. پیشنهاد: افزایش سطح نقدینگی (اوراق) به حداکثر برای حفظ اصل سرمایه.";
+          description = "هر دو بازار گران شدند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه";
           alloc = ratioTrendAbove
               ? [ { name: GOLD_SYMBOL, value: 30, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6' } ]
               : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 30, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6' } ];
@@ -439,44 +429,41 @@ export function PortfolioPage() {
       else if (goldState === 'Floor' && stockState === 'Floor') {
           scenario = "فرصت خرید طلایی";
           sid = "opportunity";
-          description = "بهترین زمان ورود. کل بازار ارزان شده است. پیشنهاد: خرید سنگین دارایی پیشرو (بر اساس قدرت نسبی) با حداقل نقدینگی.";
+          description = "بهترین زمان ورود سرمایه می باشد چون کل بازار ارزان شده است.\nپیشنهاد: خرید سنگین سرمایه ارزان تر (بر اساس قدرت نسبی)";
           alloc = ratioTrendAbove 
             ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ]
             : [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
       }
       else if (goldState === 'Ceiling' || stockState === 'Ceiling') {
-          scenario = "سیو سود (فروش پله‌ای)";
+          scenario = "ذخیره سود";
           sid = "one-ceiling";
           const highAsset = goldState === 'Ceiling' ? 'gold' : 'index';
+          description = "یکی از دارایی ها گران شده است.\nپیشنهاد: تبدیل بخشی از سود به اوراق یا دارایی‌های کم‌ریسک‌تر";
           const ratioConfirmsSell = highAsset === 'gold' ? !ratioTrendAbove : ratioTrendAbove; 
           if (ratioConfirmsSell) {
-             description = `شناسایی سود کنید. یک دارایی به سقف قیمت رسیده است. پیشنهاد: تبدیل بخشی از سود به اوراق یا دارایی‌های کم‌ریسک‌تر.`;
              alloc = highAsset === 'gold'
                 ? [ { name: GOLD_SYMBOL, value: 15, fill: '#fbbf24' }, { name: symbol.symbol, value: 50, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 35, fill: '#3b82f6' } ]
                 : [ { name: GOLD_SYMBOL, value: 50, fill: '#fbbf24' }, { name: symbol.symbol, value: 15, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 35, fill: '#3b82f6' } ];
           } else {
-             description = "یک دارایی در سقف است اما Ratio هنوز معکوس نشده. سیو سود پله‌ای پیشنهاد می‌شود.";
              alloc = [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
           }
       }
       else if (goldState === 'Floor' || stockState === 'Floor') {
-          scenario = "شکار فرصت (خرید پله‌ای)";
+          scenario = "شکار فرصت";
           sid = "one-floor";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
+          description = "یکی از دارایی ها ارزان شده است.\nپیشنهاد: تبدیل بخشی از اوراق یا دارایی به دارایی کم ریسک تر";
           if (isHighCorrRisk) {
-              description = "هشدار: همبستگی مثبت شدید است. خرید در قیمت جذاب، اما پله اول را با احتیاط انجام دهید.";
               alloc = cheapAsset === 'gold'
                 ? [ { name: GOLD_SYMBOL, value: 40, fill: '#fbbf24' }, { name: symbol.symbol, value: 30, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ]
                 : [ { name: GOLD_SYMBOL, value: 30, fill: '#fbbf24' }, { name: symbol.symbol, value: 40, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
           } else {
               const ratioSupportsBuy = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
               if (ratioSupportsBuy) {
-                 description = "خرید در قیمت جذاب. یک دارایی به کف قیمتی رسیده است. پیشنهاد: پله اول خرید را انجام دهید.";
                  alloc = cheapAsset === 'gold'
                     ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
                     : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
               } else {
-                 description = "قیمت ارزان است اما Ratio هنوز سیگنال قطعی نمی‌دهد. خرید متعادل ۴۰/۴۰.";
                  alloc = [ { name: GOLD_SYMBOL, value: 40, fill: '#fbbf24' }, { name: symbol.symbol, value: 40, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
               }
           }
@@ -484,16 +471,14 @@ export function PortfolioPage() {
       else {
           scenario = "بازار متعادل (رونددار)";
           sid = "peace";
+          description = "بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.";
           if (isHighCorrRisk) {
-              description = "بازار آرام است اما همبستگی مثبت بالاست. نقدینگی را در ۵۰٪ حفظ کنید.";
               alloc = [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6' } ];
           } else if (isSafeCorr) {
-              description = "بازار آرام است. هیجان خاصی در قیمت‌ها نیست. پیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.";
               alloc = ratioTrendAbove
                  ? [ { name: GOLD_SYMBOL, value: 55, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 10, fill: '#3b82f6' } ]
                  : [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 55, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 10, fill: '#3b82f6' } ];
           } else {
-              description = "وضعیت تعادلی بازار و همبستگی خنثی. سهم اوراق ۲۰٪.";
               alloc = ratioTrendAbove
                  ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
                  : [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
@@ -575,7 +560,7 @@ export function PortfolioPage() {
                 <div className="bg-slate-800 rounded-3xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
                     <div className="p-6 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
                         <div>
-                            <span className="text-xs text-slate-500 block mb-1 uppercase tracking-tighter">سناریوی استراتژیک شناسایی شده</span>
+                            <span className="text-xs text-slate-500 block mb-1 uppercase tracking-tighter">استراتژی</span>
                             <h3 className="text-2xl font-black text-white flex items-center gap-3">
                                 {strategy.scenario}
                                 <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></div>
@@ -616,8 +601,7 @@ export function PortfolioPage() {
                             </ResponsiveContainer>
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                                 <div className="text-center">
-                                    <span className="block text-3xl font-black text-white drop-shadow-lg">سهم از کل سبد</span>
-                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">تخصیص بهینه</span>
+                                    {/* Pie chart center text removed per request */}
                                 </div>
                             </div>
                         </div>
@@ -637,7 +621,9 @@ export function PortfolioPage() {
                                   ))}
                                 </div>
                             </div>
-                            <p className="text-[12px] text-slate-300 leading-7 text-justify font-medium">{strategy.description}</p>
+                            <p className="text-[12px] text-slate-300 leading-7 text-justify font-medium whitespace-pre-line">
+                              {strategy.description}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -648,15 +634,15 @@ export function PortfolioPage() {
        {/* Scenario Guide Section */}
        {status === FetchStatus.SUCCESS && strategy && (
          <section className="animate-fade-in mt-12">
-            <h3 className="text-xl font-black text-white mb-8 flex items-center gap-3"><Target className="w-7 h-7 text-amber-500" /> ماتریس تصمیم‌گیری استراتژیک</h3>
+            <h3 className="text-xl font-black text-white mb-8 flex items-center gap-3"><Target className="w-7 h-7 text-amber-500" /> استراتژی‌ها</h3>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[
-                  { id: 'combat', icon: Swords, title: 'فرصت نوسان‌گیری (واگرایی)', desc: 'تضاد قیمت‌ها فرصت‌ساز شد. یکی از دارایی‌ها حباب مثبت و دیگری حباب منفی دارد. پیشنهاد: جابجایی سریع سرمایه به سمت دارایی ارزان.' },
-                  { id: 'bubble', icon: Boxes, title: 'هشدار ریزش (نقد شوید)', desc: 'خطر در کمین است. هر دو بازار گران هستند. پیشنهاد: افزایش سطح نقدینگی (اوراق) به حداکثر برای حفظ اصل سرمایه.' },
-                  { id: 'opportunity', icon: Sparkles, title: 'فرصت خرید طلایی', desc: 'بهترین زمان ورود. کل بازار ارزان شده است. پیشنهاد: خرید سنگین دارایی پیشرو (بر اساس قدرت نسبی) با حداقل نقدینگی.' },
-                  { id: 'one-ceiling', icon: TrendingDown, title: 'سیو سود (فروش پله‌ای)', desc: 'شناسایی سود کنید. یک دارایی به سقف قیمت رسیده است. پیشنهاد: تبدیل بخشی از سود به اوراق یا دارایی‌های کم‌ریسک‌تر.' },
-                  { id: 'one-floor', icon: TrendingUp, title: 'شکار فرصت (خرید پله‌ای)', desc: 'خرید در قیمت جذاب. یک دارایی به کف قیمتی رسیده است. پیشنهاد: پله اول خرید را انجام دهید (با رعایت مدیریت ریسک).' },
-                  { id: 'peace', icon: CheckCircle2, title: 'بازار متعادل (رونددار)', desc: 'بازار آرام است. هیجان خاصی در قیمت‌ها نیست. پیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.' },
+                  { id: 'combat', icon: Swords, title: 'فرصت نوسان‌گیری (واگرایی)', desc: 'واگرایی طلا با سهام مدنظر فرصت نوسان گیری ایجاد کرده است، یکی حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: جابجایی سریع سرمایه به سمت حباب منفی' },
+                  { id: 'bubble', icon: Boxes, title: 'هشدار ریزش', desc: 'هر دو بازار گران شدند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه' },
+                  { id: 'opportunity', icon: Sparkles, title: 'فرصت خرید طلایی', desc: 'بهترین زمان ورود سرمایه می باشد چون کل بازار ارزان شده است.\nپیشنهاد: خرید سنگین سرمایه ارزان تر (بر اساس قدرت نسبی)' },
+                  { id: 'one-ceiling', icon: TrendingDown, title: 'ذخیره سود', desc: 'یکی از دارایی ها گران شده است.\nپیشنهاد: تبدیل بخشی از سود به اوراق یا دارایی‌های کم‌ریسک‌تر' },
+                  { id: 'one-floor', icon: TrendingUp, title: 'شکار فرصت', desc: 'یکی از دارایی ها ارزان شده است.\nپیشنهاد: تبدیل بخشی از اوراق یا دارایی به دارایی کم ریسک تر' },
+                  { id: 'peace', icon: CheckCircle2, title: 'بازار متعادل (رونددار)', desc: 'بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.' },
                 ].map((s) => {
                     const isActive = strategy.id === s.id;
                     return (
@@ -670,7 +656,7 @@ export function PortfolioPage() {
                                 <s.icon className="w-7 h-7" />
                             </div>
                             <h4 className={`font-black mb-3 text-sm transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{s.title}</h4>
-                            <p className="text-[11px] text-slate-500 leading-7 text-justify transition-colors group-hover:text-slate-400">{s.desc}</p>
+                            <p className="text-[11px] text-slate-500 leading-7 text-justify transition-colors group-hover:text-slate-400 whitespace-pre-line">{s.desc}</p>
                         </div>
                     );
                 })}
