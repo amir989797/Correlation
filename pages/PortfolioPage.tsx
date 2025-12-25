@@ -6,7 +6,7 @@ import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
 import { 
   Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, 
   TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, 
-  Zap, Target, Swords, Boxes, Sparkles, ShieldCheck, Briefcase, LayoutGrid 
+  Zap, Target, Swords, Boxes, Sparkles, ShieldCheck 
 } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 
 // CONSTANTS
-const GOLD_SYMBOL_DEFAULT = 'عیار'; 
+const GOLD_SYMBOL = 'عیار'; 
 
 type MarketState = 'Ceiling' | 'Floor' | 'Normal';
 
@@ -250,18 +250,9 @@ const ShamsiDatePicker = ({ value, onChange }: { value: { jy: number; jm: number
 };
 
 export function PortfolioPage() {
-  const [activeTab, setActiveTab] = useState<'suggested' | 'custom'>('suggested');
-  
-  // Custom Tab State
   const [symbol, setSymbol] = useState<SearchResult | null>(null);
   const [dateMode, setDateMode] = useState<'current' | 'custom'>('current');
   const [shamsiDate, setShamsiDate] = useState(getTodayShamsi());
-
-  // Suggested Tab State
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [equityType, setEquityType] = useState<'agas' | 'shetab'>('agas');
-
-  // Common State
   const [status, setStatus] = useState<FetchStatus>(FetchStatus.IDLE);
   const [error, setError] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<StrategyResult | null>(null);
@@ -275,25 +266,6 @@ export function PortfolioPage() {
     corr2M: number,
     corr1Y: number
   } | null>(null);
-
-  const handleCheckboxChange = (id: string) => {
-    if (selectedItems.includes(id)) {
-        setSelectedItems(selectedItems.filter(item => item !== id));
-    } else {
-        if (selectedItems.length < 2) {
-            setSelectedItems([...selectedItems, id]);
-        }
-    }
-  };
-
-  const getSymbolNameFromId = (id: string): string => {
-    switch (id) {
-        case 'equity': return equityType === 'agas' ? 'آگاس' : 'شتاب';
-        case 'gold': return 'عیار';
-        case 'fixed': return 'سپر';
-        default: return '';
-    }
-  };
 
   const calculateStateHysteresis = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): { state: MarketState; stateSince: string; daysActive: number; timer: number; timerType: 'entry' | 'exit' | 'none' } => {
     let currentState: MarketState = 'Normal';
@@ -369,64 +341,30 @@ export function PortfolioPage() {
   };
 
   const runStrategy = async () => {
-    let symbolA_Name = '';
-    let symbolB_Name = '';
-    let targetDateString = '';
-
-    if (activeTab === 'custom') {
-        if (!symbol) return setError('لطفا نماد را انتخاب کنید.');
-        symbolA_Name = symbol.symbol;
-        symbolB_Name = GOLD_SYMBOL_DEFAULT;
-        // Determine Date
-        // ... (fetch logic handled later inside try)
-    } else {
-        // Suggested Tab
-        if (selectedItems.length !== 2) return setError('لطفا دقیقا دو گزینه را انتخاب کنید.');
-        symbolA_Name = getSymbolNameFromId(selectedItems[0]);
-        symbolB_Name = getSymbolNameFromId(selectedItems[1]);
-    }
-
+    if (!symbol) return setError('لطفا نماد را انتخاب کنید.');
     setStatus(FetchStatus.LOADING);
     setError(null);
-    
     try {
-      const [stockRes, goldRes] = await Promise.all([
-          fetchStockHistory(symbolA_Name), 
-          fetchStockHistory(symbolB_Name)
-      ]);
+      const [stockRes, goldRes] = await Promise.all([fetchStockHistory(symbol.symbol), fetchStockHistory(GOLD_SYMBOL)]);
       const stockData = stockRes.data;
       const goldData = goldRes.data;
-      
       if (stockData.length < 400 || goldData.length < 400) throw new Error('سابقه معاملاتی کافی نیست.');
       
-      // Determine Target Date
-      if (activeTab === 'custom') {
-          targetDateString = dateMode === 'current' ? stockData[stockData.length - 1].date : (() => {
-            const { gy, gm, gd } = jalaliToGregorian(shamsiDate.jy, shamsiDate.jm, shamsiDate.jd);
-            return `${gy}${gm < 10 ? '0'+gm : gm}${gd < 10 ? '0'+gd : gd}`;
-          })();
-      } else {
-          // Suggested tab always uses latest common date or latest date
-          targetDateString = stockData[stockData.length - 1].date;
-      }
+      const targetDateStr = dateMode === 'current' ? stockData[stockData.length - 1].date : (() => {
+        const { gy, gm, gd } = jalaliToGregorian(shamsiDate.jy, shamsiDate.jm, shamsiDate.jd);
+        return `${gy}${gm < 10 ? '0'+gm : gm}${gd < 10 ? '0'+gd : gd}`;
+      })();
       
-      const stockIdx = stockData.findIndex(d => d.date === targetDateString);
-      const goldIdx = goldData.findIndex(d => d.date === targetDateString);
-      
-      if (stockIdx === -1 || goldIdx === -1) {
-          // Fallback to finding the last common date if exact date not found (mostly for current mode mismatch)
-           throw new Error('داده‌ای برای تاریخ انتخابی یافت نشد.');
-      }
+      const stockIdx = stockData.findIndex(d => d.date === targetDateStr);
+      const goldIdx = goldData.findIndex(d => d.date === targetDateStr);
+      if (stockIdx === -1 || goldIdx === -1) throw new Error('داده‌ای برای تاریخ انتخابی یافت نشد.');
 
       const stockMA100 = calculateFullHistorySMA(stockData, 100);
       const goldMA100 = calculateFullHistorySMA(goldData, 100);
-      
       const goldPoint = goldData[goldIdx];
       const stockPoint = stockData[stockIdx];
-      
-      const goldMA = goldMA100.get(targetDateString)!;
-      const stockMA = stockMA100.get(targetDateString)!;
-      
+      const goldMA = goldMA100.get(targetDateStr)!;
+      const stockMA = stockMA100.get(targetDateStr)!;
       const goldDev = ((goldPoint.close - goldMA) / goldMA) * 100;
       const stockDev = ((stockPoint.close - stockMA) / stockMA) * 100;
       
@@ -437,29 +375,23 @@ export function PortfolioPage() {
       const stockHistory = getDevHistory(stockData, stockMA100, stockIdx);
       
       const merged = alignDataByDate(stockData, goldData);
-      // Ratio: Asset 2 / Asset 1
       const ratioSeries = merged.map(m => ({ date: m.date, close: m.price2 / m.price1 })); 
       const ratioMA100 = calculateFullHistorySMA(ratioSeries, 100);
-      
       const currentRatio = goldPoint.close / stockPoint.close;
-      const ratioMA = ratioMA100.get(targetDateString)!;
+      const ratioMA = ratioMA100.get(targetDateStr)!;
       const ratioTrendAbove = currentRatio > ratioMA;
-      
-      const mergedTargetIdx = merged.findIndex(m => m.date === targetDateString);
+      const mergedTargetIdx = merged.findIndex(m => m.date === targetDateStr);
       const slice2M = merged.slice(mergedTargetIdx - 60, mergedTargetIdx + 1);
       const slice1Y = merged.slice(mergedTargetIdx - 365, mergedTargetIdx + 1);
-      
       const corr2M = calculatePearson(slice2M.map(s => s.price2), slice2M.map(s => s.price1));
       const corr1Y = calculatePearson(slice1Y.map(s => s.price2), slice1Y.map(s => s.price1));
-      
       const isAnomaly = (corr1Y > 0 && corr2M < 0) || (corr1Y < 0 && corr2M > 0);
       const isHighCorrRisk = corr2M > 0.5;
       const isSafeCorr = corr2M < -0.5;
 
-      // Note: In suggested mode, 'gold' refers to Asset B, 'index' refers to Asset A
       setMarketMetrics({
-        gold: { symbol: symbolB_Name, price: goldPoint.close, dev: goldDev, state: goldLogic.state, devHistory: goldHistory, stateSince: goldLogic.stateSince, daysActive: goldLogic.daysActive, timer: goldLogic.timer, timerType: goldLogic.timerType },
-        index: { symbol: symbolA_Name, price: stockPoint.close, dev: stockDev, state: stockLogic.state, devHistory: stockHistory, stateSince: stockLogic.stateSince, daysActive: stockLogic.daysActive, timer: stockLogic.timer, timerType: stockLogic.timerType },
+        gold: { symbol: 'طلا (عیار)', price: goldPoint.close, dev: goldDev, state: goldLogic.state, devHistory: goldHistory, stateSince: goldLogic.stateSince, daysActive: goldLogic.daysActive, timer: goldLogic.timer, timerType: goldLogic.timerType },
+        index: { symbol: symbol.symbol, price: stockPoint.close, dev: stockDev, state: stockLogic.state, devHistory: stockHistory, stateSince: stockLogic.stateSince, daysActive: stockLogic.daysActive, timer: stockLogic.timer, timerType: stockLogic.timerType },
         anomaly: isAnomaly,
         highCorr: isHighCorrRisk,
         safeCorr: isSafeCorr,
@@ -473,14 +405,10 @@ export function PortfolioPage() {
       let description = "";
       let alloc: { name: string; value: number; fill: string }[] = [];
 
-      const goldState = goldLogic.state; // State of Asset B
-      const stockState = stockLogic.state; // State of Asset A
-      const FIXED_ASSET_NAME = 'اوراق (درآمد ثابت)'; // Generic name for cash/bonds in allocation
+      const goldState = goldLogic.state;
+      const stockState = stockLogic.state;
+      const FIXED_ASSET_NAME = 'صندوق درآمد ثابت (اوراق)';
 
-      // Strategy Calculation logic remains same, but uses Asset A/B
-      // Asset A = stockState (e.g. Equity)
-      // Asset B = goldState (e.g. Gold)
-      
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
           scenario = "فرصت نوسان‌گیری (واگرایی)";
           sid = "combat";
@@ -488,16 +416,16 @@ export function PortfolioPage() {
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isAnomaly) {
               alloc = cheapAsset === 'gold'
-                  ? [ { name: symbolB_Name, value: 60, fill: '#fbbf24' }, { name: symbolA_Name, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
-                  : [ { name: symbolB_Name, value: 20, fill: '#fbbf24' }, { name: symbolA_Name, value: 60, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
+                  ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
+                  : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
           } else {
               const ratioSupportsCheap = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
               if (ratioSupportsCheap) {
                    alloc = cheapAsset === 'gold'
-                      ? [ { name: symbolB_Name, value: 60, fill: '#fbbf24' }, { name: symbolA_Name, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
-                      : [ { name: symbolB_Name, value: 20, fill: '#fbbf24' }, { name: symbolA_Name, value: 60, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
+                      ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
+                      : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
               } else {
-                   alloc = [ { name: symbolB_Name, value: 35, fill: '#fbbf24' }, { name: symbolA_Name, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
+                   alloc = [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
               }
           }
       } 
@@ -506,16 +434,16 @@ export function PortfolioPage() {
           sid = "bubble";
           description = "هر دو دارایی گران شده اند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه";
           alloc = ratioTrendAbove
-              ? [ { name: symbolB_Name, value: 30, fill: '#fbbf24' }, { name: symbolA_Name, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6' } ]
-              : [ { name: symbolB_Name, value: 20, fill: '#fbbf24' }, { name: symbolA_Name, value: 30, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6' } ];
+              ? [ { name: GOLD_SYMBOL, value: 30, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6' } ]
+              : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 30, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6' } ];
       }
       else if (goldState === 'Floor' && stockState === 'Floor') {
           scenario = "فرصت خرید طلایی";
           sid = "opportunity";
           description = "هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری";
           alloc = ratioTrendAbove 
-            ? [ { name: symbolB_Name, value: 45, fill: '#fbbf24' }, { name: symbolA_Name, value: 25, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ]
-            : [ { name: symbolB_Name, value: 25, fill: '#fbbf24' }, { name: symbolA_Name, value: 45, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
+            ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ]
+            : [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
       }
       else if (goldState === 'Ceiling' || stockState === 'Ceiling') {
           scenario = "ذخیره سود";
@@ -525,10 +453,10 @@ export function PortfolioPage() {
           const ratioConfirmsSell = highAsset === 'gold' ? !ratioTrendAbove : ratioTrendAbove; 
           if (ratioConfirmsSell) {
              alloc = highAsset === 'gold'
-                ? [ { name: symbolB_Name, value: 15, fill: '#fbbf24' }, { name: symbolA_Name, value: 50, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 35, fill: '#3b82f6' } ]
-                : [ { name: symbolB_Name, value: 50, fill: '#fbbf24' }, { name: symbolA_Name, value: 15, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 35, fill: '#3b82f6' } ];
+                ? [ { name: GOLD_SYMBOL, value: 15, fill: '#fbbf24' }, { name: symbol.symbol, value: 50, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 35, fill: '#3b82f6' } ]
+                : [ { name: GOLD_SYMBOL, value: 50, fill: '#fbbf24' }, { name: symbol.symbol, value: 15, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 35, fill: '#3b82f6' } ];
           } else {
-             alloc = [ { name: symbolB_Name, value: 35, fill: '#fbbf24' }, { name: symbolA_Name, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
+             alloc = [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
           }
       }
       else if (goldState === 'Floor' || stockState === 'Floor') {
@@ -538,16 +466,16 @@ export function PortfolioPage() {
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isHighCorrRisk) {
               alloc = cheapAsset === 'gold'
-                ? [ { name: symbolB_Name, value: 40, fill: '#fbbf24' }, { name: symbolA_Name, value: 30, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ]
-                : [ { name: symbolB_Name, value: 30, fill: '#fbbf24' }, { name: symbolA_Name, value: 40, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
+                ? [ { name: GOLD_SYMBOL, value: 40, fill: '#fbbf24' }, { name: symbol.symbol, value: 30, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ]
+                : [ { name: GOLD_SYMBOL, value: 30, fill: '#fbbf24' }, { name: symbol.symbol, value: 40, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
           } else {
               const ratioSupportsBuy = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
               if (ratioSupportsBuy) {
                  alloc = cheapAsset === 'gold'
-                    ? [ { name: symbolB_Name, value: 60, fill: '#fbbf24' }, { name: symbolA_Name, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
-                    : [ { name: symbolB_Name, value: 20, fill: '#fbbf24' }, { name: symbolA_Name, value: 60, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
+                    ? [ { name: GOLD_SYMBOL, value: 60, fill: '#fbbf24' }, { name: symbol.symbol, value: 20, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
+                    : [ { name: GOLD_SYMBOL, value: 20, fill: '#fbbf24' }, { name: symbol.symbol, value: 60, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
               } else {
-                 alloc = [ { name: symbolB_Name, value: 40, fill: '#fbbf24' }, { name: symbolA_Name, value: 40, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
+                 alloc = [ { name: GOLD_SYMBOL, value: 40, fill: '#fbbf24' }, { name: symbol.symbol, value: 40, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
               }
           }
       }
@@ -556,15 +484,15 @@ export function PortfolioPage() {
           sid = "peace";
           description = "بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.";
           if (isHighCorrRisk) {
-              alloc = [ { name: symbolB_Name, value: 25, fill: '#fbbf24' }, { name: symbolA_Name, value: 25, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6' } ];
+              alloc = [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6' } ];
           } else if (isSafeCorr) {
               alloc = ratioTrendAbove
-                 ? [ { name: symbolB_Name, value: 55, fill: '#fbbf24' }, { name: symbolA_Name, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 10, fill: '#3b82f6' } ]
-                 : [ { name: symbolB_Name, value: 35, fill: '#fbbf24' }, { name: symbolA_Name, value: 55, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 10, fill: '#3b82f6' } ];
+                 ? [ { name: GOLD_SYMBOL, value: 55, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 10, fill: '#3b82f6' } ]
+                 : [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 55, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 10, fill: '#3b82f6' } ];
           } else {
               alloc = ratioTrendAbove
-                 ? [ { name: symbolB_Name, value: 45, fill: '#fbbf24' }, { name: symbolA_Name, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
-                 : [ { name: symbolB_Name, value: 35, fill: '#fbbf24' }, { name: symbolA_Name, value: 45, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
+                 ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 35, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ]
+                 : [ { name: GOLD_SYMBOL, value: 35, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6' } ];
           }
       }
 
@@ -581,115 +509,27 @@ export function PortfolioPage() {
        </header>
 
        {/* Analysis Settings */}
-       <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl overflow-hidden">
-          {/* Tabs */}
-          <div className="flex border-b border-slate-700 mb-6">
-            <button 
-              onClick={() => { setActiveTab('suggested'); setError(null); }}
-              className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all relative ${activeTab === 'suggested' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-              <Briefcase className="w-4 h-4" />
-              پرتفوی پیشنهادی
-              {activeTab === 'suggested' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-cyan-400 rounded-t-full"></div>}
-            </button>
-            <button 
-              onClick={() => { setActiveTab('custom'); setError(null); }}
-              className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all relative ${activeTab === 'custom' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-              بررسی نماد (پیشرفته)
-              {activeTab === 'custom' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-cyan-400 rounded-t-full"></div>}
-            </button>
+       <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+          <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2 border-b border-slate-700 pb-4">
+             <Info className="w-5 h-5 text-cyan-400" /> پارامترهای ورودی
+          </h3>
+          <div className="grid md:grid-cols-3 gap-6 mb-6">
+              <SearchInput label="انتخاب صندوق یا سهام" value={symbol} onSelect={setSymbol} />
+              <div className="space-y-2">
+                  <label className="block text-sm font-medium text-slate-400">تاریخ محاسبه</label>
+                  <div className="flex gap-2">
+                    <button onClick={() => setDateMode('current')} className={`flex-1 p-3 rounded-lg border text-sm font-bold flex items-center justify-center gap-2 transition-all ${dateMode === 'current' ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}><Clock className="w-4 h-4" /> آخرین قیمت</button>
+                    <button onClick={() => setDateMode('custom')} className={`flex-1 p-3 rounded-lg border text-sm font-bold flex items-center justify-center gap-2 transition-all ${dateMode === 'custom' ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}><Calendar className="w-4 h-4" /> تاریخ خاص</button>
+                  </div>
+              </div>
+              <div className={dateMode === 'custom' ? '' : 'opacity-30 pointer-events-none'}>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">انتخاب تاریخ</label>
+                  <ShamsiDatePicker value={shamsiDate} onChange={setShamsiDate} />
+              </div>
           </div>
-          
-          {/* Tab Content */}
-          <div className="min-h-[280px]">
-            {activeTab === 'suggested' ? (
-                <div className="animate-fade-in">
-                   <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 mb-6 flex items-start gap-3">
-                      <Info className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
-                      <p className="text-sm text-slate-400 leading-relaxed">
-                        لطفاً دقیقاً <span className="text-white font-bold">دو گزینه</span> از موارد زیر را برای مقایسه انتخاب کنید. سیستم بر اساس داده‌های روز جاری محاسبه می‌کند.
-                      </p>
-                   </div>
-                   
-                   <div className="grid md:grid-cols-3 gap-4 mb-6">
-                      {/* Option 1: Equity/Shetab */}
-                      <div className={`p-4 rounded-xl border transition-all cursor-pointer ${selectedItems.includes('equity') ? 'bg-slate-700 border-cyan-500 ring-1 ring-cyan-500' : 'bg-slate-900 border-slate-700 hover:border-slate-500'}`}
-                           onClick={() => handleCheckboxChange('equity')}>
-                         <div className="flex justify-between items-center mb-3">
-                             <span className="font-bold text-white text-sm">صندوق سهامی / شتابی</span>
-                             <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${selectedItems.includes('equity') ? 'bg-cyan-500 border-cyan-500' : 'border-slate-500'}`}>
-                                {selectedItems.includes('equity') && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                             </div>
-                         </div>
-                         <select 
-                            onClick={(e) => e.stopPropagation()}
-                            value={equityType}
-                            onChange={(e) => setEquityType(e.target.value as 'agas' | 'shetab')}
-                            className="w-full bg-slate-800 text-white text-xs rounded-lg p-2 border border-slate-600 outline-none focus:border-cyan-500"
-                         >
-                            <option value="agas">صندوق سهامی (ریسک پایین)</option>
-                            <option value="shetab">صندوق شتابی (ریسک پایین)</option>
-                         </select>
-                      </div>
-
-                      {/* Option 2: Gold */}
-                      <div className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${selectedItems.includes('gold') ? 'bg-slate-700 border-cyan-500 ring-1 ring-cyan-500' : 'bg-slate-900 border-slate-700 hover:border-slate-500'}`}
-                           onClick={() => handleCheckboxChange('gold')}>
-                         <div className="flex justify-between items-center">
-                             <span className="font-bold text-white text-sm">صندوق طلا</span>
-                             <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${selectedItems.includes('gold') ? 'bg-cyan-500 border-cyan-500' : 'border-slate-500'}`}>
-                                {selectedItems.includes('gold') && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                             </div>
-                         </div>
-                         <div className="text-xs text-slate-400 mt-3 flex items-center gap-2">
-                            <span className="w-2 h-2 bg-amber-400 rounded-full"></span>
-                            نماد: عیار
-                         </div>
-                      </div>
-
-                      {/* Option 3: Fixed Income */}
-                      <div className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${selectedItems.includes('fixed') ? 'bg-slate-700 border-cyan-500 ring-1 ring-cyan-500' : 'bg-slate-900 border-slate-700 hover:border-slate-500'}`}
-                           onClick={() => handleCheckboxChange('fixed')}>
-                         <div className="flex justify-between items-center">
-                             <span className="font-bold text-white text-sm">صندوق درآمد ثابت</span>
-                             <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${selectedItems.includes('fixed') ? 'bg-cyan-500 border-cyan-500' : 'border-slate-500'}`}>
-                                {selectedItems.includes('fixed') && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                             </div>
-                         </div>
-                         <div className="text-xs text-slate-400 mt-3 flex items-center gap-2">
-                            <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
-                            نماد: سپر
-                         </div>
-                      </div>
-                   </div>
-                </div>
-            ) : (
-                <div className="grid md:grid-cols-3 gap-6 mb-6 animate-fade-in">
-                    <SearchInput label="انتخاب صندوق یا سهام" value={symbol} onSelect={setSymbol} />
-                    <div className="space-y-2">
-                        <label className="block text-sm font-medium text-slate-400">تاریخ محاسبه</label>
-                        <div className="flex gap-2">
-                            <button onClick={() => setDateMode('current')} className={`flex-1 p-3 rounded-lg border text-sm font-bold flex items-center justify-center gap-2 transition-all ${dateMode === 'current' ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}><Clock className="w-4 h-4" /> آخرین قیمت</button>
-                            <button onClick={() => setDateMode('custom')} className={`flex-1 p-3 rounded-lg border text-sm font-bold flex items-center justify-center gap-2 transition-all ${dateMode === 'custom' ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}><Calendar className="w-4 h-4" /> تاریخ خاص</button>
-                        </div>
-                    </div>
-                    <div className={dateMode === 'custom' ? '' : 'opacity-30 pointer-events-none'}>
-                        <label className="block text-sm font-medium text-slate-400 mb-2">انتخاب تاریخ</label>
-                        <ShamsiDatePicker value={shamsiDate} onChange={setShamsiDate} />
-                    </div>
-                </div>
-            )}
-            
-            <button 
-                onClick={runStrategy} 
-                disabled={status === FetchStatus.LOADING || (activeTab === 'suggested' && selectedItems.length !== 2) || (activeTab === 'custom' && !symbol)} 
-                className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all border-none disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                {status === FetchStatus.LOADING ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'محاسبه استراتژی وزنی'}
-            </button>
-          </div>
+          <button onClick={runStrategy} disabled={status === FetchStatus.LOADING} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all border-none">
+            {status === FetchStatus.LOADING ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'محاسبه استراتژی وزنی'}
+          </button>
        </div>
 
        {status === FetchStatus.SUCCESS && marketMetrics && strategy && (
