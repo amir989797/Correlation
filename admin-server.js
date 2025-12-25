@@ -23,6 +23,7 @@ const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123'; // Change this in produ
 // State
 let isUpdating = false;
 let lastUpdateLog = "هنوز آپدیتی انجام نشده است.";
+let currentProcess = null;
 
 // Middleware
 app.use(cors());
@@ -46,7 +47,6 @@ const requireAuth = (req, res, next) => {
   if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
   
   const token = authHeader.split(' ')[1]; // Bearer <token>
-  // Simple token based on base64 of username:password
   const validToken = Buffer.from(`${ADMIN_USER}:${ADMIN_PASS}`).toString('base64');
   
   if (token === validToken) {
@@ -94,14 +94,11 @@ app.post('/api/login', (req, res) => {
 app.get('/api/stats', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
-    // Get total symbols (from symbols table if exists, else count unique in prices)
     const countQuery = `
       SELECT (SELECT COUNT(*) FROM symbols) as symbol_count,
              (SELECT MAX(date) FROM daily_prices) as last_date
     `;
     const result = await client.query(countQuery);
-    
-    // Check if script exists
     const scriptExists = fs.existsSync(PYTHON_SCRIPT_PATH);
 
     res.json({
@@ -133,47 +130,54 @@ app.post('/api/update', requireAuth, (req, res) => {
   isUpdating = true;
   lastUpdateLog = "🚀 آپدیت شروع شد...\n";
   
-  // Spawn Python Process
-  // Adjust 'python3' if your environment uses 'python'
-  const pythonProcess = spawn('python3', [PYTHON_SCRIPT_PATH]);
+  currentProcess = spawn('python3', [PYTHON_SCRIPT_PATH]);
 
-  pythonProcess.stdout.on('data', (data) => {
+  currentProcess.stdout.on('data', (data) => {
     const chunk = data.toString();
-    console.log(`Python: ${chunk}`);
-    // Keep last 1000 chars of log to send to UI
     lastUpdateLog = (lastUpdateLog + chunk).slice(-2000); 
   });
 
-  pythonProcess.stderr.on('data', (data) => {
-    console.error(`Python Error: ${data}`);
+  currentProcess.stderr.on('data', (data) => {
     lastUpdateLog += `\n[ERROR]: ${data.toString()}`;
   });
 
-  pythonProcess.on('close', async (code) => {
+  currentProcess.on('close', async (code) => {
     console.log(`Python script exited with code ${code}`);
+    currentProcess = null;
     
     if (code === 0) {
         lastUpdateLog += `\n✅ دریافت دیتا با موفقیت انجام شد.`;
         lastUpdateLog += `\n🔄 در حال بروزرسانی لیست نمادها برای جستجو...`;
-        
         try {
             const count = await syncSymbolsTable();
             lastUpdateLog += `\n✨ لیست نمادها بروز شد. (${count} نماد جدید اضافه شد)`;
         } catch (err) {
-            console.error("Symbol sync failed:", err);
             lastUpdateLog += `\n❌ خطا در بروزرسانی جدول نمادها: ${err.message}`;
         }
+    } else if (code === null) {
+        lastUpdateLog += `\n🛑 اسکریپت توسط کاربر متوقف شد.`;
     } else {
         lastUpdateLog += `\n❌ عملیات با کد خطا (${code}) متوقف شد.`;
     }
 
-    // Delay setting isUpdating to false slightly to ensure logs are sent
-    setTimeout(() => {
-        isUpdating = false;
-    }, 1000);
+    setTimeout(() => { isUpdating = false; }, 1000);
   });
 
   res.json({ message: 'دستور آپدیت به سرور ارسال شد.', status: 'started' });
+});
+
+// API: Stop Update
+app.post('/api/stop', requireAuth, (req, res) => {
+    if (!isUpdating || !currentProcess) {
+        return res.status(400).json({ message: 'هیچ اسکریپتی در حال اجرا نیست.' });
+    }
+
+    try {
+        currentProcess.kill('SIGINT');
+        res.json({ message: 'دستور توقف اسکریپت ارسال شد.' });
+    } catch (err) {
+        res.status(500).json({ message: 'خطا در متوقف کردن اسکریپت: ' + err.message });
+    }
 });
 
 app.listen(PORT, '0.0.0.0', () => {

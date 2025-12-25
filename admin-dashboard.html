@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
@@ -71,10 +72,17 @@
                 </p>
 
                 <div class="flex flex-col gap-3">
-                    <button id="update-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
-                        <span id="btn-text">شروع آپدیت بازار</span>
-                        <div id="btn-loader" class="loader hidden"></div>
-                    </button>
+                    <div class="flex gap-2">
+                        <button id="update-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
+                            <span id="btn-text">شروع آپدیت بازار</span>
+                            <div id="btn-loader" class="loader hidden"></div>
+                        </button>
+                        
+                        <button id="stop-btn" class="hidden px-6 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
+                            <span>توقف</span>
+                            <div id="stop-loader" class="loader hidden border-white border-t-red-500"></div>
+                        </button>
+                    </div>
                     
                     <div class="flex items-center gap-2 text-xs text-slate-400 justify-center">
                         <span id="status-indicator" class="w-2 h-2 rounded-full bg-slate-500"></span>
@@ -99,6 +107,8 @@
         const dashboardSection = document.getElementById('dashboard-section');
         const loginForm = document.getElementById('login-form');
         const logTerminal = document.getElementById('log-terminal');
+        const stopBtn = document.getElementById('stop-btn');
+        const updateBtn = document.getElementById('update-btn');
 
         // Initial Check
         if (token) {
@@ -138,19 +148,42 @@
             dashboardSection.classList.add('hidden');
         });
 
-        document.getElementById('update-btn').addEventListener('click', async () => {
+        updateBtn.addEventListener('click', async () => {
             if (!confirm('آیا مطمئن هستید؟ این عملیات سنگین است.')) return;
-            
             try {
                 const res = await fetch(`${API_URL}/update`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const data = await res.json();
-                if (!res.ok) alert(data.message);
-                fetchStats(); // Update UI immediately
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.message);
+                }
+                fetchStats();
             } catch (err) {
                 console.error(err);
+            }
+        });
+
+        stopBtn.addEventListener('click', async () => {
+            if (!confirm('آیا مایل به متوقف کردن اسکریپت هستید؟')) return;
+            
+            document.getElementById('stop-loader').classList.remove('hidden');
+            stopBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_URL}/stop`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) alert(data.message);
+                fetchStats();
+            } catch (err) {
+                console.error(err);
+            } finally {
+                document.getElementById('stop-loader').classList.add('hidden');
+                stopBtn.disabled = false;
             }
         });
 
@@ -175,10 +208,8 @@
 
                 const data = await res.json();
 
-                // Convert Date
                 let formattedDate = '-';
                 if (data.lastDate) {
-                    // Try to format nicely
                     const d = new Date(data.lastDate);
                     formattedDate = new Intl.DateTimeFormat('fa-IR').format(d) + ` (${data.lastDate.substring(0,10)})`;
                 }
@@ -187,27 +218,27 @@
                 document.getElementById('stat-date').innerText = formattedDate;
                 document.getElementById('path-info').innerText = `مسیر اسکریپت: ${data.scriptPath} (${data.scriptExists ? 'یافت شد' : 'یافت نشد!'})`;
                 
-                // Update Button State
-                const btn = document.getElementById('update-btn');
                 const loader = document.getElementById('btn-loader');
                 const statusDot = document.getElementById('status-indicator');
                 const statusText = document.getElementById('status-text');
 
                 if (data.isUpdating) {
-                    btn.disabled = true;
-                    btn.classList.add('opacity-75');
+                    updateBtn.disabled = true;
+                    updateBtn.classList.add('opacity-75');
                     document.getElementById('btn-text').innerText = 'در حال اجرا...';
                     loader.classList.remove('hidden');
+                    stopBtn.classList.remove('hidden');
                     
                     statusDot.classList.remove('bg-slate-500', 'bg-red-500');
                     statusDot.classList.add('bg-green-500', 'animate-pulse');
                     statusText.innerText = 'اسکریپت در حال اجراست';
                     statusText.classList.add('text-green-400');
                 } else {
-                    btn.disabled = false;
-                    btn.classList.remove('opacity-75');
+                    updateBtn.disabled = false;
+                    updateBtn.classList.remove('opacity-75');
                     document.getElementById('btn-text').innerText = 'شروع آپدیت بازار';
                     loader.classList.add('hidden');
+                    stopBtn.classList.add('hidden');
                     
                     statusDot.classList.remove('bg-green-500', 'animate-pulse', 'bg-red-500');
                     statusDot.classList.add('bg-slate-500');
@@ -215,7 +246,6 @@
                     statusText.classList.remove('text-green-400');
                 }
 
-                // Update Logs
                 if (data.lastLog) {
                     logTerminal.innerText = data.lastLog;
                     logTerminal.scrollTop = logTerminal.scrollHeight;
