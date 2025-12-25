@@ -97,6 +97,31 @@ app.post('/api/login', (req, res) => {
   }
 });
 
+// Search Endpoint
+app.get('/api/search', requireAuth, async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.length < 2) return res.json([]);
+
+  let client;
+  try {
+    client = await pool.connect();
+    const query = `
+      SELECT symbol, name 
+      FROM symbols 
+      WHERE symbol LIKE $1 OR name LIKE $1
+      LIMIT 10
+    `;
+    const values = [`%${q}%`];
+    const result = await client.query(query, values);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Search Error:', err);
+    res.status(500).json([]); 
+  } finally {
+    if (client) client.release();
+  }
+});
+
 app.get('/api/stats', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {

@@ -121,6 +121,7 @@
         const API_URL = '/api';
         let token = localStorage.getItem('admin_token');
         let refreshInterval;
+        let searchDebounce;
 
         const loginSection = document.getElementById('login-section');
         const dashboardSection = document.getElementById('dashboard-section');
@@ -297,18 +298,29 @@
                     
                     const col = document.createElement('div');
                     col.className = 'bg-slate-900 rounded-xl p-4 border border-slate-700 flex flex-col h-[400px]';
+                    
+                    // Added Relative positioning to header for dropdown context
                     col.innerHTML = `
                         <div class="flex items-center gap-2 mb-3">
                             <div class="w-3 h-3 rounded-full ${cat.color}"></div>
                             <h4 class="font-bold text-white text-sm">${cat.label}</h4>
                         </div>
                         
-                        <div class="flex gap-2 mb-3">
-                            <input type="text" id="input-${cat.key}" placeholder="نماد..." class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none focus:border-cyan-500">
-                            <button onclick="addAsset('${cat.key}')" class="bg-cyan-600 hover:bg-cyan-500 text-white rounded px-3 py-1 text-xs transition">افزودن</button>
+                        <div class="relative mb-3 group z-20">
+                            <div class="flex gap-2">
+                                <input type="text" id="input-${cat.key}" 
+                                       oninput="handleSearch('${cat.key}')" 
+                                       placeholder="جستجوی نماد..." 
+                                       autocomplete="off"
+                                       class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none focus:border-cyan-500 transition-colors">
+                                <button onclick="addAsset('${cat.key}')" class="bg-cyan-600 hover:bg-cyan-500 text-white rounded px-3 py-1 text-xs transition">افزودن</button>
+                            </div>
+                            <div id="results-${cat.key}" class="absolute top-full right-0 w-full bg-slate-800 border border-slate-600 rounded-b-lg mt-0.5 hidden max-h-48 overflow-y-auto scrollbar-thin shadow-2xl z-50">
+                                <!-- Results -->
+                            </div>
                         </div>
 
-                        <div class="flex-1 overflow-y-auto scrollbar-thin space-y-1 pr-1" id="list-${cat.key}">
+                        <div class="flex-1 overflow-y-auto scrollbar-thin space-y-1 pr-1 relative z-0" id="list-${cat.key}">
                             ${items.length === 0 ? '<p class="text-xs text-slate-600 text-center mt-4">لیست خالی است</p>' : ''}
                             ${items.map(item => `
                                 <div class="flex justify-between items-center bg-slate-800 p-2 rounded border border-slate-700/50 group hover:border-slate-500 transition">
@@ -324,6 +336,62 @@
                 console.error("Failed to fetch assets", err);
             }
         }
+
+        window.handleSearch = (type) => {
+            const input = document.getElementById(`input-${type}`);
+            const resultsContainer = document.getElementById(`results-${type}`);
+            const query = input.value.trim();
+
+            if (searchDebounce) clearTimeout(searchDebounce);
+            
+            if (query.length < 2) {
+                resultsContainer.classList.add('hidden');
+                resultsContainer.innerHTML = '';
+                return;
+            }
+
+            searchDebounce = setTimeout(async () => {
+                try {
+                    const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`, {
+                         headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    
+                    resultsContainer.innerHTML = '';
+                    
+                    if (data.length > 0) {
+                        resultsContainer.classList.remove('hidden');
+                        data.forEach(item => {
+                            const el = document.createElement('div');
+                            el.className = 'p-2 hover:bg-slate-700 cursor-pointer border-b border-slate-700/50 last:border-0 flex flex-col';
+                            el.innerHTML = `
+                                <span class="text-xs font-bold text-white">${item.symbol}</span>
+                                <span class="text-[10px] text-slate-400 truncate">${item.name}</span>
+                            `;
+                            el.onclick = () => {
+                                input.value = item.symbol;
+                                resultsContainer.classList.add('hidden');
+                                resultsContainer.innerHTML = '';
+                            };
+                            resultsContainer.appendChild(el);
+                        });
+                    } else {
+                         resultsContainer.classList.remove('hidden');
+                         resultsContainer.innerHTML = '<div class="p-2 text-xs text-slate-500 text-center">موردی یافت نشد</div>';
+                    }
+
+                } catch (e) {
+                    console.error("Search failed", e);
+                }
+            }, 300);
+        };
+
+        // Close dropdowns on outside click
+        document.addEventListener('click', (e) => {
+             if (!e.target.closest('.relative')) {
+                 document.querySelectorAll('[id^="results-"]').forEach(el => el.classList.add('hidden'));
+             }
+        });
 
         window.addAsset = async (type) => {
             const input = document.getElementById(`input-${type}`);
