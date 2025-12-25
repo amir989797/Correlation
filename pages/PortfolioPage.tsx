@@ -185,7 +185,10 @@ const SearchInput = ({ label, value, onSelect }: { label: string; value: SearchR
       <div className="space-y-2 w-full">
         <label className="block text-sm font-medium text-slate-400">{label}</label>
         <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-600 rounded-lg text-cyan-400">
-           <span className="font-bold text-sm truncate">{value.symbol}</span>
+           <div className="flex flex-col overflow-hidden">
+             <span className="font-bold text-sm truncate">{value.symbol}</span>
+             <span className="text-[10px] text-slate-400 truncate">{value.name}</span>
+           </div>
            <button onClick={() => { onSelect(null); setQuery(''); }} className="p-1 hover:bg-black rounded text-slate-400 hover:text-red-400 transition-colors">
              <X className="w-5 h-5" />
            </button>
@@ -211,9 +214,14 @@ const SearchInput = ({ label, value, onSelect }: { label: string; value: SearchR
         {isOpen && results.length > 0 && (
           <div className="absolute top-full mt-2 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
              {results.map((item, idx) => (
-               <button key={idx} type="button" onClick={() => { onSelect(item); setIsOpen(false); }} className="w-full text-right px-4 py-3 hover:bg-slate-800 border-b border-slate-800 last:border-0 flex justify-between items-center group transition-colors">
-                 <span className="font-bold text-white group-hover:text-cyan-400">{item.symbol}</span>
-                 <span className="text-xs text-slate-400">{item.name}</span>
+               <button 
+                key={idx} 
+                type="button" 
+                onClick={() => { onSelect(item); setIsOpen(false); }} 
+                className="w-full text-right px-4 py-2 hover:bg-slate-800 border-b border-slate-800 last:border-0 flex flex-col items-start gap-1 group transition-colors"
+               >
+                 <span className="font-bold text-white text-sm group-hover:text-cyan-400">{item.symbol}</span>
+                 <span className="text-[10px] text-slate-400 truncate w-full">{item.name}</span>
                </button>
              ))}
           </div>

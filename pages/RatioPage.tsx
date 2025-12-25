@@ -104,10 +104,10 @@ const SearchInput = ({
                 key={idx}
                 type="button"
                 onClick={() => { onSelect(item); setIsOpen(false); }}
-                className="w-full text-right px-4 py-3 hover:bg-slate-700 border-b border-slate-700/50 last:border-0 flex justify-between items-center group transition-colors"
+                className="w-full text-right px-4 py-2 hover:bg-slate-700 border-b border-slate-700/50 last:border-0 flex flex-col items-start gap-1 group transition-colors"
                >
-                 <span className="font-bold text-white group-hover:text-amber-400">{item.symbol}</span>
-                 <span className="text-xs text-slate-400">{item.name}</span>
+                 <span className="font-bold text-white text-sm group-hover:text-amber-400">{item.symbol}</span>
+                 <span className="text-[10px] text-slate-400 truncate w-full">{item.name}</span>
                </button>
              ))}
           </div>
