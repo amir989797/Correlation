@@ -16,9 +16,10 @@ const app = express();
 const PORT = parseInt(process.env.ADMIN_PORT || '8080');
 
 // Configuration
-const PYTHON_SCRIPT_PATH = path.resolve(process.env.HOME || '/root', 'tse_downloader/full_market_download.py');
+// CHANGED: Pointing to the .js script now
+const DOWNLOADER_SCRIPT_PATH = path.join(__dirname, 'tse_downloader', 'full_market_download.js');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123'; // Change this in production!
+const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123'; 
 
 // State
 let isUpdating = false;
@@ -46,7 +47,6 @@ const requireAuth = (req, res, next) => {
   if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
   
   const token = authHeader.split(' ')[1]; // Bearer <token>
-  // Simple token based on base64 of username:password
   const validToken = Buffer.from(`${ADMIN_USER}:${ADMIN_PASS}`).toString('base64');
   
   if (token === validToken) {
@@ -94,27 +94,47 @@ app.post('/api/login', (req, res) => {
 app.get('/api/stats', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
-    // Get total symbols (from symbols table if exists, else count unique in prices)
-    const countQuery = `
-      SELECT (SELECT COUNT(*) FROM symbols) as symbol_count,
-             (SELECT MAX(date) FROM daily_prices) as last_date
-    `;
-    const result = await client.query(countQuery);
+    // Check tables existence first
+    const checkTables = await client.query(`
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'daily_prices'
+        ) as prices_exist,
+        EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'symbols'
+        ) as symbols_exist;
+    `);
+
+    const hasPrices = checkTables.rows[0].prices_exist;
+    const hasSymbols = checkTables.rows[0].symbols_exist;
+
+    let symbolCount = 0;
+    let lastDate = null;
+
+    if (hasSymbols) {
+         const countRes = await client.query('SELECT COUNT(*) FROM symbols');
+         symbolCount = countRes.rows[0].count;
+    }
+
+    if (hasPrices) {
+        const dateRes = await client.query('SELECT MAX(date) as last_date FROM daily_prices');
+        lastDate = dateRes.rows[0].last_date;
+    }
     
-    // Check if script exists
-    const scriptExists = fs.existsSync(PYTHON_SCRIPT_PATH);
+    const scriptExists = fs.existsSync(DOWNLOADER_SCRIPT_PATH);
 
     res.json({
-      symbolCount: result.rows[0].symbol_count || 0,
-      lastDate: result.rows[0].last_date,
+      symbolCount: parseInt(symbolCount),
+      lastDate: lastDate,
       isUpdating,
       lastLog: lastUpdateLog,
-      scriptPath: PYTHON_SCRIPT_PATH,
+      scriptPath: DOWNLOADER_SCRIPT_PATH,
       scriptExists
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Database Error' });
+    res.status(500).json({ error: 'Database Error', details: err.message });
   } finally {
     client.release();
   }
@@ -126,31 +146,31 @@ app.post('/api/update', requireAuth, (req, res) => {
     return res.status(400).json({ message: 'عملیات آپدیت هم‌اکنون در حال اجراست.' });
   }
 
-  if (!fs.existsSync(PYTHON_SCRIPT_PATH)) {
-    return res.status(500).json({ message: `فایل اسکریپت در مسیر ${PYTHON_SCRIPT_PATH} یافت نشد.` });
+  if (!fs.existsSync(DOWNLOADER_SCRIPT_PATH)) {
+    return res.status(500).json({ message: `فایل اسکریپت در مسیر ${DOWNLOADER_SCRIPT_PATH} یافت نشد.` });
   }
 
   isUpdating = true;
-  lastUpdateLog = "🚀 آپدیت شروع شد...\n";
+  lastUpdateLog = "🚀 آپدیت شروع شد (Node.js)...\n";
   
-  // Spawn Python Process
-  // Adjust 'python3' if your environment uses 'python'
-  const pythonProcess = spawn('python3', [PYTHON_SCRIPT_PATH]);
+  const env = { ...process.env };
+  
+  // CHANGED: Spawning 'node' instead of 'python3'
+  const downloaderProcess = spawn('node', [DOWNLOADER_SCRIPT_PATH], { env });
 
-  pythonProcess.stdout.on('data', (data) => {
+  downloaderProcess.stdout.on('data', (data) => {
     const chunk = data.toString();
-    console.log(`Python: ${chunk}`);
-    // Keep last 1000 chars of log to send to UI
+    console.log(`Downloader: ${chunk}`);
     lastUpdateLog = (lastUpdateLog + chunk).slice(-2000); 
   });
 
-  pythonProcess.stderr.on('data', (data) => {
-    console.error(`Python Error: ${data}`);
-    lastUpdateLog += `\n[ERROR]: ${data.toString()}`;
+  downloaderProcess.stderr.on('data', (data) => {
+    console.error(`Downloader Error: ${data}`);
+    lastUpdateLog += `\n[LOG]: ${data.toString()}`; 
   });
 
-  pythonProcess.on('close', async (code) => {
-    console.log(`Python script exited with code ${code}`);
+  downloaderProcess.on('close', async (code) => {
+    console.log(`Downloader exited with code ${code}`);
     
     if (code === 0) {
         lastUpdateLog += `\n✅ دریافت دیتا با موفقیت انجام شد.`;
@@ -167,7 +187,6 @@ app.post('/api/update', requireAuth, (req, res) => {
         lastUpdateLog += `\n❌ عملیات با کد خطا (${code}) متوقف شد.`;
     }
 
-    // Delay setting isUpdating to false slightly to ensure logs are sent
     setTimeout(() => {
         isUpdating = false;
     }, 1000);
