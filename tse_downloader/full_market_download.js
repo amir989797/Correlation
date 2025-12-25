@@ -6,8 +6,8 @@ import jalaali from 'jalaali-js';
 import 'dotenv/config';
 
 // --- Configuration ---
-const CONCURRENCY = 4; // Reduced slightly to prevent server blocking
-const DELAY_MS = 300;  // Increased delay
+const CONCURRENCY = 8; // Increased for speed
+const DELAY_MS = 100;  // Decreased delay
 const REQUEST_TIMEOUT = 30000; // 30 Seconds
 
 const dbConfig = {
@@ -85,8 +85,8 @@ async function fetchAllSymbols() {
 }
 
 async function fetchHistory(tseId, symbol, name) {
-    // Using Export-txt endpoint which is cleaner for full history
-    // t=i (Instrument), a=1 (Adjusted), b=0 (No header/format tweak), i={id}
+    // Using Export-txt endpoint
+    // a=1 (Adjusted Data)
     const url = `http://old.tsetmc.com/tsev2/data/Export-txt.aspx?t=i&a=1&b=0&i=${tseId}`;
     
     try {
@@ -101,14 +101,9 @@ async function fetchHistory(tseId, symbol, name) {
         
         const csvContent = response.data;
         if (!csvContent || typeof csvContent !== 'string' || csvContent.trim().length === 0) {
-            // console.log(`Empty data for ${symbol}`);
             return [];
         }
 
-        // TSETMC Export Format typically:
-        // <TICKER>,<DTYYYYMMDD>,<FIRST>,<HIGH>,<LOW>,<CLOSE>,<VALUE>,<VOL>,<OPENINT>,<PER>,<OPEN>,<LAST>
-        // But the "Export-txt" usually returns CSV without strict headers or with specific headers.
-        
         const records = parse(csvContent, {
             columns: true, 
             skip_empty_lines: true,
@@ -119,11 +114,15 @@ async function fetchHistory(tseId, symbol, name) {
         if (records.length === 0) return [];
 
         const cleanRecords = records.map(r => {
-             // Find the date key (it might handle <DTYYYYMMDD> or just Date)
              const keys = Object.keys(r);
              const dateKey = keys.find(k => k.includes('DTYYYYMMDD') || k.toLowerCase() === 'date');
-             const closeKey = keys.find(k => k.includes('CLOSE') || k.includes('Close')); // Adjusted Close
-             const lastKey = keys.find(k => k.includes('LAST') || k.includes('Last'));   // Last Trade
+             
+             // Mapping Logic:
+             // <CLOSE> = Closing Price (Payani) -> This should be our main price
+             // <LAST>  = Last Trade Price (Akharin)
+             const closeKey = keys.find(k => k.includes('CLOSE') || k.includes('Close')); 
+             // const lastKey = keys.find(k => k.includes('LAST') || k.includes('Last')); 
+
              const volKey = keys.find(k => k.includes('VOL') || k.includes('Vol'));
              const firstKey = keys.find(k => k.includes('FIRST') || k.includes('First'));
              const highKey = keys.find(k => k.includes('HIGH') || k.includes('High'));
@@ -133,7 +132,8 @@ async function fetchHistory(tseId, symbol, name) {
              if (!dateKey || !closeKey) return null;
 
              const dateStr = r[dateKey];
-             
+             const finalPrice = parseFloat(r[closeKey] || 0); // Closing Price (Adjusted)
+
              return {
                  symbol: symbol,
                  name: name,
@@ -142,11 +142,11 @@ async function fetchHistory(tseId, symbol, name) {
                  open: parseFloat(r[firstKey] || 0),
                  high: parseFloat(r[highKey] || 0),
                  low: parseFloat(r[lowKey] || 0),
-                 close: parseFloat(r[lastKey] || 0),      // Last Trade Price
-                 adj_close: parseFloat(r[closeKey] || 0), // Adjusted Price (Final)
+                 close: finalPrice,      // STORE PAYANI HERE (Standard)
+                 adj_close: finalPrice,  // Since we requested a=1, this is already adjusted
                  volume: parseInt(r[volKey] || 0),
                  value: parseInt(r[valueKey] || 0),
-                 count: 0, // Export-txt usually doesn't have count
+                 count: 0, 
                  yesterday: 0
              };
         }).filter(item => item !== null && item.date !== null);
@@ -154,8 +154,7 @@ async function fetchHistory(tseId, symbol, name) {
         return cleanRecords;
 
     } catch (error) {
-        // Log detailed error to debug
-        console.error(`[${symbol}] Download Error: ${error.message} (Status: ${error.response?.status})`);
+        // console.error(`[${symbol}] Download Error: ${error.message}`);
         return null;
     }
 }
@@ -167,12 +166,19 @@ async function saveToDatabase(client, data) {
         await client.query('BEGIN');
 
         for (const row of data) {
-            // "ON CONFLICT DO NOTHING" ensures we keep old data and only add new dates
+            // UPDATED: Use DO UPDATE to overwrite bad data (e.g. if we stored Last Trade previously)
             const query = `
                 INSERT INTO daily_prices 
                 (symbol, name, date, jalali_date, open, high, low, close, adj_close, volume, value, count, yesterday)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                ON CONFLICT (symbol, date) DO NOTHING;
+                ON CONFLICT (symbol, date) DO UPDATE SET
+                    close = EXCLUDED.close,
+                    adj_close = EXCLUDED.adj_close,
+                    open = EXCLUDED.open,
+                    high = EXCLUDED.high,
+                    low = EXCLUDED.low,
+                    volume = EXCLUDED.volume,
+                    value = EXCLUDED.value;
             `;
             const values = [
                 row.symbol, row.name, row.date, row.jalali_date,
@@ -190,7 +196,7 @@ async function saveToDatabase(client, data) {
 }
 
 async function run() {
-    console.log("🚀 شروع عملیات دانلود بازار (Node.js Downloader - Improved)...");
+    console.log("🚀 شروع عملیات دانلود بازار (Node.js Downloader - Optimized)...");
     
     const client = await pool.connect();
     try {
@@ -232,7 +238,6 @@ async function run() {
     for (let i = 0; i < symbols.length; i += CONCURRENCY) {
         const batch = symbols.slice(i, i + CONCURRENCY);
         
-        // Console Progress
         process.stdout.write(`\r⏳ پردازش: ${i}/${symbols.length} (${((i/symbols.length)*100).toFixed(1)}%) - موفق: ${successCount} `);
 
         const promises = batch.map(async (sym) => {

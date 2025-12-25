@@ -367,11 +367,33 @@ export function PortfolioPage() {
       const goldData = goldRes.data;
       if (stockData.length < 400 || goldData.length < 400) throw new Error('سابقه معاملاتی کافی نیست.');
       
-      const finalTargetDateStr = targetDateStr || stockData[stockData.length - 1].date;
+      // LOGIC TO FIND COMMON DATE (Robust to missing updates)
+      let finalTargetDateStr = targetDateStr;
+
+      if (!finalTargetDateStr) {
+          // If in "Current" mode, find the latest date that exists in BOTH datasets
+          const stockDates = new Set(stockData.map(d => d.date));
+          
+          // Iterate backwards from the latest gold date
+          for (let i = goldData.length - 1; i >= 0; i--) {
+              if (stockDates.has(goldData[i].date)) {
+                  finalTargetDateStr = goldData[i].date;
+                  break;
+              }
+          }
+      }
+      
+      if (!finalTargetDateStr) {
+          throw new Error('تاریخ مشترکی برای مقایسه دو نماد یافت نشد. ممکن است اطلاعات یکی از نمادها بروز نباشد.');
+      }
       
       const stockIdx = stockData.findIndex(d => d.date === finalTargetDateStr);
       const goldIdx = goldData.findIndex(d => d.date === finalTargetDateStr);
-      if (stockIdx === -1 || goldIdx === -1) throw new Error('داده‌ای برای تاریخ انتخابی یافت نشد.');
+
+      if (stockIdx === -1 || goldIdx === -1) {
+           // Should not happen with the loop above, but double check
+           throw new Error(`داده‌ای برای تاریخ ${finalTargetDateStr} در یکی از نمادها یافت نشد.`);
+      }
 
       const stockMA100 = calculateFullHistorySMA(stockData, 100);
       const goldMA100 = calculateFullHistorySMA(goldData, 100);
