@@ -2,15 +2,6 @@
 import { TsetmcDataPoint, MergedDataPoint, ChartDataPoint } from '../types';
 
 /**
- * Helper to remove non-numeric characters from date string (e.g. 2024-12-10 -> 20241210)
- * This ensures compatibility with both old and new server formats.
- */
-const normalizeDate = (date: string): string => {
-  if (!date) return '';
-  return date.replace(/[^0-9]/g, '');
-};
-
-/**
  * Parses raw CSV content from TSETMC.
  * Expected columns often include: <DTYYYYMMDD> and <CLOSE>
  * Also attempts to extract <TICKER>
@@ -61,15 +52,19 @@ export const parseTsetmcCsv = (csvText: string): { data: TsetmcDataPoint[], name
  * Aligns two datasets by date (Inner Join)
  */
 export const alignDataByDate = (data1: TsetmcDataPoint[], data2: TsetmcDataPoint[]): MergedDataPoint[] => {
-  const map2 = new Map(data2.map(d => [d.date, d.close]));
+  // Clean dates (remove dashes if present from DB) for robust comparison
+  const cleanDate = (d: string) => d.replace(/-/g, '').substring(0, 8);
+  
+  const map2 = new Map(data2.map(d => [cleanDate(d.date), d.close]));
   const merged: MergedDataPoint[] = [];
 
   for (const d1 of data1) {
-    if (map2.has(d1.date)) {
+    const d1Clean = cleanDate(d1.date);
+    if (map2.has(d1Clean)) {
       merged.push({
-        date: d1.date,
+        date: d1Clean, // Use clean YYYYMMDD
         price1: d1.close,
-        price2: map2.get(d1.date)!
+        price2: map2.get(d1Clean)!
       });
     }
   }
@@ -103,12 +98,13 @@ export const calculatePearson = (x: number[], y: number[]): number => {
  */
 export const toShamsi = (gregorianDate: string): string => {
   try {
-    const cleanDate = normalizeDate(gregorianDate);
-    if (cleanDate.length !== 8) return gregorianDate;
+    // Handle both YYYY-MM-DD and YYYYMMDD
+    const clean = gregorianDate.replace(/[^0-9]/g, '');
+    if (clean.length !== 8) return gregorianDate;
 
-    const year = parseInt(cleanDate.substring(0, 4));
-    const month = parseInt(cleanDate.substring(4, 6)) - 1;
-    const day = parseInt(cleanDate.substring(6, 8));
+    const year = parseInt(clean.substring(0, 4));
+    const month = parseInt(clean.substring(4, 6)) - 1;
+    const day = parseInt(clean.substring(6, 8));
     const date = new Date(year, month, day);
     
     // Use Intl to convert to Persian Calendar
@@ -130,13 +126,15 @@ export const toShamsi = (gregorianDate: string): string => {
 export const calculateFullHistorySMA = (data: TsetmcDataPoint[], window: number): Map<string, number> => {
     const map = new Map<string, number>();
     const prices = data.map(d => d.close);
+    // Clean keys for consistency
+    const cleanDate = (d: string) => d.replace(/-/g, '').substring(0, 8);
     
     for (let i = window - 1; i < data.length; i++) {
         let sum = 0;
         for (let j = 0; j < window; j++) {
             sum += prices[i - j];
         }
-        map.set(data[i].date, sum / window);
+        map.set(cleanDate(data[i].date), sum / window);
     }
     return map;
 };
@@ -150,7 +148,7 @@ export const generateAnalysisData = (
   d2: TsetmcDataPoint[], 
   windowSizes: number[]
 ): ChartDataPoint[] => {
-  // 1. Calculate MAs on full history to avoid gaps affecting the average
+  // 1. Calculate MAs on full history
   const ma100_1 = calculateFullHistorySMA(d1, 100);
   const ma200_1 = calculateFullHistorySMA(d1, 200);
   const ma100_2 = calculateFullHistorySMA(d2, 100);
@@ -165,30 +163,26 @@ export const generateAnalysisData = (
 
   for (let i = 0; i < merged.length; i++) {
     const currentDay = merged[i];
-    const rawDate = currentDay.date;
-    const cleanDate = normalizeDate(rawDate);
+    const rawDate = currentDay.date; // This is already cleaned YYYYMMDD from alignDataByDate
 
     // Helper for timestamp
     let timestamp = 0;
-    if (cleanDate.length === 8) {
-        const gy = parseInt(cleanDate.slice(0, 4));
-        const gm = parseInt(cleanDate.slice(4, 6)) - 1;
-        const gd = parseInt(cleanDate.slice(6, 8));
+    if (rawDate.length === 8) {
+        const gy = parseInt(rawDate.slice(0, 4));
+        const gm = parseInt(rawDate.slice(4, 6)) - 1;
+        const gd = parseInt(rawDate.slice(6, 8));
         timestamp = new Date(gy, gm, gd).getTime();
     } else {
-        // Fallback for weird dates
         timestamp = i;
     }
     
     // Get Pre-calculated MAs
-    // Note: We use rawDate to query the map because the keys in the map match rawDate
     const m1_100 = ma100_1.get(rawDate) ?? null;
     const m1_200 = ma200_1.get(rawDate) ?? null;
     const m2_100 = ma100_2.get(rawDate) ?? null;
     const m2_200 = ma200_2.get(rawDate) ?? null;
 
-    // Calculate Distance %: ((Price - MA) / MA) * 100
-    // This will be negative if Price < MA, positive if Price > MA.
+    // Calculate Distance %
     const dist_ma100_1 = m1_100 ? ((currentDay.price1 - m1_100) / m1_100) * 100 : null;
     const dist_ma100_2 = m2_100 ? ((currentDay.price2 - m2_100) / m2_100) * 100 : null;
 
@@ -237,7 +231,6 @@ export const generateRatioAnalysisData = (
     if (merged.length === 0) return [];
   
     // 2. Create Ratio Series for MA calculation
-    // We treat the "ratio" as a "close price" to reuse calculateFullHistorySMA
     const ratioSeries: TsetmcDataPoint[] = merged.map(m => ({
       date: m.date,
       close: m.price2 !== 0 ? m.price1 / m.price2 : 0
@@ -255,16 +248,15 @@ export const generateRatioAnalysisData = (
   
     for (let i = 0; i < merged.length; i++) {
       const m = merged[i];
-      const rawDate = m.date;
-      const cleanDate = normalizeDate(rawDate);
+      const rawDate = m.date; // Already cleaned YYYYMMDD
       const ratio = ratioSeries[i].close;
   
       // Timestamp
       let timestamp = 0;
-      if (cleanDate.length === 8) {
-          const gy = parseInt(cleanDate.slice(0, 4));
-          const gm = parseInt(cleanDate.slice(4, 6)) - 1;
-          const gd = parseInt(cleanDate.slice(6, 8));
+      if (rawDate.length === 8) {
+          const gy = parseInt(rawDate.slice(0, 4));
+          const gm = parseInt(rawDate.slice(4, 6)) - 1;
+          const gd = parseInt(rawDate.slice(6, 8));
           timestamp = new Date(gy, gm, gd).getTime();
       } else {
           timestamp = i;
@@ -273,7 +265,6 @@ export const generateRatioAnalysisData = (
       const m100 = ma100_ratio.get(rawDate) ?? null;
       const m200 = ma200_ratio.get(rawDate) ?? null;
   
-      // Distance of Ratio from its MA100
       const dist_ma100 = m100 ? ((ratio - m100) / m100) * 100 : null;
   
       const point: ChartDataPoint = {
@@ -285,15 +276,13 @@ export const generateRatioAnalysisData = (
           ma100_ratio: m100,
           ma200_ratio: m200,
           dist_ma100_ratio: dist_ma100 !== null ? parseFloat(dist_ma100.toFixed(2)) : null,
-          
-          // Required by interface but unused in ratio view
           ma100_price1: null,
           ma100_price2: null,
           ma200_price1: null,
           ma200_price2: null
       };
   
-      // Calculate Correlations between the two symbols
+      // Calculate Correlations
       windowSizes.forEach(w => {
           if (i >= w - 1) {
               const slice1 = mergedPrices1.slice(i - w + 1, i + 1);
@@ -313,10 +302,6 @@ export const generateRatioAnalysisData = (
 
 /**
  * Converts Jalali date (Year, Month, Day) to Gregorian Date object parameters { gy, gm, gd }
- * Using a lightweight algorithm.
- * j_y: Jalali Year (e.g. 1402)
- * j_m: Jalali Month (1-12)
- * j_d: Jalali Day (1-31)
  */
 export const jalaliToGregorian = (j_y: number, j_m: number, j_d: number): { gy: number, gm: number, gd: number } => {
   j_y = parseInt(String(j_y));

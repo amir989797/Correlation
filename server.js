@@ -79,7 +79,6 @@ app.get('/api/search', async (req, res) => {
 /**
  * History Endpoint
  * Fetches history from daily_prices
- * CRITICAL FIX: Ensures date is formatted as 'YYYYMMDD' (no dashes) to match frontend expectation.
  */
 app.get('/api/history/:symbol', async (req, res) => {
   const { symbol } = req.params;
@@ -89,10 +88,10 @@ app.get('/api/history/:symbol', async (req, res) => {
   try {
     client = await pool.connect();
     
-    // We format date as 'YYYYMMDD' (no dashes) because the frontend utils/mathUtils.ts
-    // expects strict indices (slice(0,4), slice(4,6), slice(6,8)).
+    // REVERTED: Removed to_char(date, 'YYYYMMDD'). Returning standard date.
+    // Frontend utils/mathUtils.ts will handle the formatting (stripping dashes).
     const query = `
-      SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
+      SELECT date, close, open, high, low, volume
       FROM daily_prices 
       WHERE symbol = $1 
       ORDER BY date ASC 
