@@ -65,7 +65,6 @@ app.get('/api/search', async (req, res) => {
     const result = await client.query(query, values);
     
     // Fallback: If symbols table is empty (migration not run), this returns empty array.
-    // The user should run 'npm run init-db'.
     
     res.json(result.rows);
   } catch (err) {
@@ -80,6 +79,7 @@ app.get('/api/search', async (req, res) => {
 /**
  * History Endpoint
  * Fetches history from daily_prices
+ * CRITICAL FIX: Ensures date is formatted as 'YYYYMMDD' (no dashes) to match frontend expectation.
  */
 app.get('/api/history/:symbol', async (req, res) => {
   const { symbol } = req.params;
@@ -90,7 +90,7 @@ app.get('/api/history/:symbol', async (req, res) => {
     client = await pool.connect();
     
     // We format date as 'YYYYMMDD' (no dashes) because the frontend utils/mathUtils.ts
-    // parses dates using strict indices (slice(0,4), slice(4,6), slice(6,8)).
+    // expects strict indices (slice(0,4), slice(4,6), slice(6,8)).
     const query = `
       SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
       FROM daily_prices 

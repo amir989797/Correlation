@@ -2,6 +2,15 @@
 import { TsetmcDataPoint, MergedDataPoint, ChartDataPoint } from '../types';
 
 /**
+ * Helper to remove non-numeric characters from date string (e.g. 2024-12-10 -> 20241210)
+ * This ensures compatibility with both old and new server formats.
+ */
+const normalizeDate = (date: string): string => {
+  if (!date) return '';
+  return date.replace(/[^0-9]/g, '');
+};
+
+/**
  * Parses raw CSV content from TSETMC.
  * Expected columns often include: <DTYYYYMMDD> and <CLOSE>
  * Also attempts to extract <TICKER>
@@ -94,9 +103,12 @@ export const calculatePearson = (x: number[], y: number[]): number => {
  */
 export const toShamsi = (gregorianDate: string): string => {
   try {
-    const year = parseInt(gregorianDate.substring(0, 4));
-    const month = parseInt(gregorianDate.substring(4, 6)) - 1;
-    const day = parseInt(gregorianDate.substring(6, 8));
+    const cleanDate = normalizeDate(gregorianDate);
+    if (cleanDate.length !== 8) return gregorianDate;
+
+    const year = parseInt(cleanDate.substring(0, 4));
+    const month = parseInt(cleanDate.substring(4, 6)) - 1;
+    const day = parseInt(cleanDate.substring(6, 8));
     const date = new Date(year, month, day);
     
     // Use Intl to convert to Persian Calendar
@@ -154,14 +166,22 @@ export const generateAnalysisData = (
   for (let i = 0; i < merged.length; i++) {
     const currentDay = merged[i];
     const rawDate = currentDay.date;
+    const cleanDate = normalizeDate(rawDate);
 
     // Helper for timestamp
-    const gy = parseInt(rawDate.slice(0, 4));
-    const gm = parseInt(rawDate.slice(4, 6)) - 1;
-    const gd = parseInt(rawDate.slice(6, 8));
-    const timestamp = new Date(gy, gm, gd).getTime();
+    let timestamp = 0;
+    if (cleanDate.length === 8) {
+        const gy = parseInt(cleanDate.slice(0, 4));
+        const gm = parseInt(cleanDate.slice(4, 6)) - 1;
+        const gd = parseInt(cleanDate.slice(6, 8));
+        timestamp = new Date(gy, gm, gd).getTime();
+    } else {
+        // Fallback for weird dates
+        timestamp = i;
+    }
     
     // Get Pre-calculated MAs
+    // Note: We use rawDate to query the map because the keys in the map match rawDate
     const m1_100 = ma100_1.get(rawDate) ?? null;
     const m1_200 = ma200_1.get(rawDate) ?? null;
     const m2_100 = ma100_2.get(rawDate) ?? null;
@@ -236,13 +256,19 @@ export const generateRatioAnalysisData = (
     for (let i = 0; i < merged.length; i++) {
       const m = merged[i];
       const rawDate = m.date;
+      const cleanDate = normalizeDate(rawDate);
       const ratio = ratioSeries[i].close;
   
       // Timestamp
-      const gy = parseInt(rawDate.slice(0, 4));
-      const gm = parseInt(rawDate.slice(4, 6)) - 1;
-      const gd = parseInt(rawDate.slice(6, 8));
-      const timestamp = new Date(gy, gm, gd).getTime();
+      let timestamp = 0;
+      if (cleanDate.length === 8) {
+          const gy = parseInt(cleanDate.slice(0, 4));
+          const gm = parseInt(cleanDate.slice(4, 6)) - 1;
+          const gd = parseInt(cleanDate.slice(6, 8));
+          timestamp = new Date(gy, gm, gd).getTime();
+      } else {
+          timestamp = i;
+      }
   
       const m100 = ma100_ratio.get(rawDate) ?? null;
       const m200 = ma200_ratio.get(rawDate) ?? null;
