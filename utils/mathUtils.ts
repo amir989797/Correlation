@@ -1,5 +1,6 @@
 
 import { TsetmcDataPoint, MergedDataPoint, ChartDataPoint } from '../types';
+import { toGregorian } from 'jalaali-js';
 
 /**
  * Parses raw CSV content from TSETMC.
@@ -302,61 +303,10 @@ export const generateRatioAnalysisData = (
 
 /**
  * Converts Jalali date (Year, Month, Day) to Gregorian Date object parameters { gy, gm, gd }
+ * Uses jalaali-js library for accuracy.
  */
 export const jalaliToGregorian = (j_y: number, j_m: number, j_d: number): { gy: number, gm: number, gd: number } => {
-  j_y = parseInt(String(j_y));
-  j_m = parseInt(String(j_m));
-  j_d = parseInt(String(j_d));
-  
-  var jy = j_y - 979;
-  var jm = j_m - 1;
-  var jd = j_d - 1;
-
-  var j_day_no = 365 * jy + Math.floor(jy / 33) * 8 + Math.floor((jy % 33 + 3) / 4);
-  for (var i = 0; i < jm; ++i) j_day_no += (i < 6) ? 31 : 30;
-  j_day_no += jd;
-
-  var g_day_no = j_day_no + 79;
-
-  var gy = 1600 + 400 * Math.floor(g_day_no / 146097);
-  g_day_no = g_day_no % 146097;
-
-  var leap = true;
-  if (g_day_no >= 36525) {
-    g_day_no--;
-    gy += 100 * Math.floor(g_day_no / 36524);
-    g_day_no = g_day_no % 36524;
-
-    if (g_day_no >= 365) g_day_no++;
-    else leap = false;
-  }
-
-  gy += 4 * Math.floor(g_day_no / 1461);
-  g_day_no %= 1461;
-
-  if (g_day_no >= 366) {
-    leap = false;
-
-    g_day_no--;
-    gy += Math.floor(g_day_no / 365);
-    g_day_no = g_day_no % 365;
-  }
-
-  var gm: number;
-  var gd: number;
-
-  var g_days_in_month = [31, (leap ? 29 : 28), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-
-  for (var i = 0; i < 12; ++i) {
-      if (g_day_no < g_days_in_month[i]) {
-          gm = i + 1;
-          gd = g_day_no + 1;
-          break;
-      }
-      g_day_no -= g_days_in_month[i];
-  }
-
-  return { gy: gy, gm: gm!, gd: gd! };
+    return toGregorian(j_y, j_m, j_d);
 }
 
 /**

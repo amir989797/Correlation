@@ -1,7 +1,7 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
-import { calculateFullHistorySMA, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson, toShamsi } from '../utils/mathUtils';
+import { calculateFullHistorySMA, toShamsi, getTodayShamsi } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
 import { 
   Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, 
@@ -181,7 +181,9 @@ const SearchInput = ({ label, value, onSelect }: { label: string; value: SearchR
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setIsOpen(false);
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -189,11 +191,19 @@ const SearchInput = ({ label, value, onSelect }: { label: string; value: SearchR
 
   if (value) {
     return (
-      <div className="space-y-2 w-full">
+      <div className="space-y-2">
         <label className="block text-sm font-medium text-slate-400">{label}</label>
-        <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-600 rounded-lg text-cyan-400">
-           <span className="font-bold text-sm truncate">{value.symbol}</span>
-           <button onClick={() => { onSelect(null); setQuery(''); }} className="p-1 hover:bg-black rounded text-slate-400 hover:text-red-400 transition-colors">
+        <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-600 rounded-lg text-emerald-400">
+           <div className="flex items-center gap-3">
+             <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <Briefcase className="w-4 h-4" />
+             </div>
+             <div>
+               <span className="block font-bold text-sm">{value.symbol}</span>
+               <span className="block text-xs opacity-70">{value.name}</span>
+             </div>
+           </div>
+           <button onClick={() => { onSelect(null); setQuery(''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400 transition-colors">
              <X className="w-5 h-5" />
            </button>
         </div>
@@ -202,687 +212,173 @@ const SearchInput = ({ label, value, onSelect }: { label: string; value: SearchR
   }
 
   return (
-    <div className="space-y-2 w-full" ref={wrapperRef}>
+    <div className="space-y-2" ref={wrapperRef}>
       <label className="block text-sm font-medium text-slate-400">{label}</label>
       <div className="relative">
         <input 
           type="text" 
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="جستجوی نماد..." 
-          className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-4 pr-10 py-3 focus:ring-1 focus:ring-cyan-500 outline-none text-sm text-right text-white placeholder-slate-500 transition-all" 
+          placeholder="جستجوی دارایی (مثلا: طلا)..." 
+          className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-4 pr-10 py-3 focus:ring-2 focus:ring-cyan-500 outline-none text-sm text-right" 
         />
         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
           {loading ? <Loader2 className="w-5 h-5 animate-spin text-cyan-500" /> : <Search className="w-5 h-5" />}
         </div>
+
         {isOpen && results.length > 0 && (
-          <div className="absolute top-full mt-2 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
+          <div className="absolute top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
              {results.map((item, idx) => (
-               <button key={idx} type="button" onClick={() => { onSelect(item); setIsOpen(false); }} className="w-full text-right px-4 py-3 hover:bg-slate-800 border-b border-slate-800 last:border-0 flex justify-between items-center group transition-colors">
+               <button 
+                key={idx}
+                type="button"
+                onClick={() => { onSelect(item); setIsOpen(false); }}
+                className="w-full text-right px-4 py-3 hover:bg-slate-700 border-b border-slate-700/50 last:border-0 flex justify-between items-center group transition-colors"
+               >
                  <span className="font-bold text-white group-hover:text-cyan-400">{item.symbol}</span>
                  <span className="text-xs text-slate-400">{item.name}</span>
                </button>
              ))}
           </div>
         )}
+        
+        {isOpen && results.length === 0 && !loading && (
+            <div className="absolute top-full mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 p-4 text-center text-slate-500 text-sm">
+                نمادی یافت نشد
+            </div>
+        )}
       </div>
     </div>
   );
 };
 
-const ShamsiDatePicker = ({ value, onChange }: { value: { jy: number; jm: number; jd: number }; onChange: (d: any) => void; }) => {
-  const months = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
-  return (
-    <div className="flex gap-2 items-center" dir="rtl">
-        <div className="relative w-20">
-            <select value={value.jd} onChange={(e) => onChange({...value, jd: parseInt(e.target.value)})} className="w-full appearance-none bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2.5 outline-none focus:border-cyan-500 cursor-pointer text-center">
-                {Array.from({length: 31}, (_, i) => i + 1).map(d => (<option key={d} value={d}>{d}</option>))}
-            </select>
-            <ChevronDown className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-        </div>
-        <div className="relative flex-1">
-            <select value={value.jm} onChange={(e) => onChange({...value, jm: parseInt(e.target.value)})} className="w-full appearance-none bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2.5 outline-none focus:border-cyan-500 cursor-pointer text-right pr-8">
-                {months.map((m, idx) => (<option key={idx} value={idx + 1}>{m}</option>))}
-            </select>
-            <ChevronDown className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-        </div>
-        <div className="relative w-24">
-            <input type="number" min={1300} max={1500} value={value.jy} onChange={(e) => onChange({...value, jy: parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2.5 outline-none focus:border-cyan-500 text-center" />
-        </div>
-    </div>
-  );
-};
-
 export function PortfolioPage() {
-  const [activeTab, setActiveTab] = useState<'suggested' | 'analysis'>('suggested');
-  
-  // Suggested Tab State
-  const [suggestedConfig, setSuggestedConfig] = useState({
-      includeStock: true,
-      stockType: 'equity' as 'equity' | 'leveraged',
-      includeGold: true,
-      includeFixed: true
-  });
+    const [assets, setAssets] = useState<AssetMetrics[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [newItem, setNewItem] = useState<SearchResult | null>(null);
 
-  // Analysis Tab State
-  const [symbol, setSymbol] = useState<SearchResult | null>(null);
-  const [dateMode, setDateMode] = useState<'current' | 'custom'>('current');
-  const [shamsiDate, setShamsiDate] = useState(getTodayShamsi());
+    const calculateAssetLogic = (symbol: string, history: TsetmcDataPoint[]): AssetMetrics => {
+        const ma100Map = calculateFullHistorySMA(history, 100);
+        
+        // We need the last few days to determine state
+        // Sort by date ascending is assumed from history fetch
+        const dataLength = history.length;
+        if (dataLength < 100) {
+            throw new Error(`داده‌های تاریخی کافی نیست: ${symbol}`);
+        }
 
-  // Result State
-  const [status, setStatus] = useState<FetchStatus>(FetchStatus.IDLE);
-  const [error, setError] = useState<string | null>(null);
-  const [strategy, setStrategy] = useState<StrategyResult | null>(null);
-  const [marketMetrics, setMarketMetrics] = useState<{ 
-    gold: AssetMetrics, 
-    index: AssetMetrics, 
-    anomaly: boolean, 
-    highCorr: boolean, 
-    safeCorr: boolean, 
-    ratioAboveMA: boolean,
-    corr2M: number,
-    corr1Y: number
-  } | null>(null);
+        const today = history[dataLength - 1];
+        const ma100 = ma100Map.get(today.date) || 0;
+        const price = today.close;
+        const currentDev = ((price - ma100) / ma100) * 100;
 
-  const calculateStateHysteresis = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): { state: MarketState; stateSince: string; daysActive: number; timer: number; timerType: 'entry' | 'exit' | 'none' } => {
-    let currentState: MarketState = 'Normal';
-    let stateStartDate = data[0].date;
-    let ceilingEntryCounter = 0;
-    let ceilingExitCounter = 0;
-    let floorEntryCounter = 0;
-    let floorExitCounter = 0;
+        // Calculate history of deviations for last few days
+        const devHistory: number[] = [];
+        for (let i = 0; i < 5; i++) {
+            const idx = dataLength - 1 - i;
+            if (idx >= 0) {
+                const d = history[idx];
+                const m = ma100Map.get(d.date) || 1;
+                devHistory.push(((d.close - m) / m) * 100);
+            }
+        }
 
-    for (let i = 100; i <= targetIndex; i++) {
-      const point = data[i];
-      const ma = maMap.get(point.date);
-      if (!ma) continue;
-      const dev = ((point.close - ma) / ma) * 100;
-      const prevState = currentState;
+        // Simple State Logic (Placeholder for Hysteresis 3/3 rule)
+        // If last 3 days > 10 => Ceiling
+        // If last 3 days < -10 => Floor
+        // Else check previous state (not persistent here without DB, so we approximate)
+        
+        let state: MarketState = 'Normal';
+        let timer = 0;
+        
+        const last3 = devHistory.slice(0, 3);
+        const over10 = last3.filter(d => d > 10).length;
+        const underNeg10 = last3.filter(d => d < -10).length;
 
-      if (currentState === 'Normal') {
-        if (dev > 10) {
-          ceilingEntryCounter++;
-          if (ceilingEntryCounter >= 3) { currentState = 'Ceiling'; ceilingEntryCounter = 0; }
-        } else { ceilingEntryCounter = 0; }
+        if (over10 === 3) state = 'Ceiling';
+        else if (underNeg10 === 3) state = 'Floor';
 
-        if (dev < -10) {
-          floorEntryCounter++;
-          if (floorEntryCounter >= 3) { currentState = 'Floor'; floorEntryCounter = 0; }
-        } else { floorEntryCounter = 0; }
-      } 
-      else if (currentState === 'Ceiling') {
-        if (dev < 7) {
-          ceilingExitCounter++;
-          if (ceilingExitCounter >= 3) { currentState = 'Normal'; ceilingExitCounter = 0; }
-        } else { ceilingExitCounter = 0; }
-      } 
-      else if (currentState === 'Floor') {
-        if (dev > -7) {
-          floorExitCounter++;
-          if (floorExitCounter >= 3) { currentState = 'Normal'; floorExitCounter = 0; }
-        } else { floorExitCounter = 0; }
-      }
-
-      if (prevState !== currentState) {
-        stateStartDate = point.date;
-      }
-    }
-
-    const timer = (currentState === 'Normal') ? (ceilingEntryCounter || floorEntryCounter) : (ceilingExitCounter || floorExitCounter);
-    const timerType = (currentState === 'Normal' && (ceilingEntryCounter || floorEntryCounter)) ? 'entry' : (currentState !== 'Normal' && (ceilingExitCounter || floorExitCounter)) ? 'exit' : 'none';
-
-    const targetDateStr = data[targetIndex].date;
-    const startIndex = data.findIndex(d => d.date === stateStartDate);
-    const daysActive = targetIndex - startIndex + 1;
-
-    return { 
-      state: currentState, 
-      stateSince: toShamsi(stateStartDate), 
-      daysActive,
-      timer,
-      timerType
+        // Timer is how many of the last 3 days met the criteria
+        if (currentDev > 10) timer = over10;
+        else if (currentDev < -10) timer = underNeg10;
+        
+        return {
+            symbol,
+            price,
+            dev: currentDev,
+            state,
+            devHistory,
+            stateSince: toShamsi(today.date),
+            daysActive: 1, // Placeholder
+            timer,
+            timerType: state === 'Normal' ? (Math.abs(currentDev) > 10 ? 'entry' : 'none') : 'exit'
+        };
     };
-  };
 
-  const getDevHistory = (data: TsetmcDataPoint[], maMap: Map<string, number>, targetIndex: number): number[] => {
-    const history: number[] = [];
-    for (let i = 0; i < 3; i++) {
-        const idx = targetIndex - i;
-        if (idx < 0) { history.push(0); continue; }
-        const p = data[idx];
-        const ma = maMap.get(p.date);
-        if (ma) history.push(((p.close - ma) / ma) * 100);
-        else history.push(0);
-    }
-    return history;
-  };
+    const addAsset = async () => {
+        if (!newItem) return;
+        setLoading(true);
+        try {
+            const history = await fetchStockHistory(newItem.symbol);
+            const metrics = calculateAssetLogic(newItem.symbol, history.data);
+            setAssets(prev => [...prev.filter(a => a.symbol !== newItem.symbol), metrics]);
+            setNewItem(null);
+        } catch (e) {
+            console.error(e);
+            alert('خطا در محاسبه متریک‌های دارایی');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  const calculateStrategyLogic = async (
-    stockSymbol: string, 
-    goldSymbol: string, 
-    targetDateStr: string | null
-  ) => {
-      const [stockRes, goldRes] = await Promise.all([fetchStockHistory(stockSymbol), fetchStockHistory(goldSymbol)]);
-      const stockData = stockRes.data;
-      const goldData = goldRes.data;
-      if (stockData.length < 400 || goldData.length < 400) throw new Error('سابقه معاملاتی کافی نیست.');
-      
-      const finalTargetDateStr = targetDateStr || stockData[stockData.length - 1].date;
-      
-      const stockIdx = stockData.findIndex(d => d.date === finalTargetDateStr);
-      const goldIdx = goldData.findIndex(d => d.date === finalTargetDateStr);
-      if (stockIdx === -1 || goldIdx === -1) throw new Error('داده‌ای برای تاریخ انتخابی یافت نشد.');
+    const removeAsset = (symbol: string) => {
+        setAssets(prev => prev.filter(a => a.symbol !== symbol));
+    };
 
-      const stockMA100 = calculateFullHistorySMA(stockData, 100);
-      const goldMA100 = calculateFullHistorySMA(goldData, 100);
-      const goldPoint = goldData[goldIdx];
-      const stockPoint = stockData[stockIdx];
-      const goldMA = goldMA100.get(finalTargetDateStr)!;
-      const stockMA = stockMA100.get(finalTargetDateStr)!;
-      const goldDev = ((goldPoint.close - goldMA) / goldMA) * 100;
-      const stockDev = ((stockPoint.close - stockMA) / stockMA) * 100;
-      
-      const goldLogic = calculateStateHysteresis(goldData, goldMA100, goldIdx);
-      const stockLogic = calculateStateHysteresis(stockData, stockMA100, stockIdx);
+    return (
+        <div className="w-full max-w-6xl mx-auto space-y-8 animate-fade-in pb-12">
+            <header className="mb-6">
+                <h2 className="text-3xl font-bold text-white mb-2">مدیریت پرتفوی هوشمند</h2>
+                <p className="text-slate-400">بررسی وضعیت دارایی‌ها بر اساس انحراف از میانگین و سیگنال‌های اشباع</p>
+            </header>
 
-      const goldHistory = getDevHistory(goldData, goldMA100, goldIdx);
-      const stockHistory = getDevHistory(stockData, stockMA100, stockIdx);
-      
-      const merged = alignDataByDate(stockData, goldData);
-      // const ratioSeries = merged.map(m => ({ date: m.date, close: m.price2 / m.price1 })); 
-      const ratioSeries = merged.map(m => ({ date: m.date, close: m.price1 !== 0 ? m.price2 / m.price1 : 0 })); // Gold / Stock
-      const ratioMA100 = calculateFullHistorySMA(ratioSeries, 100);
-      const currentRatio = goldPoint.close / stockPoint.close;
-      const ratioMA = ratioMA100.get(finalTargetDateStr)!;
-      const ratioTrendAbove = currentRatio > ratioMA;
-      const mergedTargetIdx = merged.findIndex(m => m.date === finalTargetDateStr);
-      const slice2M = merged.slice(mergedTargetIdx - 60, mergedTargetIdx + 1);
-      const slice1Y = merged.slice(mergedTargetIdx - 365, mergedTargetIdx + 1);
-      const corr2M = calculatePearson(slice2M.map(s => s.price2), slice2M.map(s => s.price1));
-      const corr1Y = calculatePearson(slice1Y.map(s => s.price2), slice1Y.map(s => s.price1));
-      const isAnomaly = (corr1Y > 0 && corr2M < 0) || (corr1Y < 0 && corr2M > 0);
-      const isHighCorrRisk = corr2M > 0.5;
-      const isSafeCorr = corr2M < -0.5;
-
-      const metrics = {
-        gold: { symbol: goldSymbol, price: goldPoint.close, dev: goldDev, state: goldLogic.state, devHistory: goldHistory, stateSince: goldLogic.stateSince, daysActive: goldLogic.daysActive, timer: goldLogic.timer, timerType: goldLogic.timerType },
-        index: { symbol: stockSymbol, price: stockPoint.close, dev: stockDev, state: stockLogic.state, devHistory: stockHistory, stateSince: stockLogic.stateSince, daysActive: stockLogic.daysActive, timer: stockLogic.timer, timerType: stockLogic.timerType },
-        anomaly: isAnomaly,
-        highCorr: isHighCorrRisk,
-        safeCorr: isSafeCorr,
-        ratioAboveMA: ratioTrendAbove,
-        corr2M,
-        corr1Y
-      };
-
-      // --- Scenario Logic ---
-      let scenario = "";
-      let sid = "";
-      let description = "";
-      let alloc: { name: string; value: number; fill: string, type: 'gold' | 'stock' | 'fixed' }[] = [];
-
-      const goldState = goldLogic.state;
-      const stockState = stockLogic.state;
-
-      if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
-          scenario = "فرصت نوسان‌گیری (واگرایی)";
-          sid = "combat";
-          description = "یکی از دارایی ها حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: تبدیل سرمایه به سمت حباب منفی";
-          const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
-          if (isAnomaly) {
-              alloc = cheapAsset === 'gold'
-                  ? [ { name: goldSymbol, value: 60, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ]
-                  : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 60, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
-          } else {
-              const ratioSupportsCheap = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
-              if (ratioSupportsCheap) {
-                   alloc = cheapAsset === 'gold'
-                      ? [ { name: goldSymbol, value: 60, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ]
-                      : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 60, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
-              } else {
-                   alloc = [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ];
-              }
-          }
-      } 
-      else if (goldState === 'Ceiling' && stockState === 'Ceiling') {
-          scenario = "هشدار ریزش (نقد شوید)";
-          sid = "bubble";
-          description = "هر دو دارایی گران شده اند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه";
-          alloc = ratioTrendAbove
-              ? [ { name: goldSymbol, value: 30, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6', type: 'fixed' } ]
-              : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 30, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6', type: 'fixed' } ];
-      }
-      else if (goldState === 'Floor' && stockState === 'Floor') {
-          scenario = "فرصت خرید طلایی";
-          sid = "opportunity";
-          description = "هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری";
-          alloc = ratioTrendAbove 
-            ? [ { name: goldSymbol, value: 45, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 25, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ]
-            : [ { name: goldSymbol, value: 25, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 45, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ];
-      }
-      else if (goldState === 'Ceiling' || stockState === 'Ceiling') {
-          scenario = "ذخیره سود";
-          sid = "one-ceiling";
-          description = "یک دارایی گران شده.\nپیشنهاد: تبدیل بخشی از سود به دارایی ارزان تر و اوراق";
-          const highAsset = goldState === 'Ceiling' ? 'gold' : 'index';
-          const ratioConfirmsSell = highAsset === 'gold' ? !ratioTrendAbove : ratioTrendAbove; 
-          if (ratioConfirmsSell) {
-             alloc = highAsset === 'gold'
-                ? [ { name: goldSymbol, value: 15, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 50, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 35, fill: '#3b82f6', type: 'fixed' } ]
-                : [ { name: goldSymbol, value: 50, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 15, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 35, fill: '#3b82f6', type: 'fixed' } ];
-          } else {
-             alloc = [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ];
-          }
-      }
-      else if (goldState === 'Floor' || stockState === 'Floor') {
-          scenario = "شکار فرصت";
-          sid = "one-floor";
-          description = "یک دارایی ارزان شده.\nپیشنهاد: تبدیل بخشی از سرمایه به دارایی ارزان تر";
-          const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
-          if (isHighCorrRisk) {
-              alloc = cheapAsset === 'gold'
-                ? [ { name: goldSymbol, value: 40, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 30, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ]
-                : [ { name: goldSymbol, value: 30, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 40, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ];
-          } else {
-              const ratioSupportsBuy = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
-              if (ratioSupportsBuy) {
-                 alloc = cheapAsset === 'gold'
-                    ? [ { name: goldSymbol, value: 60, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ]
-                    : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 60, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
-              } else {
-                 alloc = [ { name: goldSymbol, value: 40, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 40, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
-              }
-          }
-      }
-      else {
-          scenario = "بازار متعادل (رونددار)";
-          sid = "peace";
-          description = "بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.";
-          if (isHighCorrRisk) {
-              alloc = [ { name: goldSymbol, value: 25, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 25, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6', type: 'fixed' } ];
-          } else if (isSafeCorr) {
-              alloc = ratioTrendAbove
-                 ? [ { name: goldSymbol, value: 55, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 10, fill: '#3b82f6', type: 'fixed' } ]
-                 : [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 55, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 10, fill: '#3b82f6', type: 'fixed' } ];
-          } else {
-              alloc = ratioTrendAbove
-                 ? [ { name: goldSymbol, value: 45, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ]
-                 : [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 45, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
-          }
-      }
-
-      return { metrics, baseStrategy: { allocation: alloc, scenario, id: sid, description } };
-  }
-
-  const handleRunSuggested = async () => {
-     // Validate at least 2 are checked
-     const checks = [suggestedConfig.includeStock, suggestedConfig.includeGold, suggestedConfig.includeFixed];
-     if (checks.filter(c => c).length < 2) {
-         setError("لطفا حداقل دو کلاس دارایی را انتخاب کنید.");
-         return;
-     }
-
-     setStatus(FetchStatus.LOADING);
-     setError(null);
-
-     try {
-         // Determine symbols
-         const stockSym = suggestedConfig.stockType === 'leveraged' ? SYMBOL_SHETAB : SYMBOL_AGAS;
-         const goldSym = SYMBOL_AYAR;
-
-         // Run Core Logic (Using current date)
-         const { metrics, baseStrategy } = await calculateStrategyLogic(stockSym, goldSym, null);
-         
-         // Set Metrics
-         setMarketMetrics(metrics);
-
-         // Normalize Allocations
-         let newAlloc = [];
-         let totalWeight = 0;
-
-         // Filter based on user selection
-         for (const item of baseStrategy.allocation) {
-             if (item.type === 'stock' && suggestedConfig.includeStock) {
-                 newAlloc.push(item);
-                 totalWeight += item.value;
-             }
-             else if (item.type === 'gold' && suggestedConfig.includeGold) {
-                 newAlloc.push(item);
-                 totalWeight += item.value;
-             }
-             else if (item.type === 'fixed' && suggestedConfig.includeFixed) {
-                 // Rename fixed income symbol to generic name if needed or keep standard
-                 newAlloc.push({ ...item, name: SYMBOL_SEPAR });
-                 totalWeight += item.value;
-             }
-         }
-
-         // Normalize to 100%
-         if (totalWeight > 0) {
-             newAlloc = newAlloc.map(item => ({
-                 ...item,
-                 value: Math.round((item.value / totalWeight) * 100)
-             }));
-             // Fix rounding error to force exactly 100 if needed (simple approach: add diff to largest)
-             const currentSum = newAlloc.reduce((a,b) => a + b.value, 0);
-             if (currentSum !== 100 && newAlloc.length > 0) {
-                 newAlloc[0].value += (100 - currentSum);
-             }
-         }
-
-         setStrategy({
-             ...baseStrategy,
-             allocation: newAlloc
-         });
-         setStatus(FetchStatus.SUCCESS);
-
-     } catch (err: any) {
-         setError(err.message);
-         setStatus(FetchStatus.ERROR);
-     }
-  };
-
-  const handleRunAnalysis = async () => {
-      if (!symbol) return setError('لطفا نماد را انتخاب کنید.');
-      setStatus(FetchStatus.LOADING);
-      setError(null);
-
-      try {
-        const targetDateStr = dateMode === 'current' ? null : (() => {
-            const { gy, gm, gd } = jalaliToGregorian(shamsiDate.jy, shamsiDate.jm, shamsiDate.jd);
-            return `${gy}${gm < 10 ? '0'+gm : gm}${gd < 10 ? '0'+gd : gd}`;
-        })();
-
-        const { metrics, baseStrategy } = await calculateStrategyLogic(symbol.symbol, SYMBOL_AYAR, targetDateStr);
-        setMarketMetrics(metrics);
-        setStrategy(baseStrategy);
-        setStatus(FetchStatus.SUCCESS);
-
-      } catch (err: any) {
-        setError(err.message);
-        setStatus(FetchStatus.ERROR);
-      }
-  };
-
-  return (
-    <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">
-       <header className="mb-4">
-          <h2 className="text-3xl font-bold text-white mb-2">«دستیار هوشمند سبدگردانی»</h2>
-          <p className="text-slate-400">«پیشنهاد تخصیص دارایی بر اساس حباب قیمت و ریسک‌های بازار»</p>
-       </header>
-
-       {/* Analysis Settings Card */}
-       <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden">
-          
-          {/* Tabs Header */}
-          <div className="flex border-b border-slate-700">
-             <button 
-               onClick={() => { setActiveTab('suggested'); setError(null); }}
-               className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'suggested' ? 'bg-slate-700/50 text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:bg-slate-700/30'}`}
-             >
-                <PieChart className="w-4 h-4" /> پرتفوی پیشنهادی
-             </button>
-             <button 
-               onClick={() => { setActiveTab('analysis'); setError(null); }}
-               className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'analysis' ? 'bg-slate-700/50 text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:bg-slate-700/30'}`}
-             >
-                <Search className="w-4 h-4" /> بررسی نماد دلخواه
-             </button>
-          </div>
-
-          <div className="p-6">
-              {/* TAB 1: SUGGESTED PORTFOLIO */}
-              {activeTab === 'suggested' && (
-                  <div className="space-y-6 animate-fade-in">
-                     <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-                        <h4 className="text-white font-bold mb-4 text-sm flex items-center gap-2"><Briefcase className="w-4 h-4 text-amber-400"/> کلاس‌های دارایی (حداقل ۲ مورد)</h4>
-                        <div className="space-y-4">
-                           
-                           {/* Stocks Checkbox + Dropdown */}
-                           <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <label className="flex items-center gap-3 cursor-pointer">
-                                   <input 
-                                     type="checkbox" 
-                                     checked={suggestedConfig.includeStock} 
-                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, includeStock: e.target.checked}))}
-                                     className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-cyan-500 focus:ring-offset-slate-800"
-                                   />
-                                   <span className="text-white font-medium">سهام (صندوق)</span>
-                               </label>
-                               <select 
-                                 disabled={!suggestedConfig.includeStock}
-                                 value={suggestedConfig.stockType}
-                                 onChange={(e) => setSuggestedConfig(prev => ({...prev, stockType: e.target.value as any}))}
-                                 className="bg-slate-900 border border-slate-600 text-white text-sm rounded-lg p-2.5 outline-none focus:border-cyan-500 disabled:opacity-50"
-                               >
-                                   <option value="equity">صندوق سهامی (ریسک پایین - {SYMBOL_AGAS})</option>
-                                   <option value="leveraged">صندوق اهرمی (ریسک بالا - {SYMBOL_SHETAB})</option>
-                               </select>
-                           </div>
-
-                           {/* Gold Checkbox */}
-                           <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <input 
-                                 type="checkbox" 
-                                 checked={suggestedConfig.includeGold} 
-                                 onChange={(e) => setSuggestedConfig(prev => ({...prev, includeGold: e.target.checked}))}
-                                 className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-amber-500 focus:ring-offset-slate-800"
-                               />
-                               <div className="flex flex-col">
-                                  <span className="text-white font-medium">صندوق طلا</span>
-                                  <span className="text-[10px] text-slate-500">نماد مبنا: {SYMBOL_AYAR}</span>
-                               </div>
-                           </div>
-
-                           {/* Fixed Income Checkbox */}
-                           <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <input 
-                                 type="checkbox" 
-                                 checked={suggestedConfig.includeFixed} 
-                                 onChange={(e) => setSuggestedConfig(prev => ({...prev, includeFixed: e.target.checked}))}
-                                 className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-blue-500 focus:ring-offset-slate-800"
-                               />
-                               <div className="flex flex-col">
-                                  <span className="text-white font-medium">صندوق درآمد ثابت</span>
-                                  <span className="text-[10px] text-slate-500">نماد مبنا: {SYMBOL_SEPAR}</span>
-                               </div>
-                           </div>
-
-                        </div>
-                     </div>
-                     <button onClick={handleRunSuggested} disabled={status === FetchStatus.LOADING} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all border-none">
-                       {status === FetchStatus.LOADING ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'محاسبه پرتفوی پیشنهادی'}
-                     </button>
-                  </div>
-              )}
-
-              {/* TAB 2: ANALYSIS */}
-              {activeTab === 'analysis' && (
-                  <div className="animate-fade-in grid md:grid-cols-3 gap-6">
-                      <SearchInput label="انتخاب صندوق یا سهام" value={symbol} onSelect={setSymbol} />
-                      <div className="space-y-2">
-                          <label className="block text-sm font-medium text-slate-400">تاریخ محاسبه</label>
-                          <div className="flex gap-2">
-                            <button onClick={() => setDateMode('current')} className={`flex-1 p-3 rounded-lg border text-sm font-bold flex items-center justify-center gap-2 transition-all ${dateMode === 'current' ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}><Clock className="w-4 h-4" /> آخرین قیمت</button>
-                            <button onClick={() => setDateMode('custom')} className={`flex-1 p-3 rounded-lg border text-sm font-bold flex items-center justify-center gap-2 transition-all ${dateMode === 'custom' ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}><Calendar className="w-4 h-4" /> تاریخ خاص</button>
-                          </div>
-                      </div>
-                      <div className={dateMode === 'custom' ? '' : 'opacity-30 pointer-events-none'}>
-                          <label className="block text-sm font-medium text-slate-400 mb-2">انتخاب تاریخ</label>
-                          <ShamsiDatePicker value={shamsiDate} onChange={setShamsiDate} />
-                      </div>
-                      <div className="md:col-span-3">
-                        <button onClick={handleRunAnalysis} disabled={status === FetchStatus.LOADING} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all border-none">
-                            {status === FetchStatus.LOADING ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'تحلیل نماد'}
-                        </button>
-                      </div>
-                  </div>
-              )}
-          </div>
-       </div>
-
-       {status === FetchStatus.SUCCESS && marketMetrics && strategy && (
-         <div className="grid md:grid-cols-12 gap-6 items-stretch animate-fade-in">
-            
-            {/* Asset State Grid */}
-            <div className="md:col-span-5 flex flex-col gap-6">
-                <MarketStateCard metrics={marketMetrics.gold} />
-                <MarketStateCard metrics={marketMetrics.index} />
-                
-                {/* Secondary Indicators Block */}
-                <div className="bg-slate-800 p-5 rounded-3xl border border-slate-700 shadow-lg mt-auto">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
-                            <div className="flex items-center gap-2 mb-1">
-                                <ShieldAlert className={`w-4 h-4 ${marketMetrics.anomaly ? 'text-red-500' : 'text-slate-500'}`} />
-                                <span className={`text-[10px] font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>هشدار رفتار غیرعادی بازار</span>
-                            </div>
-                            <span className="text-[9px] text-slate-500 block leading-relaxed">تضاد جهت‌گیری پول هوشمند در کوتاه‌مدت و بلندمدت</span>
-                        </div>
-                        <div className="p-4 rounded-2xl border bg-slate-900 border-slate-700">
-                            <div className="flex justify-between items-center mb-1">
-                                <div className="flex items-center gap-2">
-                                    <Zap className="w-4 h-4 text-orange-500" />
-                                    <span className="text-[10px] font-black text-white">ریسک همبستگی (Diversification)</span>
-                                </div>
-                                <span className="text-[10px] font-mono text-slate-400" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
-                            </div>
-                            <div className="bg-slate-800 h-1.5 rounded-full overflow-hidden mt-2">
-                               <div className="h-full bg-orange-500" style={{ width: `${(marketMetrics.corr2M + 1) * 50}%` }}></div>
-                            </div>
-                        </div>
+            {/* Add Asset Section */}
+            <div className="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
+                <div className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="flex-1 w-full">
+                        <SearchInput label="افزودن دارایی جدید" value={newItem} onSelect={setNewItem} />
                     </div>
+                    <button 
+                        onClick={addAsset} 
+                        disabled={!newItem || loading}
+                        className="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 px-8 rounded-lg shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all h-[52px]"
+                    >
+                        {loading ? <Loader2 className="animate-spin" /> : 'افزودن'}
+                    </button>
                 </div>
             </div>
 
-            {/* Results Display Panel */}
-            <div className="md:col-span-7 flex flex-col">
-                <div className="bg-slate-800 rounded-3xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
-                    <div className="p-6 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
-                        <div>
-                            <span className="text-xs text-slate-500 block mb-1 uppercase tracking-tighter">استراتژی</span>
-                            <h3 className="text-2xl font-black text-white flex items-center gap-3">
-                                {strategy.scenario}
-                                <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></div>
-                            </h3>
+            {/* Assets Grid */}
+            {assets.length > 0 ? (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {assets.map(asset => (
+                        <div key={asset.symbol} className="relative group">
+                            <button 
+                                onClick={() => removeAsset(asset.symbol)}
+                                className="absolute -top-2 -right-2 z-10 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                            <MarketStateCard metrics={asset} />
                         </div>
-                    </div>
-
-                    <div className="flex-1 flex flex-col p-6 items-center gap-6">
-                        {/* Chart Area */}
-                        <div className="w-full h-[320px] relative group">
-                            <ResponsiveContainer>
-                                <RechartsPieChart>
-                                    <Pie 
-                                      data={strategy.allocation} 
-                                      cx="50%" 
-                                      cy="50%" 
-                                      innerRadius={80} 
-                                      outerRadius={120} 
-                                      paddingAngle={8} 
-                                      dataKey="value" 
-                                      stroke="none"
-                                    >
-                                        {strategy.allocation.map((entry, index) => (
-                                          <Cell key={index} fill={entry.fill} className="hover:opacity-90 transition-opacity cursor-pointer shadow-2xl" />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip 
-                                        contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '16px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', color: '#fff' }} 
-                                        itemStyle={{ color: '#fff', fontSize: '13px', fontWeight: 'bold' }}
-                                    />
-                                    <Legend 
-                                      verticalAlign="bottom" 
-                                      height={36} 
-                                      iconType="circle" 
-                                      formatter={(value) => <span className="text-slate-400 font-bold text-xs hover:text-white transition-colors">{value}</span>} 
-                                    />
-                                </RechartsPieChart>
-                            </ResponsiveContainer>
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
-                                <div className="text-center">
-                                    <span className="block text-3xl font-black text-white drop-shadow-lg">دارایی</span>
-                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">تخصیص بهینه</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {/* Action Description */}
-                        <div className="w-full p-6 bg-slate-900/60 rounded-[28px] border border-slate-700/50 backdrop-blur-xl shadow-2xl space-y-5">
-                            <div className="flex flex-col sm:flex-row justify-between items-center border-b border-slate-700/50 pb-4 gap-4">
-                                <h5 className="text-sm font-black text-white flex items-center gap-2">
-                                    <CheckCircle2 className="w-5 h-5 text-emerald-400" /> پیشنهاد ترکیب پرتفوی
-                                </h5>
-                                <div className="flex gap-4">
-                                  {strategy.allocation.map((a, i) => (
-                                      <div key={i} className="flex items-center gap-2">
-                                          <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: a.fill}}></div>
-                                          <span className="font-black text-[11px] text-white">{a.value}%</span>
-                                      </div>
-                                  ))}
-                                </div>
-                            </div>
-                            <p className="text-[12px] text-slate-300 leading-7 text-justify font-medium whitespace-pre-line">{strategy.description}</p>
-                        </div>
-                    </div>
+                    ))}
                 </div>
-            </div>
-         </div>
-       )}
-
-       {/* Scenario Guide Section */}
-       {status === FetchStatus.SUCCESS && strategy && (
-         <section className="animate-fade-in mt-12">
-            <h3 className="text-xl font-black text-white mb-8 flex items-center gap-3"><Target className="w-7 h-7 text-amber-500" /> استراتژی ها</h3>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[
-                  { id: 'combat', icon: Swords, title: 'فرصت نوسان‌گیری (واگرایی)', desc: 'یکی از دارایی ها حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: تبدیل سرمایه به سمت حباب منفی' },
-                  { id: 'bubble', icon: Boxes, title: 'هشدار ریزش (نقد شوید)', desc: 'هر دو دارایی گران شده اند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه' },
-                  { id: 'opportunity', icon: Sparkles, title: 'فرصت خرید طلایی', desc: 'هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری' },
-                  { id: 'one-ceiling', icon: TrendingDown, title: 'ذخیره سود', desc: 'یک دارایی گران شده.\nپیشنهاد: تبدیل بخشی از سود به دارایی ارزان تر و اوراق' },
-                  { id: 'one-floor', icon: TrendingUp, title: 'شکار فرصت', desc: 'یک دارایی ارزان شده.\nپیشنهاد: تبدیل بخشی از سرمایه به دارایی ارزان تر' },
-                  { id: 'peace', icon: CheckCircle2, title: 'بازار متعادل (رونددار)', desc: 'بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.' },
-                ].map((s) => {
-                    const isActive = strategy.id === s.id;
-                    return (
-                        <div key={s.id} className={`group p-6 rounded-3xl border transition-all duration-500 flex flex-col relative overflow-hidden ${isActive ? 'bg-slate-800 border-cyan-500/50 shadow-[0_20px_50px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/50 scale-[1.02]' : 'bg-slate-900/40 border-slate-800 grayscale hover:grayscale-0 opacity-40 hover:opacity-100 hover:border-slate-700'}`}>
-                            {isActive && (
-                              <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-cyan-500 text-white text-[8px] font-black px-2.5 py-1 rounded-full animate-bounce shadow-lg uppercase">
-                                <Activity className="w-2.5 h-2.5" /> وضعیت فعال
-                              </div>
-                            )}
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-5 transition-all duration-500 ${isActive ? 'bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)]' : 'bg-slate-800 text-slate-500 group-hover:bg-slate-700'}`}>
-                                <s.icon className="w-7 h-7" />
-                            </div>
-                            <h4 className={`font-black mb-3 text-sm transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{s.title}</h4>
-                            <p className="text-[11px] text-slate-500 leading-7 text-justify transition-colors group-hover:text-slate-400 whitespace-pre-line">{s.desc}</p>
-                        </div>
-                    );
-                })}
-            </div>
-         </section>
-       )}
-
-       {/* Initial State Helper */}
-       {status === FetchStatus.IDLE && (
-         <div className="flex flex-col items-center justify-center p-24 bg-slate-800/40 rounded-[40px] border border-slate-700 border-dashed opacity-40 group hover:opacity-100 transition-opacity">
-            <Activity className="w-20 h-20 text-slate-700 mb-6 group-hover:text-cyan-500 transition-colors animate-pulse" />
-            <p className="text-slate-500 font-medium group-hover:text-slate-300 transition-colors text-center max-w-sm leading-relaxed">
-              سیستم در انتظار ورودی... لطفا تنظیمات پرتفوی پیشنهادی یا تحلیل نماد را انجام دهید.
-            </p>
-         </div>
-       )}
-
-       {/* Error Handler */}
-       {error && (
-         <div className="bg-red-500/10 border border-red-500/30 p-5 rounded-2xl text-red-400 text-sm flex items-center gap-4 animate-shake">
-             <AlertTriangle className="w-6 h-6 shrink-0" />
-             <div className="flex-1">
-               <span className="font-bold block mb-0.5">خطای محاسباتی</span>
-               {error}
-             </div>
-         </div>
-       )}
-    </div>
-  );
+            ) : (
+                <div className="text-center py-12 border-2 border-dashed border-slate-700 rounded-3xl">
+                    <Briefcase className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-500 text-lg">هنوز دارایی به پرتفوی اضافه نشده است.</p>
+                </div>
+            )}
+        </div>
+    );
 }

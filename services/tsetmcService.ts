@@ -54,10 +54,21 @@ export const fetchStockHistory = async (symbol: string): Promise<{ data: TsetmcD
         throw new Error('داده‌ای برای این نماد یافت نشد.');
     }
 
-    const data: TsetmcDataPoint[] = json.map((item: any) => ({
-      date: item.date,
-      close: item.close
-    }));
+    const data: TsetmcDataPoint[] = json.map((item: any) => {
+      // Normalize Date: Postgres might return "2024-12-23" or ISO string.
+      // We need strict "YYYYMMDD" format for frontend mathUtils.
+      let dateStr = String(item.date);
+      if (dateStr.includes('T')) {
+          dateStr = dateStr.split('T')[0];
+      }
+      // Remove dashes to ensure YYYYMMDD format
+      dateStr = dateStr.replace(/-/g, '');
+
+      return {
+        date: dateStr,
+        close: item.close
+      };
+    });
 
     return {
       data,
