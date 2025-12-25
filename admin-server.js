@@ -1,4 +1,3 @@
-
 import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
@@ -18,45 +17,34 @@ const PORT = parseInt(process.env.ADMIN_PORT || '8080');
 // Configuration
 const PYTHON_SCRIPT_PATH = path.resolve(process.env.HOME || '/root', 'tse_downloader/full_market_download.py');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123'; // Change this in production!
+const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123';
 
-// State
 let isUpdating = false;
 let lastUpdateLog = "هنوز آپدیتی انجام نشده است.";
 let currentProcess = null;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Database Config
 const dbConfig = {
   user: process.env.DB_USER || 'tseuser',
   host: process.env.DB_HOST || 'localhost',
   database: process.env.DB_NAME || 'tsetmc',
   password: process.env.DB_PASSWORD || 'YourStrongPass123',
   port: parseInt(process.env.DB_PORT || '5432'),
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
 };
 
 const pool = new Pool(dbConfig);
 
-// Authentication Middleware
 const requireAuth = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-  
-  const token = authHeader.split(' ')[1]; // Bearer <token>
+  const token = authHeader.split(' ')[1];
   const validToken = Buffer.from(`${ADMIN_USER}:${ADMIN_PASS}`).toString('base64');
-  
-  if (token === validToken) {
-    next();
-  } else {
-    res.status(403).json({ error: 'Forbidden' });
-  }
+  if (token === validToken) next();
+  else res.status(403).json({ error: 'Forbidden' });
 };
 
-// Helper: Sync Symbols Table
 const syncSymbolsTable = async () => {
   const client = await pool.connect();
   try {
@@ -74,12 +62,10 @@ const syncSymbolsTable = async () => {
   }
 };
 
-// Serve Static Dashboard
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin-dashboard.html'));
 });
 
-// API: Login
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
   if (username === ADMIN_USER && password === ADMIN_PASS) {
@@ -90,7 +76,6 @@ app.post('/api/login', (req, res) => {
   }
 });
 
-// API: Stats
 app.get('/api/stats', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -117,67 +102,61 @@ app.get('/api/stats', requireAuth, async (req, res) => {
   }
 });
 
-// API: Trigger Update
 app.post('/api/update', requireAuth, (req, res) => {
-  if (isUpdating) {
-    return res.status(400).json({ message: 'عملیات آپدیت هم‌اکنون در حال اجراست.' });
-  }
-
-  if (!fs.existsSync(PYTHON_SCRIPT_PATH)) {
-    return res.status(500).json({ message: `فایل اسکریپت در مسیر ${PYTHON_SCRIPT_PATH} یافت نشد.` });
-  }
+  if (isUpdating) return res.status(400).json({ message: 'عملیات آپدیت هم‌اکنون در حال اجراست.' });
+  if (!fs.existsSync(PYTHON_SCRIPT_PATH)) return res.status(500).json({ message: `فایل اسکریپت یافت نشد.` });
 
   isUpdating = true;
-  lastUpdateLog = "🚀 آپدیت شروع شد...\n";
+  lastUpdateLog = "🚀 آپدیت شروع شد (حالت چند رشته‌ای)...\n";
   
-  currentProcess = spawn('python3', [PYTHON_SCRIPT_PATH]);
+  // استفاده از -u برای unbuffered output (نمایش آنی لاگ‌ها)
+  currentProcess = spawn('python3', ['-u', PYTHON_SCRIPT_PATH]);
 
   currentProcess.stdout.on('data', (data) => {
     const chunk = data.toString();
-    lastUpdateLog = (lastUpdateLog + chunk).slice(-2000); 
+    lastUpdateLog = (lastUpdateLog + chunk).slice(-5000); 
   });
 
+  // اصلاح مهم: تشخیص نوار پیشرفت از خطای واقعی
   currentProcess.stderr.on('data', (data) => {
-    lastUpdateLog += `\n[ERROR]: ${data.toString()}`;
+    const text = data.toString();
+    if (text.includes('%') || text.includes('it/s')) {
+        // این فقط نوار پیشرفت است، خطا نیست
+        lastUpdateLog += `\n[PROGRESS]: ${text}`; 
+    } else {
+        // خطای واقعی
+        lastUpdateLog += `\n[ERROR]: ${text}`;
+    }
+    // محدود کردن حجم لاگ
+    lastUpdateLog = lastUpdateLog.slice(-5000);
   });
 
   currentProcess.on('close', async (code) => {
-    console.log(`Python script exited with code ${code}`);
+    console.log(`Script finished: ${code}`);
     currentProcess = null;
-    
+    isUpdating = false; // سریع آزاد کن
+
     if (code === 0) {
-        lastUpdateLog += `\n✅ دریافت دیتا با موفقیت انجام شد.`;
-        lastUpdateLog += `\n🔄 در حال بروزرسانی لیست نمادها برای جستجو...`;
+        lastUpdateLog += `\n✅ دریافت دیتا تمام شد.`;
+        // سینک کردن جدول نمادها
         try {
             const count = await syncSymbolsTable();
-            lastUpdateLog += `\n✨ لیست نمادها بروز شد. (${count} نماد جدید اضافه شد)`;
-        } catch (err) {
-            lastUpdateLog += `\n❌ خطا در بروزرسانی جدول نمادها: ${err.message}`;
+            lastUpdateLog += `\n✨ لیست جستجو بروز شد (${count} نماد جدید).`;
+        } catch (e) {
+            lastUpdateLog += `\n⚠️ خطا در بروزرسانی لیست جستجو: ${e.message}`;
         }
-    } else if (code === null) {
-        lastUpdateLog += `\n🛑 اسکریپت توسط کاربر متوقف شد.`;
     } else {
-        lastUpdateLog += `\n❌ عملیات با کد خطا (${code}) متوقف شد.`;
+        lastUpdateLog += `\n❌ عملیات متوقف شد (Code: ${code}).`;
     }
-
-    setTimeout(() => { isUpdating = false; }, 1000);
   });
 
-  res.json({ message: 'دستور آپدیت به سرور ارسال شد.', status: 'started' });
+  res.json({ message: 'دستور آپدیت ارسال شد.', status: 'started' });
 });
 
-// API: Stop Update
 app.post('/api/stop', requireAuth, (req, res) => {
-    if (!isUpdating || !currentProcess) {
-        return res.status(400).json({ message: 'هیچ اسکریپتی در حال اجرا نیست.' });
-    }
-
-    try {
-        currentProcess.kill('SIGINT');
-        res.json({ message: 'دستور توقف اسکریپت ارسال شد.' });
-    } catch (err) {
-        res.status(500).json({ message: 'خطا در متوقف کردن اسکریپت: ' + err.message });
-    }
+    if (!isUpdating || !currentProcess) return res.status(400).json({ message: 'چیزی در حال اجرا نیست.' });
+    currentProcess.kill('SIGINT');
+    res.json({ message: 'دستور توقف ارسال شد.' });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
