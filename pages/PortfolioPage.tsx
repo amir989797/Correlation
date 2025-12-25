@@ -654,19 +654,19 @@ export function PortfolioPage() {
        </header>
 
        {/* Analysis Settings Card */}
-       <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden">
+       <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl relative z-10">
           
           {/* Tabs Header */}
           <div className="flex border-b border-slate-700">
              <button 
                onClick={() => { setActiveTab('suggested'); setError(null); }}
-               className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'suggested' ? 'bg-slate-700/50 text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:bg-slate-700/30'}`}
+               className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors rounded-tr-2xl ${activeTab === 'suggested' ? 'bg-slate-700/50 text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:bg-slate-700/30'}`}
              >
                 <PieChart className="w-4 h-4" /> پرتفوی پیشنهادی
              </button>
              <button 
                onClick={() => { setActiveTab('analysis'); setError(null); }}
-               className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'analysis' ? 'bg-slate-700/50 text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:bg-slate-700/30'}`}
+               className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors rounded-tl-2xl ${activeTab === 'analysis' ? 'bg-slate-700/50 text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:bg-slate-700/30'}`}
              >
                 <Search className="w-4 h-4" /> بررسی نماد دلخواه
              </button>
