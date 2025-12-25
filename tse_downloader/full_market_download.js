@@ -6,8 +6,9 @@ import jalaali from 'jalaali-js';
 import 'dotenv/config';
 
 // --- Configuration ---
-const CONCURRENCY = 5; // Number of parallel downloads
-const DELAY_MS = 200;  // Delay between requests to avoid IP ban
+const CONCURRENCY = 4; // Reduced slightly to prevent server blocking
+const DELAY_MS = 300;  // Increased delay
+const REQUEST_TIMEOUT = 30000; // 30 Seconds
 
 const dbConfig = {
   user: process.env.DB_USER || 'tseuser',
@@ -27,18 +28,19 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const toJalaliDate = (gregorianDateStr) => {
     // Input: YYYYMMDD (String)
     try {
+        if (!gregorianDateStr || gregorianDateStr.length !== 8) return null;
         const y = parseInt(gregorianDateStr.substring(0, 4));
         const m = parseInt(gregorianDateStr.substring(4, 6));
         const d = parseInt(gregorianDateStr.substring(6, 8));
         const j = jalaali.toJalaali(y, m, d);
-        return `${j.jy}-${String(j.jm).padStart(2, '0')}-${String(j.jd).padStart(2, '0')}`; // YYYY-MM-DD
+        return `${j.jy}-${String(j.jm).padStart(2, '0')}-${String(j.jd).padStart(2, '0')}`;
     } catch (e) {
         return null;
     }
 };
 
 const formatDateForDB = (gregorianDateStr) => {
-    // Input YYYYMMDD -> Output YYYY-MM-DD for Postgres Date type
+    if (!gregorianDateStr || gregorianDateStr.length !== 8) return null;
     return `${gregorianDateStr.substring(0, 4)}-${gregorianDateStr.substring(4, 6)}-${gregorianDateStr.substring(6, 8)}`;
 };
 
@@ -47,31 +49,28 @@ const formatDateForDB = (gregorianDateStr) => {
 async function fetchAllSymbols() {
     console.log("📥 در حال دریافت لیست نمادها از TSETMC...");
     try {
-        // MarketWatchInit contains all active symbols loaded in the market watch
         const response = await axios.get('http://old.tsetmc.com/tsev2/data/MarketWatchInit.aspx?h=0&r=0', {
             timeout: 30000
         });
         
         const raw = response.data;
-        // The format is complex: ... @ DataBlock ...
         const parts = raw.split('@');
-        if (parts.length < 3) throw new Error("Invalid TSETMC response structure");
+        if (parts.length < 3) throw new Error("ساختار پاسخ TSETMC نامعتبر است.");
 
-        const dataBlock = parts[2]; // Usually the index 2 has the symbol list
+        const dataBlock = parts[2];
         const rows = dataBlock.split(';');
 
         const symbols = [];
         for (const row of rows) {
             const cols = row.split(',');
             if (cols.length > 5) {
-                // Structure: Id, Code, Symbol, Name, ...
                 const id = cols[0];
                 const code = cols[1];
                 const symbol = cols[2];
                 const name = cols[3];
                 
-                // Filter out strange symbols (numerical or too long) to clean up
-                if (symbol && id && !symbol.includes('Testing')) {
+                // Filter valid symbols
+                if (symbol && id && !symbol.includes('Testing') && /^\d+$/.test(id)) {
                     symbols.push({ id, symbol, name });
                 }
             }
@@ -86,64 +85,77 @@ async function fetchAllSymbols() {
 }
 
 async function fetchHistory(tseId, symbol, name) {
-    // A=1 means Adjusted Data
-    const url = `http://members.tsetmc.com/tsev2/data/InstTradeHistory.aspx?i=${tseId}&Top=999999&A=1`;
+    // Using Export-txt endpoint which is cleaner for full history
+    // t=i (Instrument), a=1 (Adjusted), b=0 (No header/format tweak), i={id}
+    const url = `http://old.tsetmc.com/tsev2/data/Export-txt.aspx?t=i&a=1&b=0&i=${tseId}`;
+    
     try {
         const response = await axios.get(url, { 
-            timeout: 15000,
+            timeout: REQUEST_TIMEOUT,
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                'Accept': 'text/plain, */*; q=0.01',
+                'Connection': 'keep-alive'
             }
         });
         
         const csvContent = response.data;
-        if (!csvContent || csvContent.trim().length === 0) return [];
+        if (!csvContent || typeof csvContent !== 'string' || csvContent.trim().length === 0) {
+            // console.log(`Empty data for ${symbol}`);
+            return [];
+        }
 
+        // TSETMC Export Format typically:
+        // <TICKER>,<DTYYYYMMDD>,<FIRST>,<HIGH>,<LOW>,<CLOSE>,<VALUE>,<VOL>,<OPENINT>,<PER>,<OPEN>,<LAST>
+        // But the "Export-txt" usually returns CSV without strict headers or with specific headers.
+        
         const records = parse(csvContent, {
-            columns: true,
+            columns: true, 
             skip_empty_lines: true,
-            trim: true
+            trim: true,
+            relax_column_count: true
         });
 
-        /*
-            Typical TSETMC CSV Columns:
-            Date,First,High,Low,Close,Value,Vol,Openint,Per,Open,Last
-            
-            Mapping:
-            Date -> date
-            First -> open
-            High -> high
-            Low -> low
-            Close -> adj_close (Final Price)
-            Last -> close (Last Trade)
-            Vol -> volume
-            Value -> value
-            Count -> count (sometimes missing in CSV, might need calculation or set to 0)
-        */
+        if (records.length === 0) return [];
 
-        return records.map(r => {
-             // Clean date
-             const dateStr = r['Date'];
+        const cleanRecords = records.map(r => {
+             // Find the date key (it might handle <DTYYYYMMDD> or just Date)
+             const keys = Object.keys(r);
+             const dateKey = keys.find(k => k.includes('DTYYYYMMDD') || k.toLowerCase() === 'date');
+             const closeKey = keys.find(k => k.includes('CLOSE') || k.includes('Close')); // Adjusted Close
+             const lastKey = keys.find(k => k.includes('LAST') || k.includes('Last'));   // Last Trade
+             const volKey = keys.find(k => k.includes('VOL') || k.includes('Vol'));
+             const firstKey = keys.find(k => k.includes('FIRST') || k.includes('First'));
+             const highKey = keys.find(k => k.includes('HIGH') || k.includes('High'));
+             const lowKey = keys.find(k => k.includes('LOW') || k.includes('Low'));
+             const valueKey = keys.find(k => k.includes('VALUE') || k.includes('Value'));
+
+             if (!dateKey || !closeKey) return null;
+
+             const dateStr = r[dateKey];
              
              return {
                  symbol: symbol,
                  name: name,
-                 date: formatDateForDB(dateStr), // YYYY-MM-DD
+                 date: formatDateForDB(dateStr),
                  jalali_date: toJalaliDate(dateStr),
-                 open: parseFloat(r['First']),
-                 high: parseFloat(r['High']),
-                 low: parseFloat(r['Low']),
-                 close: parseFloat(r['Last']), // Last Trade
-                 adj_close: parseFloat(r['Close']), // Final Price (Adjusted)
-                 volume: parseInt(r['Vol']),
-                 value: parseInt(r['Value']),
-                 count: parseInt(r['Count'] || 0),
-                 yesterday: 0 // CSV often doesn't have yesterday, can be calculated but keeping 0 for now
+                 open: parseFloat(r[firstKey] || 0),
+                 high: parseFloat(r[highKey] || 0),
+                 low: parseFloat(r[lowKey] || 0),
+                 close: parseFloat(r[lastKey] || 0),      // Last Trade Price
+                 adj_close: parseFloat(r[closeKey] || 0), // Adjusted Price (Final)
+                 volume: parseInt(r[volKey] || 0),
+                 value: parseInt(r[valueKey] || 0),
+                 count: 0, // Export-txt usually doesn't have count
+                 yesterday: 0
              };
-        });
+        }).filter(item => item !== null && item.date !== null);
+
+        return cleanRecords;
 
     } catch (error) {
-        // console.error(`Failed to download ${symbol}: ${error.message}`);
+        // Log detailed error to debug
+        console.error(`[${symbol}] Download Error: ${error.message} (Status: ${error.response?.status})`);
         return null;
     }
 }
@@ -151,11 +163,11 @@ async function fetchHistory(tseId, symbol, name) {
 async function saveToDatabase(client, data) {
     if (!data || data.length === 0) return;
     
-    // We use a transaction for batch insert
     try {
         await client.query('BEGIN');
 
         for (const row of data) {
+            // "ON CONFLICT DO NOTHING" ensures we keep old data and only add new dates
             const query = `
                 INSERT INTO daily_prices 
                 (symbol, name, date, jalali_date, open, high, low, close, adj_close, volume, value, count, yesterday)
@@ -178,9 +190,8 @@ async function saveToDatabase(client, data) {
 }
 
 async function run() {
-    console.log("🚀 شروع عملیات دانلود بازار (Node.js Downloader)...");
+    console.log("🚀 شروع عملیات دانلود بازار (Node.js Downloader - Improved)...");
     
-    // 1. Ensure Table Exists
     const client = await pool.connect();
     try {
         await client.query(`
@@ -206,7 +217,6 @@ async function run() {
         client.release();
     }
 
-    // 2. Fetch Symbols
     let symbols;
     try {
         symbols = await fetchAllSymbols();
@@ -218,16 +228,14 @@ async function run() {
     let successCount = 0;
     let failCount = 0;
     
-    // 3. Loop and Download with Concurrency Control
-    // Simple batch processing
+    // Process in batches
     for (let i = 0; i < symbols.length; i += CONCURRENCY) {
         const batch = symbols.slice(i, i + CONCURRENCY);
-        const promises = batch.map(async (sym) => {
-            // Log progress
-            if (Math.random() > 0.9) {
-                 process.stdout.write(`\r⏳ پیشرفت: ${(i / symbols.length * 100).toFixed(1)}% `);
-            }
+        
+        // Console Progress
+        process.stdout.write(`\r⏳ پردازش: ${i}/${symbols.length} (${((i/symbols.length)*100).toFixed(1)}%) - موفق: ${successCount} `);
 
+        const promises = batch.map(async (sym) => {
             const data = await fetchHistory(sym.id, sym.symbol, sym.name);
             
             if (data && data.length > 0) {
@@ -236,7 +244,7 @@ async function run() {
                     await saveToDatabase(dbClient, data);
                     successCount++;
                 } catch (err) {
-                    // console.error(`DB Error ${sym.symbol}:`, err.message);
+                    console.error(`DB Error ${sym.symbol}:`, err.message);
                     failCount++;
                 } finally {
                     dbClient.release();
@@ -245,7 +253,7 @@ async function run() {
                 failCount++;
             }
             
-            await wait(DELAY_MS); // throttle
+            await wait(DELAY_MS); 
         });
 
         await Promise.all(promises);
