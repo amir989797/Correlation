@@ -4,4 +4,6 @@
 pytse_client
 pandas
 psycopg2-binary
+sqlalchemy
+tqdm
 requests
