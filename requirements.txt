@@ -1,1 +1,7 @@
-# This file is deprecated. Dependencies are now managed in package.json.
+# Python Dependencies (for /root/tse_downloader/full_market_download.py)
+# Install using: pip3 install -r requirements.txt
+
+pytse_client
+pandas
+psycopg2-binary
+requests
