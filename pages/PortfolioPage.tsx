@@ -491,6 +491,7 @@ export function PortfolioPage() {
                     : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 60, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
               } else {
                  alloc = [ { name: goldSymbol, value: 40, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 40, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
+              }
           }
       }
       else {
