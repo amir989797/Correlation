@@ -46,15 +46,6 @@ const runTest = async () => {
 
         console.log(`📦 حجم دیتای دریافتی: ${csvContent.length} کاراکتر`);
 
-        // بررسی وجود تاریخ در متن خام
-        if (csvContent.includes(TARGET_DATE_RAW)) {
-            console.log(`✅ تاریخ ${TARGET_DATE_RAW} در فایل خام CSV پیدا شد!`);
-        } else {
-            console.log(`❌ تاریخ ${TARGET_DATE_RAW} در فایل خام CSV وجود ندارد.`);
-            console.log('نکته: اگر تاریخ تعطیل رسمی بوده، عدم وجود آن طبیعی است.');
-            return; // اگر نیست، کاری نمی‌توان کرد
-        }
-
         // پارس کردن CSV
         const records = parse(csvContent, {
             columns: true,
@@ -63,16 +54,36 @@ const runTest = async () => {
             relax_column_count: true
         });
 
-        // پیدا کردن رکورد خاص
-        const targetRecord = records.find(r => r['<DTYYYYMMDD>'] === TARGET_DATE_RAW || Object.values(r).includes(TARGET_DATE_RAW));
+        if (records.length > 0) {
+            // مرتب‌سازی بر اساس تاریخ نزولی (جدیدترین اول)
+            const sortedRecords = records.sort((a, b) => {
+                const dateA = a['<DTYYYYMMDD>'] || '';
+                const dateB = b['<DTYYYYMMDD>'] || '';
+                return dateB.localeCompare(dateA);
+            });
+
+            const latest = sortedRecords[0];
+            console.log('\n📅 --- وضعیت آخرین داده موجود ---');
+            console.log(`آخرین تاریخ موجود: ${latest['<DTYYYYMMDD>']}`);
+            console.log(`آخرین قیمت پایانی: ${latest['<CLOSE>']}`);
+            console.log(`آخرین حجم معاملات: ${latest['<VOL>']}`);
+            console.log('----------------------------------\n');
+        } else {
+            console.log('⚠️ هیچ رکوردی در فایل CSV یافت نشد.');
+            return;
+        }
+
+        // بررسی وجود تاریخ مورد نظر
+        const targetRecord = records.find(r => r['<DTYYYYMMDD>'] === TARGET_DATE_RAW);
 
         if (targetRecord) {
-            console.log('📋 جزئیات رکورد پیدا شده:', targetRecord);
+            console.log(`✅ تاریخ هدف ${TARGET_DATE_RAW} پیدا شد!`);
+            console.log('📋 جزئیات رکورد:', targetRecord);
             
             // تلاش برای درج در دیتابیس
             const client = await pool.connect();
             try {
-                const dateDB = formatDateForDB(TARGET_DATE_RAW); // 2023-12-22
+                const dateDB = formatDateForDB(TARGET_DATE_RAW); 
                 const close = parseFloat(targetRecord['<CLOSE>'] || targetRecord['<LAST>'] || 0);
                 const vol = parseInt(targetRecord['<VOL>'] || 0);
                 
@@ -86,15 +97,14 @@ const runTest = async () => {
                     DO UPDATE SET close = EXCLUDED.close, volume = EXCLUDED.volume;
                 `;
 
-                // مقادیر ساده‌سازی شده برای تست
                 const values = [
                     'فولاد', 
                     'فولاد مبارکه اصفهان', 
                     dateDB, 
                     close, 
-                    close, // فرض بر adjusted بودن
+                    close, 
                     vol, 
-                    0, 0, 0, 0 // سایر مقادیر صفر برای تست
+                    0, 0, 0, 0 
                 ];
 
                 await client.query(query, values);
@@ -107,7 +117,8 @@ const runTest = async () => {
             }
 
         } else {
-            console.log('⚠️ رکورد در پارسر پیدا نشد (با وجود اینکه در متن خام بود). مشکل از CSV Header است.');
+            console.log(`❌ تاریخ هدف ${TARGET_DATE_RAW} در فایل دانلودی وجود ندارد.`);
+            console.log('نکته: احتمالا روز تعطیل بوده است.');
         }
 
     } catch (err) {
