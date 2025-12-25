@@ -66,7 +66,7 @@ const MarketStateCard = ({ metrics }: { metrics: AssetMetrics }) => {
   };
 
   return (
-    <div className="bg-slate-900 rounded-3xl border border-slate-700 overflow-hidden group hover:border-slate-500 transition-all duration-500 shadow-2xl relative">
+    <div className="bg-slate-900 rounded-3xl border border-slate-700 overflow-hidden group hover:border-slate-500 transition-all duration-500 shadow-2xl relative h-full">
       {/* State Indicator Bar */}
       <div className={`absolute top-0 right-0 w-1.5 h-full ${stateColor} ${state !== 'Normal' ? 'animate-pulse' : ''}`}></div>
 
@@ -807,41 +807,10 @@ export function PortfolioPage() {
        </div>
 
        {status === FetchStatus.SUCCESS && marketMetrics && strategy && (
-         <div className="grid md:grid-cols-12 gap-6 items-stretch animate-fade-in">
+         <div className="flex flex-col gap-8 animate-fade-in">
             
-            {/* Asset State Grid */}
-            <div className="md:col-span-5 flex flex-col gap-6">
-                <MarketStateCard metrics={marketMetrics.gold} />
-                <MarketStateCard metrics={marketMetrics.index} />
-                
-                {/* Secondary Indicators Block */}
-                <div className="bg-slate-800 p-5 rounded-3xl border border-slate-700 shadow-lg mt-auto">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
-                            <div className="flex items-center gap-2 mb-1">
-                                <ShieldAlert className={`w-4 h-4 ${marketMetrics.anomaly ? 'text-red-500' : 'text-slate-500'}`} />
-                                <span className={`text-[10px] font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>هشدار رفتار غیرعادی بازار</span>
-                            </div>
-                            <span className="text-[9px] text-slate-500 block leading-relaxed">تضاد جهت‌گیری پول هوشمند در کوتاه‌مدت و بلندمدت</span>
-                        </div>
-                        <div className="p-4 rounded-2xl border bg-slate-900 border-slate-700">
-                            <div className="flex justify-between items-center mb-1">
-                                <div className="flex items-center gap-2">
-                                    <Zap className="w-4 h-4 text-orange-500" />
-                                    <span className="text-[10px] font-black text-white">ریسک همبستگی</span>
-                                </div>
-                                <span className="text-[10px] font-mono text-slate-400" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
-                            </div>
-                            <div className="bg-slate-800 h-1.5 rounded-full overflow-hidden mt-2">
-                               <div className="h-full bg-orange-500" style={{ width: `${(marketMetrics.corr2M + 1) * 50}%` }}></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Results Display Panel */}
-            <div className="md:col-span-7 flex flex-col">
+            {/* 1. Results Display Panel (Chart) - Full Width */}
+            <div className="w-full">
                 <div className="bg-slate-800 rounded-3xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
                     <div className="p-6 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
                         <div>
@@ -908,6 +877,45 @@ export function PortfolioPage() {
                                 </div>
                             </div>
                             <p className="text-[12px] text-slate-300 leading-7 text-justify font-medium whitespace-pre-line">{strategy.description}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* 2. Calculation Details */}
+            <div className="space-y-6">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-cyan-400" />
+                    نحوه محاسبه
+                </h3>
+
+                {/* Cards Grid */}
+                <div className="grid md:grid-cols-2 gap-6">
+                    <MarketStateCard metrics={marketMetrics.gold} />
+                    <MarketStateCard metrics={marketMetrics.index} />
+                </div>
+
+                {/* Secondary Indicators (Below Cards) */}
+                <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-lg">
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                                <ShieldAlert className={`w-4 h-4 ${marketMetrics.anomaly ? 'text-red-500' : 'text-slate-500'}`} />
+                                <span className={`text-[10px] font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>هشدار رفتار غیرعادی بازار</span>
+                            </div>
+                            <span className="text-[9px] text-slate-500 block leading-relaxed">تضاد جهت‌گیری پول هوشمند در کوتاه‌مدت و بلندمدت</span>
+                        </div>
+                        <div className="p-4 rounded-2xl border bg-slate-900 border-slate-700">
+                            <div className="flex justify-between items-center mb-1">
+                                <div className="flex items-center gap-2">
+                                    <Zap className="w-4 h-4 text-orange-500" />
+                                    <span className="text-[10px] font-black text-white">ریسک همبستگی</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-slate-400" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
+                            </div>
+                            <div className="bg-slate-800 h-1.5 rounded-full overflow-hidden mt-2">
+                               <div className="h-full bg-orange-500" style={{ width: `${(marketMetrics.corr2M + 1) * 50}%` }}></div>
+                            </div>
                         </div>
                     </div>
                 </div>
