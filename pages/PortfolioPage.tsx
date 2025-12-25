@@ -99,9 +99,12 @@ const MarketStateCard = ({ metrics }: { metrics: AssetMetrics }) => {
                <span className="text-[9px] text-amber-400 animate-pulse font-black">({timer}/۳)</span>
              )}
            </div>
-           <div className="flex gap-2.5">
+           <div className="flex gap-4 items-center">
               {devHistory.slice(0, 3).reverse().map((val, idx) => (
-                <div key={idx} className={`w-3.5 h-3.5 rounded-full ${getDotColor(val)} transition-all duration-700`} title={`${val.toFixed(1)}%`}></div>
+                <div key={idx} className="flex flex-col items-center gap-1">
+                   <div className={`w-3.5 h-3.5 rounded-full ${getDotColor(val)} transition-all duration-700`} title={`${val.toFixed(1)}%`}></div>
+                   <span className="text-[8px] text-slate-500 font-bold">روز {idx + 1}</span>
+                </div>
               ))}
            </div>
         </div>
@@ -409,7 +412,7 @@ export function PortfolioPage() {
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
           scenario = "فرصت نوسان‌گیری (واگرایی)";
           sid = "combat";
-          description = "بین دارایی ها واگرایی ایجاد شده، یکی حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: جابجایی سریع سرمایه به سمت حباب منفی";
+          description = "یکی از دارایی ها حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: تبدیل سرمایه به سمت حباب منفی";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isAnomaly) {
               alloc = cheapAsset === 'gold'
@@ -437,7 +440,7 @@ export function PortfolioPage() {
       else if (goldState === 'Floor' && stockState === 'Floor') {
           scenario = "فرصت خرید طلایی";
           sid = "opportunity";
-          description = "هر دو دارایی ارزان شده اند.\nپیشنهاد: خرید سنگین سرمایه ارزان تر (بر اساس قدرت نسبی)";
+          description = "هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری";
           alloc = ratioTrendAbove 
             ? [ { name: GOLD_SYMBOL, value: 45, fill: '#fbbf24' }, { name: symbol.symbol, value: 25, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ]
             : [ { name: GOLD_SYMBOL, value: 25, fill: '#fbbf24' }, { name: symbol.symbol, value: 45, fill: '#10b981' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6' } ];
@@ -459,7 +462,7 @@ export function PortfolioPage() {
       else if (goldState === 'Floor' || stockState === 'Floor') {
           scenario = "شکار فرصت";
           sid = "one-floor";
-          description = "یک دارایی نسبت به دارایی دیگر ارزان شده.\nپیشنهاد: افزایش دارایی ارزان تر";
+          description = "یک دارایی ارزان شده.\nپیشنهاد: تبدیل بخشی از سرمایه به دارایی ارزان تر";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isHighCorrRisk) {
               alloc = cheapAsset === 'gold'
@@ -644,11 +647,11 @@ export function PortfolioPage() {
             <h3 className="text-xl font-black text-white mb-8 flex items-center gap-3"><Target className="w-7 h-7 text-amber-500" /> استراتژی ها</h3>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[
-                  { id: 'combat', icon: Swords, title: 'فرصت نوسان‌گیری (واگرایی)', desc: 'بین دارایی ها واگرایی ایجاد شده، یکی حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: جابجایی سریع سرمایه به سمت حباب منفی' },
+                  { id: 'combat', icon: Swords, title: 'فرصت نوسان‌گیری (واگرایی)', desc: 'یکی از دارایی ها حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: تبدیل سرمایه به سمت حباب منفی' },
                   { id: 'bubble', icon: Boxes, title: 'هشدار ریزش (نقد شوید)', desc: 'هر دو دارایی گران شده اند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه' },
-                  { id: 'opportunity', icon: Sparkles, title: 'فرصت خرید طلایی', desc: 'هر دو دارایی ارزان شده اند.\nپیشنهاد: خرید سنگین سرمایه ارزان تر (بر اساس قدرت نسبی)' },
+                  { id: 'opportunity', icon: Sparkles, title: 'فرصت خرید طلایی', desc: 'هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری' },
                   { id: 'one-ceiling', icon: TrendingDown, title: 'ذخیره سود', desc: 'یک دارایی گران شده.\nپیشنهاد: تبدیل بخشی از سود به دارایی ارزان تر و اوراق' },
-                  { id: 'one-floor', icon: TrendingUp, title: 'شکار فرصت', desc: 'یک دارایی نسبت به دارایی دیگر ارزان شده.\nپیشنهاد: افزایش دارایی ارزان تر' },
+                  { id: 'one-floor', icon: TrendingUp, title: 'شکار فرصت', desc: 'یک دارایی ارزان شده.\nپیشنهاد: تبدیل بخشی از سرمایه به دارایی ارزان تر' },
                   { id: 'peace', icon: CheckCircle2, title: 'بازار متعادل (رونددار)', desc: 'بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.' },
                 ].map((s) => {
                     const isActive = strategy.id === s.id;
