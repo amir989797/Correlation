@@ -1,5 +1,5 @@
 
-import { TsetmcDataPoint, SearchResult } from '../types';
+import { TsetmcDataPoint, SearchResult, AssetGroup } from '../types';
 
 // Updated API URL to point to the server IP
 const API_BASE_URL = 'http://109.94.164.70:8000/api';
@@ -26,6 +26,21 @@ export const searchSymbols = async (query: string): Promise<SearchResult[]> => {
     console.error('Search Request Failed:', error);
     return [];
   }
+};
+
+/**
+ * Fetches the curated list of assets configured by admin.
+ */
+export const fetchAssetGroups = async (): Promise<AssetGroup[]> => {
+    try {
+        const url = `${API_BASE_URL}/assets`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch assets');
+        return await response.json();
+    } catch (error) {
+        console.error('Asset Groups Fetch Failed:', error);
+        return [];
+    }
 };
 
 /**

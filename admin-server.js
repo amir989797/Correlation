@@ -1,3 +1,4 @@
+
 import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
@@ -35,6 +36,26 @@ const dbConfig = {
 };
 
 const pool = new Pool(dbConfig);
+
+// Init DB for Assets
+const initAssetDB = async () => {
+    const client = await pool.connect();
+    try {
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS asset_groups (
+                symbol VARCHAR(50),
+                type VARCHAR(20),
+                PRIMARY KEY (symbol, type)
+            );
+        `);
+        console.log("✅ Asset Groups table checked/created.");
+    } catch (e) {
+        console.error("Error creating asset_groups table:", e);
+    } finally {
+        client.release();
+    }
+};
+initAssetDB();
 
 const requireAuth = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -109,7 +130,6 @@ app.post('/api/update', requireAuth, (req, res) => {
   isUpdating = true;
   lastUpdateLog = "🚀 آپدیت شروع شد (حالت چند رشته‌ای)...\n";
   
-  // استفاده از -u برای unbuffered output (نمایش آنی لاگ‌ها)
   currentProcess = spawn('python3', ['-u', PYTHON_SCRIPT_PATH]);
 
   currentProcess.stdout.on('data', (data) => {
@@ -117,28 +137,23 @@ app.post('/api/update', requireAuth, (req, res) => {
     lastUpdateLog = (lastUpdateLog + chunk).slice(-5000); 
   });
 
-  // اصلاح مهم: تشخیص نوار پیشرفت از خطای واقعی
   currentProcess.stderr.on('data', (data) => {
     const text = data.toString();
     if (text.includes('%') || text.includes('it/s')) {
-        // این فقط نوار پیشرفت است، خطا نیست
         lastUpdateLog += `\n[PROGRESS]: ${text}`; 
     } else {
-        // خطای واقعی
         lastUpdateLog += `\n[ERROR]: ${text}`;
     }
-    // محدود کردن حجم لاگ
     lastUpdateLog = lastUpdateLog.slice(-5000);
   });
 
   currentProcess.on('close', async (code) => {
     console.log(`Script finished: ${code}`);
     currentProcess = null;
-    isUpdating = false; // سریع آزاد کن
+    isUpdating = false;
 
     if (code === 0) {
         lastUpdateLog += `\n✅ دریافت دیتا تمام شد.`;
-        // سینک کردن جدول نمادها
         try {
             const count = await syncSymbolsTable();
             lastUpdateLog += `\n✨ لیست جستجو بروز شد (${count} نماد جدید).`;
@@ -157,6 +172,48 @@ app.post('/api/stop', requireAuth, (req, res) => {
     if (!isUpdating || !currentProcess) return res.status(400).json({ message: 'چیزی در حال اجرا نیست.' });
     currentProcess.kill('SIGINT');
     res.json({ message: 'دستور توقف ارسال شد.' });
+});
+
+// --- ASSET GROUP MANAGEMENT ---
+
+app.get('/api/assets', requireAuth, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const result = await client.query('SELECT symbol, type FROM asset_groups ORDER BY symbol');
+        res.json(result.rows);
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/api/assets', requireAuth, async (req, res) => {
+    const { symbol, type } = req.body;
+    if (!symbol || !type) return res.status(400).json({error: 'Invalid data'});
+    
+    const client = await pool.connect();
+    try {
+        await client.query('INSERT INTO asset_groups (symbol, type) VALUES ($1, $2) ON CONFLICT DO NOTHING', [symbol, type]);
+        res.json({ success: true });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.delete('/api/assets', requireAuth, async (req, res) => {
+    const { symbol, type } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('DELETE FROM asset_groups WHERE symbol = $1 AND type = $2', [symbol, type]);
+        res.json({ success: true });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    } finally {
+        client.release();
+    }
 });
 
 app.listen(PORT, '0.0.0.0', () => {

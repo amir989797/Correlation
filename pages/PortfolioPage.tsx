@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
+import { fetchStockHistory, searchSymbols, fetchAssetGroups } from '../services/tsetmcService';
 import { calculateFullHistorySMA, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson, toShamsi } from '../utils/mathUtils';
-import { SearchResult, TsetmcDataPoint, FetchStatus } from '../types';
+import { SearchResult, TsetmcDataPoint, FetchStatus, AssetGroup } from '../types';
 import { 
   Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, 
   TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, 
@@ -16,13 +16,6 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-
-// CONSTANTS
-const SYMBOL_AYAR = 'عیار';
-const SYMBOL_SEPAR = 'سپر';
-const SYMBOL_AGAS = 'آگاس';
-const SYMBOL_SHETAB = 'شتاب';
-const FIXED_ASSET_NAME = 'صندوق درآمد ثابت (اوراق)';
 
 type MarketState = 'Ceiling' | 'Floor' | 'Normal';
 
@@ -256,13 +249,40 @@ const ShamsiDatePicker = ({ value, onChange }: { value: { jy: number; jm: number
 export function PortfolioPage() {
   const [activeTab, setActiveTab] = useState<'suggested' | 'analysis'>('suggested');
   
+  // Asset Lists from API
+  const [assetGroups, setAssetGroups] = useState<AssetGroup[]>([]);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+
   // Suggested Tab State
+  // We now store the SELECTED symbol for each category
   const [suggestedConfig, setSuggestedConfig] = useState({
       includeStock: true,
       stockType: 'equity' as 'equity' | 'leveraged',
+      selectedStock: '',
       includeGold: true,
-      includeFixed: true
+      selectedGold: '',
+      includeFixed: true,
+      selectedFixed: ''
   });
+
+  // Load assets on mount
+  useEffect(() => {
+      setLoadingAssets(true);
+      fetchAssetGroups().then(data => {
+          setAssetGroups(data);
+          // Set initial defaults if available
+          const equity = data.find(d => d.type === 'equity');
+          const gold = data.find(d => d.type === 'gold');
+          const fixed = data.find(d => d.type === 'fixed');
+          
+          setSuggestedConfig(prev => ({
+              ...prev,
+              selectedStock: equity ? equity.symbol : '',
+              selectedGold: gold ? gold.symbol : '',
+              selectedFixed: fixed ? fixed.symbol : ''
+          }));
+      }).finally(() => setLoadingAssets(false));
+  }, []);
 
   // Analysis Tab State
   const [symbol, setSymbol] = useState<SearchResult | null>(null);
@@ -389,7 +409,6 @@ export function PortfolioPage() {
       const stockHistory = getDevHistory(stockData, stockMA100, stockIdx);
       
       const merged = alignDataByDate(stockData, goldData);
-      // const ratioSeries = merged.map(m => ({ date: m.date, close: m.price2 / m.price1 })); 
       const ratioSeries = merged.map(m => ({ date: m.date, close: m.price1 !== 0 ? m.price2 / m.price1 : 0 })); // Gold / Stock
       const ratioMA100 = calculateFullHistorySMA(ratioSeries, 100);
       const currentRatio = goldPoint.close / stockPoint.close;
@@ -424,6 +443,8 @@ export function PortfolioPage() {
       const goldState = goldLogic.state;
       const stockState = stockLogic.state;
 
+      const fixedName = suggestedConfig.selectedFixed || "درآمد ثابت";
+
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
           scenario = "فرصت نوسان‌گیری (واگرایی)";
           sid = "combat";
@@ -431,16 +452,16 @@ export function PortfolioPage() {
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isAnomaly) {
               alloc = cheapAsset === 'gold'
-                  ? [ { name: goldSymbol, value: 60, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ]
-                  : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 60, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
+                  ? [ { name: goldSymbol, value: 60, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 20, fill: '#3b82f6', type: 'fixed' } ]
+                  : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 60, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 20, fill: '#3b82f6', type: 'fixed' } ];
           } else {
               const ratioSupportsCheap = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
               if (ratioSupportsCheap) {
                    alloc = cheapAsset === 'gold'
-                      ? [ { name: goldSymbol, value: 60, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ]
-                      : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 60, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
+                      ? [ { name: goldSymbol, value: 60, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 20, fill: '#3b82f6', type: 'fixed' } ]
+                      : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 60, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 20, fill: '#3b82f6', type: 'fixed' } ];
               } else {
-                   alloc = [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ];
+                   alloc = [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 30, fill: '#3b82f6', type: 'fixed' } ];
               }
           }
       } 
@@ -449,16 +470,16 @@ export function PortfolioPage() {
           sid = "bubble";
           description = "هر دو دارایی گران شده اند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه";
           alloc = ratioTrendAbove
-              ? [ { name: goldSymbol, value: 30, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6', type: 'fixed' } ]
-              : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 30, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6', type: 'fixed' } ];
+              ? [ { name: goldSymbol, value: 30, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 50, fill: '#3b82f6', type: 'fixed' } ]
+              : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 30, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 50, fill: '#3b82f6', type: 'fixed' } ];
       }
       else if (goldState === 'Floor' && stockState === 'Floor') {
           scenario = "فرصت خرید طلایی";
           sid = "opportunity";
           description = "هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری";
           alloc = ratioTrendAbove 
-            ? [ { name: goldSymbol, value: 45, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 25, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ]
-            : [ { name: goldSymbol, value: 25, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 45, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ];
+            ? [ { name: goldSymbol, value: 45, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 25, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 30, fill: '#3b82f6', type: 'fixed' } ]
+            : [ { name: goldSymbol, value: 25, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 45, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 30, fill: '#3b82f6', type: 'fixed' } ];
       }
       else if (goldState === 'Ceiling' || stockState === 'Ceiling') {
           scenario = "ذخیره سود";
@@ -468,10 +489,10 @@ export function PortfolioPage() {
           const ratioConfirmsSell = highAsset === 'gold' ? !ratioTrendAbove : ratioTrendAbove; 
           if (ratioConfirmsSell) {
              alloc = highAsset === 'gold'
-                ? [ { name: goldSymbol, value: 15, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 50, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 35, fill: '#3b82f6', type: 'fixed' } ]
-                : [ { name: goldSymbol, value: 50, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 15, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 35, fill: '#3b82f6', type: 'fixed' } ];
+                ? [ { name: goldSymbol, value: 15, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 50, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 35, fill: '#3b82f6', type: 'fixed' } ]
+                : [ { name: goldSymbol, value: 50, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 15, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 35, fill: '#3b82f6', type: 'fixed' } ];
           } else {
-             alloc = [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ];
+             alloc = [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 30, fill: '#3b82f6', type: 'fixed' } ];
           }
       }
       else if (goldState === 'Floor' || stockState === 'Floor') {
@@ -481,16 +502,16 @@ export function PortfolioPage() {
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isHighCorrRisk) {
               alloc = cheapAsset === 'gold'
-                ? [ { name: goldSymbol, value: 40, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 30, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ]
-                : [ { name: goldSymbol, value: 30, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 40, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 30, fill: '#3b82f6', type: 'fixed' } ];
+                ? [ { name: goldSymbol, value: 40, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 30, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 30, fill: '#3b82f6', type: 'fixed' } ]
+                : [ { name: goldSymbol, value: 30, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 40, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 30, fill: '#3b82f6', type: 'fixed' } ];
           } else {
               const ratioSupportsBuy = cheapAsset === 'gold' ? ratioTrendAbove : !ratioTrendAbove;
               if (ratioSupportsBuy) {
                  alloc = cheapAsset === 'gold'
-                    ? [ { name: goldSymbol, value: 60, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ]
-                    : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 60, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
+                    ? [ { name: goldSymbol, value: 60, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 20, fill: '#3b82f6', type: 'fixed' } ]
+                    : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 60, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 20, fill: '#3b82f6', type: 'fixed' } ];
               } else {
-                 alloc = [ { name: goldSymbol, value: 40, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 40, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
+                 alloc = [ { name: goldSymbol, value: 40, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 40, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 20, fill: '#3b82f6', type: 'fixed' } ];
               }
           }
       }
@@ -499,15 +520,15 @@ export function PortfolioPage() {
           sid = "peace";
           description = "بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.";
           if (isHighCorrRisk) {
-              alloc = [ { name: goldSymbol, value: 25, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 25, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 50, fill: '#3b82f6', type: 'fixed' } ];
+              alloc = [ { name: goldSymbol, value: 25, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 25, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 50, fill: '#3b82f6', type: 'fixed' } ];
           } else if (isSafeCorr) {
               alloc = ratioTrendAbove
-                 ? [ { name: goldSymbol, value: 55, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 10, fill: '#3b82f6', type: 'fixed' } ]
-                 : [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 55, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 10, fill: '#3b82f6', type: 'fixed' } ];
+                 ? [ { name: goldSymbol, value: 55, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 10, fill: '#3b82f6', type: 'fixed' } ]
+                 : [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 55, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 10, fill: '#3b82f6', type: 'fixed' } ];
           } else {
               alloc = ratioTrendAbove
-                 ? [ { name: goldSymbol, value: 45, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ]
-                 : [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 45, fill: '#10b981', type: 'stock' }, { name: FIXED_ASSET_NAME, value: 20, fill: '#3b82f6', type: 'fixed' } ];
+                 ? [ { name: goldSymbol, value: 45, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 35, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 20, fill: '#3b82f6', type: 'fixed' } ]
+                 : [ { name: goldSymbol, value: 35, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 45, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 20, fill: '#3b82f6', type: 'fixed' } ];
           }
       }
 
@@ -522,13 +543,17 @@ export function PortfolioPage() {
          return;
      }
 
+     if (suggestedConfig.includeStock && !suggestedConfig.selectedStock) return setError("لطفا نماد سهامی/اهرمی را انتخاب کنید.");
+     if (suggestedConfig.includeGold && !suggestedConfig.selectedGold) return setError("لطفا نماد طلا را انتخاب کنید.");
+     if (suggestedConfig.includeFixed && !suggestedConfig.selectedFixed) return setError("لطفا نماد درآمد ثابت را انتخاب کنید.");
+
      setStatus(FetchStatus.LOADING);
      setError(null);
 
      try {
-         // Determine symbols
-         const stockSym = suggestedConfig.stockType === 'leveraged' ? SYMBOL_SHETAB : SYMBOL_AGAS;
-         const goldSym = SYMBOL_AYAR;
+         // Determine symbols from selection
+         const stockSym = suggestedConfig.selectedStock;
+         const goldSym = suggestedConfig.selectedGold;
 
          // Run Core Logic (Using current date)
          const { metrics, baseStrategy } = await calculateStrategyLogic(stockSym, goldSym, null);
@@ -536,11 +561,10 @@ export function PortfolioPage() {
          // Set Metrics
          setMarketMetrics(metrics);
 
-         // Normalize Allocations
+         // Normalize Allocations based on selections
          let newAlloc = [];
          let totalWeight = 0;
 
-         // Filter based on user selection
          for (const item of baseStrategy.allocation) {
              if (item.type === 'stock' && suggestedConfig.includeStock) {
                  newAlloc.push(item);
@@ -551,8 +575,7 @@ export function PortfolioPage() {
                  totalWeight += item.value;
              }
              else if (item.type === 'fixed' && suggestedConfig.includeFixed) {
-                 // Rename fixed income symbol to generic name if needed or keep standard
-                 newAlloc.push({ ...item, name: SYMBOL_SEPAR });
+                 newAlloc.push({ ...item, name: suggestedConfig.selectedFixed });
                  totalWeight += item.value;
              }
          }
@@ -563,7 +586,6 @@ export function PortfolioPage() {
                  ...item,
                  value: Math.round((item.value / totalWeight) * 100)
              }));
-             // Fix rounding error to force exactly 100 if needed (simple approach: add diff to largest)
              const currentSum = newAlloc.reduce((a,b) => a + b.value, 0);
              if (currentSum !== 100 && newAlloc.length > 0) {
                  newAlloc[0].value += (100 - currentSum);
@@ -584,6 +606,11 @@ export function PortfolioPage() {
 
   const handleRunAnalysis = async () => {
       if (!symbol) return setError('لطفا نماد را انتخاب کنید.');
+      
+      // Need a gold symbol to compare against for analysis mode too. 
+      // We'll use the selected gold fund if available, or fall back to a default if list is empty.
+      const defaultGold = assetGroups.find(g => g.type === 'gold')?.symbol || 'عیار';
+
       setStatus(FetchStatus.LOADING);
       setError(null);
 
@@ -593,7 +620,7 @@ export function PortfolioPage() {
             return `${gy}${gm < 10 ? '0'+gm : gm}${gd < 10 ? '0'+gd : gd}`;
         })();
 
-        const { metrics, baseStrategy } = await calculateStrategyLogic(symbol.symbol, SYMBOL_AYAR, targetDateStr);
+        const { metrics, baseStrategy } = await calculateStrategyLogic(symbol.symbol, defaultGold, targetDateStr);
         setMarketMetrics(metrics);
         setStrategy(baseStrategy);
         setStatus(FetchStatus.SUCCESS);
@@ -603,6 +630,13 @@ export function PortfolioPage() {
         setStatus(FetchStatus.ERROR);
       }
   };
+
+  // Helper to filter assets for dropdowns
+  const getAssetsByType = (type: string) => assetGroups.filter(g => g.type === type);
+  // For stocks, we combine based on the dropdown filter
+  const stockAssets = suggestedConfig.stockType === 'equity' 
+      ? getAssetsByType('equity') 
+      : getAssetsByType('leveraged');
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">
@@ -635,56 +669,99 @@ export function PortfolioPage() {
               {activeTab === 'suggested' && (
                   <div className="space-y-6 animate-fade-in">
                      <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-                        <h4 className="text-white font-bold mb-4 text-sm flex items-center gap-2"><Briefcase className="w-4 h-4 text-amber-400"/> کلاس‌های دارایی (حداقل ۲ مورد)</h4>
+                        <h4 className="text-white font-bold mb-4 text-sm flex items-center gap-2"><Briefcase className="w-4 h-4 text-amber-400"/> کلاس‌های دارایی</h4>
+                        
+                        {loadingAssets && <div className="text-center text-xs text-slate-500 mb-2">در حال بارگذاری لیست صندوق‌ها...</div>}
+
                         <div className="space-y-4">
                            
-                           {/* Stocks Checkbox + Dropdown */}
-                           <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <label className="flex items-center gap-3 cursor-pointer">
+                           {/* Stocks Row */}
+                           <div className="flex flex-col md:flex-row gap-4 p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
+                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px]">
                                    <input 
                                      type="checkbox" 
                                      checked={suggestedConfig.includeStock} 
                                      onChange={(e) => setSuggestedConfig(prev => ({...prev, includeStock: e.target.checked}))}
                                      className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-cyan-500 focus:ring-offset-slate-800"
                                    />
-                                   <span className="text-white font-medium">سهام (صندوق)</span>
+                                   <span className="text-white font-medium">بازار سهام</span>
                                </label>
-                               <select 
-                                 disabled={!suggestedConfig.includeStock}
-                                 value={suggestedConfig.stockType}
-                                 onChange={(e) => setSuggestedConfig(prev => ({...prev, stockType: e.target.value as any}))}
-                                 className="bg-slate-900 border border-slate-600 text-white text-sm rounded-lg p-2.5 outline-none focus:border-cyan-500 disabled:opacity-50"
-                               >
-                                   <option value="equity">صندوق سهامی (ریسک پایین - {SYMBOL_AGAS})</option>
-                                   <option value="leveraged">صندوق اهرمی (ریسک بالا - {SYMBOL_SHETAB})</option>
-                               </select>
-                           </div>
-
-                           {/* Gold Checkbox */}
-                           <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <input 
-                                 type="checkbox" 
-                                 checked={suggestedConfig.includeGold} 
-                                 onChange={(e) => setSuggestedConfig(prev => ({...prev, includeGold: e.target.checked}))}
-                                 className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-amber-500 focus:ring-offset-slate-800"
-                               />
-                               <div className="flex flex-col">
-                                  <span className="text-white font-medium">صندوق طلا</span>
-                                  <span className="text-[10px] text-slate-500">نماد مبنا: {SYMBOL_AYAR}</span>
+                               <div className="flex-1 flex gap-2">
+                                   <select 
+                                     disabled={!suggestedConfig.includeStock}
+                                     value={suggestedConfig.stockType}
+                                     onChange={(e) => {
+                                         const newType = e.target.value as any;
+                                         // Auto select first of new type
+                                         const first = assetGroups.find(g => g.type === newType);
+                                         setSuggestedConfig(prev => ({
+                                             ...prev, 
+                                             stockType: newType,
+                                             selectedStock: first ? first.symbol : ''
+                                         }));
+                                     }}
+                                     className="bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-cyan-500 disabled:opacity-50 w-32"
+                                   >
+                                       <option value="equity">سهامی</option>
+                                       <option value="leveraged">اهرمی</option>
+                                   </select>
+                                   <select
+                                     disabled={!suggestedConfig.includeStock}
+                                     value={suggestedConfig.selectedStock}
+                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedStock: e.target.value}))}
+                                     className="flex-1 bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-cyan-500 disabled:opacity-50"
+                                   >
+                                       {stockAssets.length === 0 && <option value="">لیست خالی است</option>}
+                                       {stockAssets.map(a => <option key={a.symbol} value={a.symbol}>{a.symbol}</option>)}
+                                   </select>
                                </div>
                            </div>
 
-                           {/* Fixed Income Checkbox */}
-                           <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <input 
-                                 type="checkbox" 
-                                 checked={suggestedConfig.includeFixed} 
-                                 onChange={(e) => setSuggestedConfig(prev => ({...prev, includeFixed: e.target.checked}))}
-                                 className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-blue-500 focus:ring-offset-slate-800"
-                               />
-                               <div className="flex flex-col">
-                                  <span className="text-white font-medium">صندوق درآمد ثابت</span>
-                                  <span className="text-[10px] text-slate-500">نماد مبنا: {SYMBOL_SEPAR}</span>
+                           {/* Gold Row */}
+                           <div className="flex flex-col md:flex-row gap-4 p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
+                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px]">
+                                   <input 
+                                     type="checkbox" 
+                                     checked={suggestedConfig.includeGold} 
+                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, includeGold: e.target.checked}))}
+                                     className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-amber-500 focus:ring-offset-slate-800"
+                                   />
+                                   <span className="text-white font-medium">صندوق طلا</span>
+                               </label>
+                               <div className="flex-1">
+                                   <select
+                                     disabled={!suggestedConfig.includeGold}
+                                     value={suggestedConfig.selectedGold}
+                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedGold: e.target.value}))}
+                                     className="w-full bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-amber-500 disabled:opacity-50"
+                                   >
+                                       {getAssetsByType('gold').length === 0 && <option value="">لیست خالی است</option>}
+                                       {getAssetsByType('gold').map(a => <option key={a.symbol} value={a.symbol}>{a.symbol}</option>)}
+                                   </select>
+                               </div>
+                           </div>
+
+                           {/* Fixed Income Row */}
+                           <div className="flex flex-col md:flex-row gap-4 p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
+                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px]">
+                                   <input 
+                                     type="checkbox" 
+                                     checked={suggestedConfig.includeFixed} 
+                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, includeFixed: e.target.checked}))}
+                                     className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-blue-500 focus:ring-offset-slate-800"
+                                   />
+                                   <span className="text-white font-medium">درآمد ثابت</span>
+                               </label>
+                               <div className="flex-1">
+                                   <select
+                                     disabled={!suggestedConfig.includeFixed}
+                                     value={suggestedConfig.selectedFixed}
+                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedFixed: e.target.value}))}
+                                     className="w-full bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-blue-500 disabled:opacity-50"
+                                   >
+                                       {getAssetsByType('fixed').length === 0 && <option value="">لیست خالی است</option>}
+                                       {getAssetsByType('fixed').map(a => <option key={a.symbol} value={a.symbol}>{a.symbol}</option>)}
+                                   </select>
                                </div>
                            </div>
 
@@ -743,7 +820,7 @@ export function PortfolioPage() {
                             <div className="flex justify-between items-center mb-1">
                                 <div className="flex items-center gap-2">
                                     <Zap className="w-4 h-4 text-orange-500" />
-                                    <span className="text-[10px] font-black text-white">ریسک همبستگی (Diversification)</span>
+                                    <span className="text-[10px] font-black text-white">ریسک همبستگی</span>
                                 </div>
                                 <span className="text-[10px] font-mono text-slate-400" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
                             </div>

@@ -1,5 +1,4 @@
 
-
 export interface TsetmcDataPoint {
   date: string; // YYYYMMDD
   close: number;
@@ -35,6 +34,11 @@ export interface ChartDataPoint {
 export interface SearchResult {
   symbol: string;
   name: string;
+}
+
+export interface AssetGroup {
+  symbol: string;
+  type: 'equity' | 'leveraged' | 'gold' | 'fixed';
 }
 
 export enum FetchStatus {

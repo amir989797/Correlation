@@ -44,7 +44,6 @@ app.get('/', (req, res) => {
 
 /**
  * Search Endpoint
- * OPTIMIZED: Now searches in the 'symbols' table instead of 'daily_prices'.
  */
 app.get('/api/search', async (req, res) => {
   const { q } = req.query;
@@ -53,8 +52,6 @@ app.get('/api/search', async (req, res) => {
   let client;
   try {
     client = await pool.connect();
-    
-    // Fast query on the dedicated symbols table
     const query = `
       SELECT symbol, name 
       FROM symbols 
@@ -63,14 +60,9 @@ app.get('/api/search', async (req, res) => {
     `;
     const values = [`%${q}%`];
     const result = await client.query(query, values);
-    
-    // Fallback: If symbols table is empty (migration not run), this returns empty array.
-    // The user should run 'npm run init-db'.
-    
     res.json(result.rows);
   } catch (err) {
     console.error('❌ Search Error:', err);
-    // Silent fail for search to avoid crashing frontend logic, just return empty
     res.status(500).json([]); 
   } finally {
     if (client) client.release();
@@ -78,8 +70,33 @@ app.get('/api/search', async (req, res) => {
 });
 
 /**
+ * Asset Groups Endpoint (Public)
+ * Returns the curated lists of funds/assets
+ */
+app.get('/api/assets', async (req, res) => {
+  let client;
+  try {
+    client = await pool.connect();
+    // Check if table exists first to avoid crash if migration hasn't run
+    const result = await client.query(`
+        SELECT symbol, type FROM asset_groups ORDER BY symbol
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    // If table doesn't exist yet, return empty list gracefully
+    if (err.code === '42P01') { 
+        res.json([]);
+    } else {
+        console.error('❌ Assets Error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+  } finally {
+    if (client) client.release();
+  }
+});
+
+/**
  * History Endpoint
- * Fetches history from daily_prices
  */
 app.get('/api/history/:symbol', async (req, res) => {
   const { symbol } = req.params;
@@ -89,8 +106,6 @@ app.get('/api/history/:symbol', async (req, res) => {
   try {
     client = await pool.connect();
     
-    // We format date as 'YYYYMMDD' (no dashes) because the frontend utils/mathUtils.ts
-    // parses dates using strict indices (slice(0,4), slice(4,6), slice(6,8)).
     const query = `
       SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
       FROM daily_prices 
