@@ -1,6 +1,5 @@
 
 import { TsetmcDataPoint, MergedDataPoint, ChartDataPoint } from '../types';
-import { toGregorian } from 'jalaali-js';
 
 /**
  * Parses raw CSV content from TSETMC.
@@ -53,19 +52,15 @@ export const parseTsetmcCsv = (csvText: string): { data: TsetmcDataPoint[], name
  * Aligns two datasets by date (Inner Join)
  */
 export const alignDataByDate = (data1: TsetmcDataPoint[], data2: TsetmcDataPoint[]): MergedDataPoint[] => {
-  // Clean dates (remove dashes if present from DB) for robust comparison
-  const cleanDate = (d: string) => d.replace(/-/g, '').substring(0, 8);
-  
-  const map2 = new Map(data2.map(d => [cleanDate(d.date), d.close]));
+  const map2 = new Map(data2.map(d => [d.date, d.close]));
   const merged: MergedDataPoint[] = [];
 
   for (const d1 of data1) {
-    const d1Clean = cleanDate(d1.date);
-    if (map2.has(d1Clean)) {
+    if (map2.has(d1.date)) {
       merged.push({
-        date: d1Clean, // Use clean YYYYMMDD
+        date: d1.date,
         price1: d1.close,
-        price2: map2.get(d1Clean)!
+        price2: map2.get(d1.date)!
       });
     }
   }
@@ -99,13 +94,9 @@ export const calculatePearson = (x: number[], y: number[]): number => {
  */
 export const toShamsi = (gregorianDate: string): string => {
   try {
-    // Handle both YYYY-MM-DD and YYYYMMDD
-    const clean = gregorianDate.replace(/[^0-9]/g, '');
-    if (clean.length !== 8) return gregorianDate;
-
-    const year = parseInt(clean.substring(0, 4));
-    const month = parseInt(clean.substring(4, 6)) - 1;
-    const day = parseInt(clean.substring(6, 8));
+    const year = parseInt(gregorianDate.substring(0, 4));
+    const month = parseInt(gregorianDate.substring(4, 6)) - 1;
+    const day = parseInt(gregorianDate.substring(6, 8));
     const date = new Date(year, month, day);
     
     // Use Intl to convert to Persian Calendar
@@ -127,15 +118,13 @@ export const toShamsi = (gregorianDate: string): string => {
 export const calculateFullHistorySMA = (data: TsetmcDataPoint[], window: number): Map<string, number> => {
     const map = new Map<string, number>();
     const prices = data.map(d => d.close);
-    // Clean keys for consistency
-    const cleanDate = (d: string) => d.replace(/-/g, '').substring(0, 8);
     
     for (let i = window - 1; i < data.length; i++) {
         let sum = 0;
         for (let j = 0; j < window; j++) {
             sum += prices[i - j];
         }
-        map.set(cleanDate(data[i].date), sum / window);
+        map.set(data[i].date, sum / window);
     }
     return map;
 };
@@ -149,7 +138,7 @@ export const generateAnalysisData = (
   d2: TsetmcDataPoint[], 
   windowSizes: number[]
 ): ChartDataPoint[] => {
-  // 1. Calculate MAs on full history
+  // 1. Calculate MAs on full history to avoid gaps affecting the average
   const ma100_1 = calculateFullHistorySMA(d1, 100);
   const ma200_1 = calculateFullHistorySMA(d1, 200);
   const ma100_2 = calculateFullHistorySMA(d2, 100);
@@ -164,18 +153,13 @@ export const generateAnalysisData = (
 
   for (let i = 0; i < merged.length; i++) {
     const currentDay = merged[i];
-    const rawDate = currentDay.date; // This is already cleaned YYYYMMDD from alignDataByDate
+    const rawDate = currentDay.date;
 
     // Helper for timestamp
-    let timestamp = 0;
-    if (rawDate.length === 8) {
-        const gy = parseInt(rawDate.slice(0, 4));
-        const gm = parseInt(rawDate.slice(4, 6)) - 1;
-        const gd = parseInt(rawDate.slice(6, 8));
-        timestamp = new Date(gy, gm, gd).getTime();
-    } else {
-        timestamp = i;
-    }
+    const gy = parseInt(rawDate.slice(0, 4));
+    const gm = parseInt(rawDate.slice(4, 6)) - 1;
+    const gd = parseInt(rawDate.slice(6, 8));
+    const timestamp = new Date(gy, gm, gd).getTime();
     
     // Get Pre-calculated MAs
     const m1_100 = ma100_1.get(rawDate) ?? null;
@@ -183,7 +167,8 @@ export const generateAnalysisData = (
     const m2_100 = ma100_2.get(rawDate) ?? null;
     const m2_200 = ma200_2.get(rawDate) ?? null;
 
-    // Calculate Distance %
+    // Calculate Distance %: ((Price - MA) / MA) * 100
+    // This will be negative if Price < MA, positive if Price > MA.
     const dist_ma100_1 = m1_100 ? ((currentDay.price1 - m1_100) / m1_100) * 100 : null;
     const dist_ma100_2 = m2_100 ? ((currentDay.price2 - m2_100) / m2_100) * 100 : null;
 
@@ -232,6 +217,7 @@ export const generateRatioAnalysisData = (
     if (merged.length === 0) return [];
   
     // 2. Create Ratio Series for MA calculation
+    // We treat the "ratio" as a "close price" to reuse calculateFullHistorySMA
     const ratioSeries: TsetmcDataPoint[] = merged.map(m => ({
       date: m.date,
       close: m.price2 !== 0 ? m.price1 / m.price2 : 0
@@ -249,23 +235,19 @@ export const generateRatioAnalysisData = (
   
     for (let i = 0; i < merged.length; i++) {
       const m = merged[i];
-      const rawDate = m.date; // Already cleaned YYYYMMDD
+      const rawDate = m.date;
       const ratio = ratioSeries[i].close;
   
       // Timestamp
-      let timestamp = 0;
-      if (rawDate.length === 8) {
-          const gy = parseInt(rawDate.slice(0, 4));
-          const gm = parseInt(rawDate.slice(4, 6)) - 1;
-          const gd = parseInt(rawDate.slice(6, 8));
-          timestamp = new Date(gy, gm, gd).getTime();
-      } else {
-          timestamp = i;
-      }
+      const gy = parseInt(rawDate.slice(0, 4));
+      const gm = parseInt(rawDate.slice(4, 6)) - 1;
+      const gd = parseInt(rawDate.slice(6, 8));
+      const timestamp = new Date(gy, gm, gd).getTime();
   
       const m100 = ma100_ratio.get(rawDate) ?? null;
       const m200 = ma200_ratio.get(rawDate) ?? null;
   
+      // Distance of Ratio from its MA100
       const dist_ma100 = m100 ? ((ratio - m100) / m100) * 100 : null;
   
       const point: ChartDataPoint = {
@@ -277,13 +259,15 @@ export const generateRatioAnalysisData = (
           ma100_ratio: m100,
           ma200_ratio: m200,
           dist_ma100_ratio: dist_ma100 !== null ? parseFloat(dist_ma100.toFixed(2)) : null,
+          
+          // Required by interface but unused in ratio view
           ma100_price1: null,
           ma100_price2: null,
           ma200_price1: null,
           ma200_price2: null
       };
   
-      // Calculate Correlations
+      // Calculate Correlations between the two symbols
       windowSizes.forEach(w => {
           if (i >= w - 1) {
               const slice1 = mergedPrices1.slice(i - w + 1, i + 1);
@@ -303,10 +287,65 @@ export const generateRatioAnalysisData = (
 
 /**
  * Converts Jalali date (Year, Month, Day) to Gregorian Date object parameters { gy, gm, gd }
- * Uses jalaali-js library for accuracy.
+ * Using a lightweight algorithm.
+ * j_y: Jalali Year (e.g. 1402)
+ * j_m: Jalali Month (1-12)
+ * j_d: Jalali Day (1-31)
  */
 export const jalaliToGregorian = (j_y: number, j_m: number, j_d: number): { gy: number, gm: number, gd: number } => {
-    return toGregorian(j_y, j_m, j_d);
+  j_y = parseInt(String(j_y));
+  j_m = parseInt(String(j_m));
+  j_d = parseInt(String(j_d));
+  
+  var jy = j_y - 979;
+  var jm = j_m - 1;
+  var jd = j_d - 1;
+
+  var j_day_no = 365 * jy + Math.floor(jy / 33) * 8 + Math.floor((jy % 33 + 3) / 4);
+  for (var i = 0; i < jm; ++i) j_day_no += (i < 6) ? 31 : 30;
+  j_day_no += jd;
+
+  var g_day_no = j_day_no + 79;
+
+  var gy = 1600 + 400 * Math.floor(g_day_no / 146097);
+  g_day_no = g_day_no % 146097;
+
+  var leap = true;
+  if (g_day_no >= 36525) {
+    g_day_no--;
+    gy += 100 * Math.floor(g_day_no / 36524);
+    g_day_no = g_day_no % 36524;
+
+    if (g_day_no >= 365) g_day_no++;
+    else leap = false;
+  }
+
+  gy += 4 * Math.floor(g_day_no / 1461);
+  g_day_no %= 1461;
+
+  if (g_day_no >= 366) {
+    leap = false;
+
+    g_day_no--;
+    gy += Math.floor(g_day_no / 365);
+    g_day_no = g_day_no % 365;
+  }
+
+  var gm: number;
+  var gd: number;
+
+  var g_days_in_month = [31, (leap ? 29 : 28), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  for (var i = 0; i < 12; ++i) {
+      if (g_day_no < g_days_in_month[i]) {
+          gm = i + 1;
+          gd = g_day_no + 1;
+          break;
+      }
+      g_day_no -= g_days_in_month[i];
+  }
+
+  return { gy: gy, gm: gm!, gd: gd! };
 }
 
 /**

@@ -1,11 +1,8 @@
 
 import { TsetmcDataPoint, SearchResult } from '../types';
 
-// Updated API URL to be dynamic. 
-// It uses the current window hostname but forces port 8000 where the Express API lives.
-const API_BASE_URL = typeof window !== 'undefined' 
-  ? `${window.location.protocol}//${window.location.hostname}:8000/api`
-  : 'http://localhost:8000/api';
+// Updated API URL to point to the server IP
+const API_BASE_URL = 'http://109.94.164.70:8000/api';
 
 /**
  * Searches for symbols via the backend API.
@@ -54,21 +51,10 @@ export const fetchStockHistory = async (symbol: string): Promise<{ data: TsetmcD
         throw new Error('داده‌ای برای این نماد یافت نشد.');
     }
 
-    const data: TsetmcDataPoint[] = json.map((item: any) => {
-      // Normalize Date: Postgres might return "2024-12-23" or ISO string.
-      // We need strict "YYYYMMDD" format for frontend mathUtils.
-      let dateStr = String(item.date);
-      if (dateStr.includes('T')) {
-          dateStr = dateStr.split('T')[0];
-      }
-      // Remove dashes to ensure YYYYMMDD format
-      dateStr = dateStr.replace(/-/g, '');
-
-      return {
-        date: dateStr,
-        close: item.close
-      };
-    });
+    const data: TsetmcDataPoint[] = json.map((item: any) => ({
+      date: item.date,
+      close: item.close
+    }));
 
     return {
       data,
@@ -78,7 +64,7 @@ export const fetchStockHistory = async (symbol: string): Promise<{ data: TsetmcD
   } catch (e: any) {
     console.error("Fetch History Failed:", e);
     if (e.message.includes('Failed to fetch')) {
-        throw new Error('عدم دسترسی به سرور. لطفا بررسی کنید که بک‌اند Node.js روی پورت 8000 اجرا باشد.');
+        throw new Error('عدم دسترسی به سرور. لطفا بررسی کنید که بک‌اند Node.js اجرا باشد.');
     }
     throw new Error(e.message || 'خطا در دریافت اطلاعات.');
   }
