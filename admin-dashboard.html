@@ -251,6 +251,7 @@
                 
                 if (res.ok) {
                     alert(data.message);
+                    fetchAssets(); // Refresh asset list to see new returns
                 } else {
                     alert('خطا: ' + data.message);
                 }
@@ -378,7 +379,7 @@
                 const res = await fetch(`${API_URL}/assets`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const data = await res.json(); // Array of {symbol, type, url, is_default}
+                const data = await res.json(); // Array of {symbol, type, url, is_default, last_return}
                 
                 const container = document.getElementById('asset-containers');
                 container.innerHTML = '';
@@ -416,17 +417,27 @@
 
                         <div class="flex-1 overflow-y-auto scrollbar-thin space-y-1 pr-1 relative z-0" id="list-${cat.key}">
                             ${items.length === 0 ? '<p class="text-xs text-slate-600 text-center mt-4">لیست خالی است</p>' : ''}
-                            ${items.map(item => `
+                            ${items.map(item => {
+                                const ret = item.last_return;
+                                const hasReturn = ret !== undefined && ret !== null;
+                                const retColor = hasReturn ? (ret >= 0 ? 'text-emerald-400' : 'text-red-400') : '';
+                                const retBg = hasReturn ? (ret >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10') : '';
+                                const retText = hasReturn ? (ret > 0 ? '+' + ret.toFixed(1) + '%' : ret.toFixed(1) + '%') : '';
+
+                                return `
                                 <div class="flex justify-between items-center bg-slate-800 p-2 rounded border border-slate-700/50 group hover:border-slate-500 transition">
-                                    <div class="flex items-center gap-2 overflow-hidden">
-                                        <div class="flex flex-col overflow-hidden">
-                                           <span class="text-xs text-slate-200 font-bold">${item.symbol}</span>
-                                           ${item.url ? `<a href="${item.url}" target="_blank" class="text-[9px] text-blue-400 hover:text-blue-300 truncate max-w-[80px]" title="${item.url}">${new URL(item.url).hostname.replace('www.','')}</a>` : ''}
+                                    <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                        <div class="flex flex-col overflow-hidden w-full">
+                                           <div class="flex items-center justify-between pl-2">
+                                               <span class="text-xs text-slate-200 font-bold">${item.symbol}</span>
+                                               ${hasReturn ? `<span class="text-[9px] px-1.5 py-0.5 rounded ${retColor} ${retBg} font-mono" dir="ltr">${retText}</span>` : ''}
+                                           </div>
+                                           ${item.url ? `<a href="${item.url}" target="_blank" class="text-[9px] text-blue-400 hover:text-blue-300 truncate max-w-full block mt-0.5 opacity-70 hover:opacity-100" title="${item.url}">${new URL(item.url).hostname.replace('www.','')}</a>` : ''}
                                         </div>
                                     </div>
-                                    <button onclick="removeAsset('${item.symbol}', '${cat.key}')" class="text-slate-500 hover:text-red-400 p-1"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                                    <button onclick="removeAsset('${item.symbol}', '${cat.key}')" class="text-slate-500 hover:text-red-400 p-1 shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                                 </div>
-                            `).join('')}
+                            `}).join('')}
                         </div>
                     `;
                     container.appendChild(col);
