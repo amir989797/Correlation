@@ -45,10 +45,12 @@ export const fetchAssetGroups = async (): Promise<AssetGroup[]> => {
 
 /**
  * Fetches historical data for a given Symbol from the backend API.
+ * @param symbol The ticker symbol
+ * @param limit Optional limit for rows (default 10000)
  */
-export const fetchStockHistory = async (symbol: string): Promise<{ data: TsetmcDataPoint[], name: string }> => {
+export const fetchStockHistory = async (symbol: string, limit: number = 10000): Promise<{ data: TsetmcDataPoint[], name: string }> => {
   try {
-    const url = `${API_BASE_URL}/history/${encodeURIComponent(symbol)}?limit=10000`;
+    const url = `${API_BASE_URL}/history/${encodeURIComponent(symbol)}?limit=${limit}`;
     const response = await fetch(url);
     
     if (!response.ok) {

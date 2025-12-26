@@ -262,6 +262,7 @@ export function PortfolioPage() {
   // Asset Lists from API
   const [assetGroups, setAssetGroups] = useState<AssetGroup[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
+  const [assetReturns, setAssetReturns] = useState<Record<string, number>>({});
 
   // Suggested Tab State
   // We now store the SELECTED symbol for each category
@@ -275,26 +276,65 @@ export function PortfolioPage() {
       selectedFixed: ''
   });
 
-  // Load assets on mount
+  // Calculate 1 Year Return (approx)
+  const calcReturn = (data: TsetmcDataPoint[]) => {
+      if (data.length < 2) return 0;
+      const current = data[data.length - 1].close;
+      // Approximate 240 trading days or look back 365 days
+      // Since data is just date/close, let's take index ~240 back if available, or just the first one if history is short but > 1 year
+      // Or simply find the date 1 year ago.
+      // For simplicity/speed in this context, let's take the price ~240 trading days ago (approx 1 year).
+      const index = Math.max(0, data.length - 240); 
+      const old = data[index].close;
+      return ((current - old) / old) * 100;
+  };
+
+  // Load assets and calculate returns on mount
   useEffect(() => {
-      setLoadingAssets(true);
-      fetchAssetGroups().then(data => {
-          setAssetGroups(data);
-          
-          // Helper to find default or first
-          const getDefault = (type: string) => {
-              const assets = data.filter(d => d.type === type);
-              const def = assets.find(d => d.is_default);
-              return def ? def.symbol : (assets.length > 0 ? assets[0].symbol : '');
-          };
-          
-          setSuggestedConfig(prev => ({
-              ...prev,
-              selectedStock: getDefault('equity'),
-              selectedGold: getDefault('gold'),
-              selectedFixed: getDefault('fixed')
-          }));
-      }).finally(() => setLoadingAssets(false));
+      const load = async () => {
+          setLoadingAssets(true);
+          try {
+              const data = await fetchAssetGroups();
+              setAssetGroups(data);
+              
+              // Parallel Fetch for returns (Optimized limit 400 days)
+              const returns: Record<string, number> = {};
+              await Promise.all(data.map(async (asset) => {
+                  try {
+                      // Fetch enough history for 1 year calculation
+                      const hist = await fetchStockHistory(asset.symbol, 400); 
+                      returns[asset.symbol] = calcReturn(hist.data);
+                  } catch (e) {
+                      console.warn(`Could not calc return for ${asset.symbol}`);
+                      returns[asset.symbol] = 0;
+                  }
+              }));
+              setAssetReturns(returns);
+
+              // Helper to find asset with MAX return
+              const getBestAsset = (type: string) => {
+                  const subset = data.filter(d => d.type === type);
+                  if (subset.length === 0) return '';
+                  
+                  // Sort by return descending
+                  subset.sort((a, b) => (returns[b.symbol] || 0) - (returns[a.symbol] || 0));
+                  return subset[0].symbol;
+              };
+              
+              setSuggestedConfig(prev => ({
+                  ...prev,
+                  selectedStock: getBestAsset('equity'), // Default to equity best
+                  selectedGold: getBestAsset('gold'),
+                  selectedFixed: getBestAsset('fixed')
+              }));
+
+          } catch (e) {
+              console.error("Init failed", e);
+          } finally {
+              setLoadingAssets(false);
+          }
+      };
+      load();
   }, []);
 
   // Analysis Tab State
@@ -657,6 +697,13 @@ export function PortfolioPage() {
     return asset?.url;
   };
 
+  const getReturnText = (symbol: string) => {
+      const val = assetReturns[symbol];
+      if (val === undefined) return '';
+      const sign = val > 0 ? '+' : '';
+      return `(${sign}${val.toFixed(1)}%)`;
+  };
+
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">
        
@@ -789,7 +836,12 @@ export function PortfolioPage() {
                            کلاس‌های دارایی <span className="text-slate-500 font-normal text-xs">(حداقل دو دارایی انتخاب کنید)</span>
                         </h4>
                         
-                        {loadingAssets && <div className="text-center text-xs text-slate-500 mb-2">در حال بارگذاری لیست صندوق‌ها...</div>}
+                        {loadingAssets && (
+                            <div className="flex flex-col items-center justify-center py-4 gap-2">
+                                <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
+                                <span className="text-xs text-slate-400">در حال دریافت بازدهی نمادها...</span>
+                            </div>
+                        )}
 
                         <div className="space-y-4">
                            
@@ -808,7 +860,10 @@ export function PortfolioPage() {
                                          {suggestedConfig.includeStock && <Check size={14} className="text-white" strokeWidth={4} />}
                                       </div>
                                    </div>
-                                   <span className={`font-bold transition-colors ${suggestedConfig.includeStock ? 'text-white' : 'text-slate-500'}`}>بازار سهام</span>
+                                   <div className="flex flex-col">
+                                       <span className={`font-bold transition-colors ${suggestedConfig.includeStock ? 'text-white' : 'text-slate-500'}`}>بازار سهام</span>
+                                       <span className="text-[9px] text-slate-500">صندوق های سهامی که ضریب الفای بالای ۱۵ و ارزش دارایی بیشتر از ۱۰۰ میلیارد تومان دارند.</span>
+                                   </div>
                                </label>
                                
                                <div className={`flex-1 flex flex-col sm:flex-row gap-3 w-full transition-opacity ${suggestedConfig.includeStock ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
@@ -819,9 +874,14 @@ export function PortfolioPage() {
                                          onClick={() => {
                                             if (!suggestedConfig.includeStock) return;
                                             const newType = 'equity';
+                                            // Find max return for new type
                                             const assets = assetGroups.filter(g => g.type === newType);
-                                            const def = assets.find(g => g.is_default);
-                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: def ? def.symbol : (assets[0]?.symbol || '') }));
+                                            let best = assets.length > 0 ? assets[0].symbol : '';
+                                            if (assets.length > 0) {
+                                                const sorted = [...assets].sort((a,b) => (assetReturns[b.symbol] || 0) - (assetReturns[a.symbol] || 0));
+                                                best = sorted[0].symbol;
+                                            }
+                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: best }));
                                          }}
                                          className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${suggestedConfig.stockType === 'equity' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
                                        >
@@ -832,8 +892,12 @@ export function PortfolioPage() {
                                             if (!suggestedConfig.includeStock) return;
                                             const newType = 'leveraged';
                                             const assets = assetGroups.filter(g => g.type === newType);
-                                            const def = assets.find(g => g.is_default);
-                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: def ? def.symbol : (assets[0]?.symbol || '') }));
+                                            let best = assets.length > 0 ? assets[0].symbol : '';
+                                            if (assets.length > 0) {
+                                                const sorted = [...assets].sort((a,b) => (assetReturns[b.symbol] || 0) - (assetReturns[a.symbol] || 0));
+                                                best = sorted[0].symbol;
+                                            }
+                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: best }));
                                          }}
                                          className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${suggestedConfig.stockType === 'leveraged' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
                                        >
@@ -852,7 +916,7 @@ export function PortfolioPage() {
                                            {stockAssets.length === 0 && <option value="">لیست خالی است</option>}
                                            {stockAssets.map(a => (
                                                <option key={a.symbol} value={a.symbol}>
-                                                   {a.symbol} {a.url ? ` - [${new URL(a.url).hostname.replace('www.','')}]` : ''}
+                                                   {a.symbol} {getReturnText(a.symbol)}
                                                </option>
                                            ))}
                                        </select>
@@ -886,7 +950,10 @@ export function PortfolioPage() {
                                          {suggestedConfig.includeGold && <Check size={14} className="text-white" strokeWidth={4} />}
                                       </div>
                                    </div>
-                                   <span className={`font-bold transition-colors ${suggestedConfig.includeGold ? 'text-white' : 'text-slate-500'}`}>صندوق طلا</span>
+                                   <div className="flex flex-col">
+                                      <span className={`font-bold transition-colors ${suggestedConfig.includeGold ? 'text-white' : 'text-slate-500'}`}>صندوق طلا</span>
+                                      <span className="text-[9px] text-slate-500">صندوق های طلایی که ارزش دارایی بالای ۱۰ همت دارند.</span>
+                                   </div>
                                </label>
                                <div className={`flex-1 w-full transition-opacity ${suggestedConfig.includeGold ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                                    <div className="flex gap-2">
@@ -899,7 +966,7 @@ export function PortfolioPage() {
                                            {getAssetsByType('gold').length === 0 && <option value="">لیست خالی است</option>}
                                            {getAssetsByType('gold').map(a => (
                                                <option key={a.symbol} value={a.symbol}>
-                                                    {a.symbol} {a.url ? ` - [${new URL(a.url).hostname.replace('www.','')}]` : ''}
+                                                    {a.symbol} {getReturnText(a.symbol)}
                                                </option>
                                            ))}
                                        </select>
@@ -932,7 +999,10 @@ export function PortfolioPage() {
                                          {suggestedConfig.includeFixed && <Check size={14} className="text-white" strokeWidth={4} />}
                                       </div>
                                    </div>
-                                   <span className={`font-bold transition-colors ${suggestedConfig.includeFixed ? 'text-white' : 'text-slate-500'}`}>درآمد ثابت</span>
+                                   <div className="flex flex-col">
+                                       <span className={`font-bold transition-colors ${suggestedConfig.includeFixed ? 'text-white' : 'text-slate-500'}`}>درآمد ثابت</span>
+                                       <span className="text-[9px] text-slate-500">صندوق های درامد ثابت بدون ریسک که ارزش دارایی بالای ۱۰ همت دارند.</span>
+                                   </div>
                                </label>
                                <div className={`flex-1 w-full transition-opacity ${suggestedConfig.includeFixed ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                                    <div className="flex gap-2">
@@ -945,7 +1015,7 @@ export function PortfolioPage() {
                                            {getAssetsByType('fixed').length === 0 && <option value="">لیست خالی است</option>}
                                            {getAssetsByType('fixed').map(a => (
                                                <option key={a.symbol} value={a.symbol}>
-                                                   {a.symbol} {a.url ? ` - [${new URL(a.url).hostname.replace('www.','')}]` : ''}
+                                                   {a.symbol} {getReturnText(a.symbol)}
                                                </option>
                                            ))}
                                        </select>

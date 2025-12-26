@@ -221,13 +221,14 @@ app.get('/api/assets', requireAuth, async (req, res) => {
 
 app.post('/api/assets', requireAuth, async (req, res) => {
     const { symbol, type, url } = req.body;
-    if (!symbol || !type) return res.status(400).json({error: 'Invalid data'});
+    if (!symbol || !type) return res.status(400).json({error: 'نماد و نوع الزامی است'});
+    if (!url) return res.status(400).json({error: 'آدرس سایت الزامی است'});
     
     const client = await pool.connect();
     try {
         await client.query(
             'INSERT INTO asset_groups (symbol, type, url) VALUES ($1, $2, $3) ON CONFLICT (symbol, type) DO UPDATE SET url = $3', 
-            [symbol, type, url || null]
+            [symbol, type, url]
         );
         res.json({ success: true });
     } catch(e) {
@@ -237,26 +238,7 @@ app.post('/api/assets', requireAuth, async (req, res) => {
     }
 });
 
-app.put('/api/assets/default', requireAuth, async (req, res) => {
-    const { symbol, type } = req.body;
-    if (!symbol || !type) return res.status(400).json({error: 'Invalid data'});
-    
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        // Reset all to false for this type
-        await client.query('UPDATE asset_groups SET is_default = FALSE WHERE type = $1', [type]);
-        // Set specific one to true
-        await client.query('UPDATE asset_groups SET is_default = TRUE WHERE symbol = $1 AND type = $2', [symbol, type]);
-        await client.query('COMMIT');
-        res.json({ success: true });
-    } catch(e) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ error: e.message });
-    } finally {
-        client.release();
-    }
-});
+// Removed PUT default endpoint as default is now calculated dynamically
 
 app.delete('/api/assets', requireAuth, async (req, res) => {
     const { symbol, type } = req.body;
