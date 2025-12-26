@@ -144,35 +144,31 @@ const calcReturn = (data) => {
 
 const calculateAllAssetReturns = async () => {
     console.log('🔄 Calculating 1-year returns for all assets...');
-    const client = await pool.connect();
+    let mainClient;
     try {
+        mainClient = await pool.connect();
         // 1. Get list of assets
-        const assetsRes = await client.query('SELECT symbol, type FROM asset_groups');
+        const assetsRes = await mainClient.query('SELECT symbol, type FROM asset_groups');
         const assets = assetsRes.rows;
-        let updatedCount = 0;
+        
+        // Release main client early to free up pool connection
+        mainClient.release();
+        mainClient = null;
 
-        for (const asset of assets) {
+        // 2. Parallel Processing Function
+        // Uses individual clients from pool for each parallel request. 
+        // PG Pool handles queuing automatically.
+        const processAsset = async (asset) => {
+            const client = await pool.connect();
             try {
-                // 2. Fetch history (limit 400 days ~ 1.5 years is enough for 1y calc)
-                const historyRes = await client.query(`
-                    SELECT to_char(date, 'YYYYMMDD') as date, close 
-                    FROM daily_prices 
-                    WHERE symbol = $1 
-                    ORDER BY date ASC
-                    LIMIT 500
-                `, [asset.symbol]); // Note: In Postgres LIMIT applies after ORDER BY, but to get LATEST 500 we usually sort DESC. 
-                                    // However, our data might be large. Let's optimize:
-                                    // We need the *latest* dates. 
-                                    // Correct approach: SELECT ... ORDER BY date DESC LIMIT 500, then reverse in JS.
-                
-                // Optimized Query
+                // Fetch only needed history (Limit 600)
                 const historyResOpt = await client.query(`
                     SELECT * FROM (
                         SELECT to_char(date, 'YYYYMMDD') as date, close 
                         FROM daily_prices 
                         WHERE symbol = $1 
                         ORDER BY date DESC
-                        LIMIT 500
+                        LIMIT 600
                     ) sub ORDER BY date ASC
                 `, [asset.symbol]);
 
@@ -180,22 +176,32 @@ const calculateAllAssetReturns = async () => {
                 
                 if (history.length > 0) {
                     const retVal = calcReturn(history);
-                    // 3. Update DB
                     await client.query(`
                         UPDATE asset_groups 
                         SET last_return = $1 
                         WHERE symbol = $2 AND type = $3
                     `, [retVal, asset.symbol, asset.type]);
-                    updatedCount++;
+                    return 1;
                 }
+                return 0;
             } catch (err) {
                 console.error(`Failed to calc return for ${asset.symbol}:`, err.message);
+                return 0;
+            } finally {
+                client.release();
             }
-        }
+        };
+
+        // Run all in parallel
+        const results = await Promise.all(assets.map(asset => processAsset(asset)));
+        const updatedCount = results.reduce((sum, val) => sum + val, 0);
+
         console.log(`✅ Returns calculated and saved for ${updatedCount} assets.`);
         return updatedCount;
-    } finally {
-        client.release();
+    } catch (e) {
+        console.error('Calculation Error:', e);
+        if (mainClient) mainClient.release();
+        throw e;
     }
 };
 

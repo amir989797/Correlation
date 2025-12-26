@@ -520,7 +520,16 @@ export function PortfolioPage() {
     goldSymbol: string, 
     targetDateStr: string | null
   ) => {
-      const [stockRes, goldRes] = await Promise.all([fetchStockHistory(stockSymbol), fetchStockHistory(goldSymbol)]);
+      // PERFORMANCE OPTIMIZATION: We only fetch the last 600 records (approx 2 years) instead of full history (10000).
+      // The strategy needs 365 days + 200 days buffer for MA200 = ~565 days. 600 is safe.
+      // This reduces payload size by ~95%.
+      const limit = 600;
+      
+      const [stockRes, goldRes] = await Promise.all([
+          fetchStockHistory(stockSymbol, limit), 
+          fetchStockHistory(goldSymbol, limit)
+      ]);
+
       const stockData = stockRes.data;
       const goldData = goldRes.data;
       if (stockData.length < 400 || goldData.length < 400) throw new Error('سابقه معاملاتی کافی نیست.');
@@ -553,8 +562,14 @@ export function PortfolioPage() {
       const ratioMA = ratioMA100.get(finalTargetDateStr)!;
       const ratioTrendAbove = currentRatio > ratioMA;
       const mergedTargetIdx = merged.findIndex(m => m.date === finalTargetDateStr);
-      const slice2M = merged.slice(mergedTargetIdx - 60, mergedTargetIdx + 1);
-      const slice1Y = merged.slice(mergedTargetIdx - 365, mergedTargetIdx + 1);
+      
+      // Safety check for slice range
+      const safeStart2M = Math.max(0, mergedTargetIdx - 60);
+      const safeStart1Y = Math.max(0, mergedTargetIdx - 365);
+
+      const slice2M = merged.slice(safeStart2M, mergedTargetIdx + 1);
+      const slice1Y = merged.slice(safeStart1Y, mergedTargetIdx + 1);
+      
       const corr2M = calculatePearson(slice2M.map(s => s.price2), slice2M.map(s => s.price1));
       const corr1Y = calculatePearson(slice1Y.map(s => s.price2), slice1Y.map(s => s.price1));
       const isAnomaly = (corr1Y > 0 && corr2M < 0) || (corr1Y < 0 && corr2M > 0);

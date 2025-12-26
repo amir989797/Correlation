@@ -38,6 +38,11 @@ pool.connect().then(client => {
   console.error('❌ Failed to connect to database:', err.message);
 });
 
+// In-Memory Cache for Assets
+let assetsCache = null;
+let assetsCacheTime = 0;
+const ASSETS_CACHE_TTL = 60 * 1000; // 1 minute
+
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'TSETMC Node.js API is running' });
 });
@@ -71,9 +76,16 @@ app.get('/api/search', async (req, res) => {
 
 /**
  * Asset Groups Endpoint (Public)
- * Returns the curated lists of funds/assets
+ * Returns the curated lists of funds/assets.
+ * Cached for performance.
  */
 app.get('/api/assets', async (req, res) => {
+  // Check Cache
+  const now = Date.now();
+  if (assetsCache && (now - assetsCacheTime < ASSETS_CACHE_TTL)) {
+      return res.json(assetsCache);
+  }
+
   let client;
   try {
     client = await pool.connect();
@@ -81,6 +93,11 @@ app.get('/api/assets', async (req, res) => {
     const result = await client.query(`
         SELECT symbol, type, url, is_default, last_return FROM asset_groups ORDER BY symbol
     `);
+    
+    // Update Cache
+    assetsCache = result.rows;
+    assetsCacheTime = now;
+    
     res.json(result.rows);
   } catch (err) {
     // If table doesn't exist yet, return empty list gracefully
@@ -97,6 +114,7 @@ app.get('/api/assets', async (req, res) => {
 
 /**
  * History Endpoint
+ * Optimized to return LATEST records when limit is applied
  */
 app.get('/api/history/:symbol', async (req, res) => {
   const { symbol } = req.params;
@@ -106,18 +124,23 @@ app.get('/api/history/:symbol', async (req, res) => {
   try {
     client = await pool.connect();
     
+    // Optimized Query: Get LATEST N records (DESC), then sort them ASC for the chart
     const query = `
-      SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
-      FROM daily_prices 
-      WHERE symbol = $1 
-      ORDER BY date ASC 
-      LIMIT $2
+      SELECT * FROM (
+          SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
+          FROM daily_prices 
+          WHERE symbol = $1 
+          ORDER BY date DESC 
+          LIMIT $2
+      ) sub ORDER BY date ASC
     `;
     const values = [symbol, limit];
     const result = await client.query(query, values);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Symbol not found' });
+      // Check if symbol exists but has no data, or doesn't exist at all
+      // For simplicity, we just return 404
+      return res.status(404).json({ error: 'Symbol not found or no data' });
     }
 
     res.json(result.rows);
