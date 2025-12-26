@@ -6,7 +6,8 @@ import { SearchResult, TsetmcDataPoint, FetchStatus, AssetGroup } from '../types
 import { 
   Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, 
   TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, 
-  Zap, Target, Swords, Boxes, Sparkles, ShieldCheck, PieChart, Briefcase
+  Zap, Target, Swords, Boxes, Sparkles, ShieldCheck, PieChart, Briefcase,
+  Coins, Landmark, GraduationCap, Lightbulb
 } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
@@ -648,9 +649,88 @@ export function PortfolioPage() {
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">
-       <header className="mb-4">
-          <h2 className="text-3xl font-bold text-white mb-2">«دستیار هوشمند سبدگردانی»</h2>
-          <p className="text-slate-400">«پیشنهاد تخصیص دارایی بر اساس حباب قیمت و ریسک‌های بازار»</p>
+       
+       {/* Enhanced Header Section */}
+       <header className="mb-8 space-y-6">
+          <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 inline-block mb-2">
+            دستیار پرتفوی شما
+          </h2>
+          
+          <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50 backdrop-blur-sm space-y-8 shadow-xl">
+             <p className="text-slate-300 leading-8 text-justify font-medium">
+               خوش آمدید! اینجا قرار نیست با اصطلاحات پیچیده گیج شوید. ما به شما کمک می‌کنیم تا بدون نیاز به دانش تخصصی، امن‌ترین و بهترین ترکیب دارایی را برای پول خود بسازید. این دارایی‌ها چه هستند؟ پیشنهادهای ما «صندوق‌های بورسی» هستند که مجوز رسمی دارند و با استفاده از کارگزاری های بورس، خرید و فروش آن‌ها بسیار آسان است:
+             </p>
+
+             {/* Definitions Grid */}
+             <div className="grid md:grid-cols-3 gap-4">
+                {/* Gold Card */}
+                <div className="bg-slate-900/80 p-5 rounded-2xl border border-amber-500/20 shadow-lg flex flex-col gap-3 group hover:border-amber-500/50 transition-colors">
+                   <div className="flex items-center gap-2 text-amber-400 font-bold border-b border-slate-800 pb-2">
+                      <Coins className="w-5 h-5" />
+                      <span>صندوق طلا</span>
+                   </div>
+                   <p className="text-xs text-slate-400 leading-6 text-justify">
+                     این صندوق‌ها دارایی‌های طلا نگهداری می‌کنند و قیمت آن‌ها دقیقاً همگام با قیمت طلا بالا و پایین می‌رود (مناسب برای حفظ ارزش پول).
+                   </p>
+                </div>
+
+                {/* Fixed Income Card */}
+                <div className="bg-slate-900/80 p-5 rounded-2xl border border-blue-500/20 shadow-lg flex flex-col gap-3 group hover:border-blue-500/50 transition-colors">
+                   <div className="flex items-center gap-2 text-blue-400 font-bold border-b border-slate-800 pb-2">
+                      <ShieldCheck className="w-5 h-5" />
+                      <span>درآمد ثابت (بدون ریسک)</span>
+                   </div>
+                   <p className="text-xs text-slate-400 leading-6 text-justify">
+                     این صندوق‌ها جایگزین سپرده بانکی هستند و سودی حدود ۳۰ تا ۳۵ درصد سالانه دارند. امنیت آن‌ها بسیار بالاست و ریسک ندارد.
+                   </p>
+                </div>
+
+                {/* Stock Card */}
+                <div className="bg-slate-900/80 p-5 rounded-2xl border border-emerald-500/20 shadow-lg flex flex-col gap-3 group hover:border-emerald-500/50 transition-colors">
+                   <div className="flex items-center gap-2 text-emerald-400 font-bold border-b border-slate-800 pb-2">
+                      <TrendingUp className="w-5 h-5" />
+                      <span>بازار سهام</span>
+                   </div>
+                   <p className="text-xs text-slate-400 leading-6 text-justify">
+                     شامل دو نوع صندوق است: ۱. صندوق‌های سهامی: با ریسک استاندارد و پتانسیل رشد. ۲. صندوق‌های شتابی (اهرمی): با ریسک بالاتر برای کسانی که دنبال هیجان و سود بیشتر هستند.
+                   </p>
+                </div>
+             </div>
+
+             {/* How To Start */}
+             <div className="space-y-4">
+                <h4 className="text-white font-bold flex items-center gap-2 text-lg">
+                   <GraduationCap className="w-6 h-6 text-purple-400" />
+                   چطور شروع کنم؟ <span className="text-sm font-normal text-slate-400">(فقط ۲ قدم)</span>
+                </h4>
+                <div className="space-y-3 pr-2">
+                   <div className="flex items-start gap-3">
+                      <div className="bg-purple-500/20 text-purple-400 w-6 h-6 rounded-full flex items-center justify-center font-bold text-sm shrink-0 mt-0.5">1</div>
+                      <p className="text-slate-300 text-sm leading-7"><span className="text-white font-bold">انتخاب دارایی‌ها:</span> در کادرهای زیر، تیکِ هر دارایی که مایلید داشته باشید (سهام، طلا یا درآمد ثابت) را بزنید.</p>
+                   </div>
+                   <div className="flex items-start gap-3">
+                      <div className="bg-purple-500/20 text-purple-400 w-6 h-6 rounded-full flex items-center justify-center font-bold text-sm shrink-0 mt-0.5">2</div>
+                      <div className="space-y-2">
+                         <p className="text-slate-300 text-sm leading-7"><span className="text-white font-bold">استفاده از پیشنهادهای آماده:</span> شما تنها نیستید! ما برای هر بخش، بهترین صندوق‌های بازار را در منوی کشویی (لیست بازشو) قرار داده‌ایم.</p>
+                         <p className="text-slate-400 text-xs leading-6 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                            مثلاً اگر «صندوق طلا» را انتخاب کردید، ما صندوق معتبری مثل «تابش» یا برای سهام، صندوق «آتیمس» را پیشنهاد داده‌ایم تا نیاز به جستجو نداشته باشید. البته اگر حرفه‌ای هستید، می‌توانید این گزینه‌ها را تغییر دهید.
+                         </p>
+                      </div>
+                   </div>
+                </div>
+             </div>
+
+             {/* Golden Tip */}
+             <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl flex gap-4 items-start">
+                <Lightbulb className="w-6 h-6 text-yellow-500 shrink-0 mt-1 animate-pulse" />
+                <div>
+                   <h5 className="text-yellow-500 font-bold text-sm mb-1">نکته طلایی: بازار زنده است!</h5>
+                   <p className="text-yellow-200/80 text-xs leading-6 text-justify">
+                     اقتصاد همیشه در حال تغییر است. پرتفویی که امروز عالی است، شاید ماه آینده نیاز به تغییر داشته باشد. پیشنهاد می‌کنیم ماهی یکی‌دوبار به اینجا سر بزنید و دکمه «محاسبه» را بزنید تا اگر وضعیت بازار عوض شده بود، درصد دارایی‌هایتان را با خیال راحت بروزرسانی کنید.
+                   </p>
+                </div>
+             </div>
+          </div>
        </header>
 
        {/* Analysis Settings Card */}
