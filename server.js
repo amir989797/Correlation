@@ -71,15 +71,15 @@ app.get('/api/search', async (req, res) => {
 
 /**
  * Asset Groups Endpoint (Public)
- * Returns the curated lists of funds/assets with returns
+ * Returns the curated lists of funds/assets
  */
 app.get('/api/assets', async (req, res) => {
   let client;
   try {
     client = await pool.connect();
-    // Include one_year_return in response
+    // Check if table exists first to avoid crash if migration hasn't run
     const result = await client.query(`
-        SELECT symbol, type, url, is_default, one_year_return FROM asset_groups ORDER BY symbol
+        SELECT symbol, type, url, is_default FROM asset_groups ORDER BY symbol
     `);
     res.json(result.rows);
   } catch (err) {

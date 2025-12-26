@@ -39,35 +39,6 @@ interface StrategyResult {
   description: string;
 }
 
-// --- CONSTANTS ---
-
-const STRATEGIES: Record<string, { title: string; description: string }> = {
-  combat: {
-    title: "فرصت نوسان‌گیری (واگرایی)",
-    description: "یکی از دارایی ها حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: تبدیل سرمایه به سمت حباب منفی"
-  },
-  bubble: {
-    title: "هشدار ریزش (نقد شوید)",
-    description: "هر دو دارایی گران شده اند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه"
-  },
-  opportunity: {
-    title: "فرصت خرید طلایی",
-    description: "هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری"
-  },
-  "one-ceiling": {
-    title: "ذخیره سود",
-    description: "یک دارایی گران شده.\nپیشنهاد: تبدیل بخشی از سود به دارایی ارزان تر و اوراق"
-  },
-  "one-floor": {
-    title: "شکار فرصت",
-    description: "یک دارایی ارزان شده.\nپیشنهاد: تبدیل بخشی از سرمایه به دارایی ارزان تر"
-  },
-  peace: {
-    title: "بازار متعادل (رونددار)",
-    description: "بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید."
-  }
-};
-
 // --- Helper Components ---
 
 /**
@@ -397,6 +368,7 @@ export function PortfolioPage() {
   // Asset Lists from API
   const [assetGroups, setAssetGroups] = useState<AssetGroup[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
+  const [assetReturns, setAssetReturns] = useState<Record<string, number>>({});
 
   // Suggested Tab State
   const [suggestedConfig, setSuggestedConfig] = useState({
@@ -409,7 +381,58 @@ export function PortfolioPage() {
       selectedFixed: ''
   });
 
-  // Load assets on mount
+  // Optimized 1 Year Return Calculation
+  const calcReturn = (data: TsetmcDataPoint[]) => {
+      if (data.length < 2) return 0;
+      
+      const lastPoint = data[data.length - 1];
+      const lastDateStr = lastPoint.date;
+      
+      // Parse YYYYMMDD to Date
+      const parseDate = (d: string) => {
+          const y = parseInt(d.substring(0, 4));
+          const m = parseInt(d.substring(4, 6)) - 1;
+          const dy = parseInt(d.substring(6, 8));
+          return new Date(y, m, dy);
+      };
+
+      const lastDate = parseDate(lastDateStr);
+      // Target date is 365 days ago
+      const targetTime = lastDate.getTime() - (365 * 24 * 60 * 60 * 1000);
+
+      // Find closest data point to targetTime by iterating BACKWARDS from end
+      // Since array is sorted, we start from today and go back in time.
+      // This is much faster than iterating from the beginning (oldest) to find recent past.
+      
+      let closestPoint = data[data.length - 1];
+      let minDiff = Infinity;
+
+      // We only need to check back roughly 250-300 trading days (indexes)
+      // But to be safe and accurate for gaps, we loop.
+      // Optimization: break loop when difference starts increasing significantly or date is way past target
+      
+      for (let i = data.length - 1; i >= 0; i--) {
+          const p = data[i];
+          const pTime = parseDate(p.date).getTime();
+          const diff = Math.abs(pTime - targetTime);
+
+          if (diff < minDiff) {
+              minDiff = diff;
+              closestPoint = p;
+          } else if (diff > minDiff && pTime < targetTime) {
+              // If we moved past the target time (to older dates) and difference is getting larger,
+              // we found our local minimum.
+              break; 
+          }
+      }
+
+      // If closest point is the same as last point (e.g. only 1 data point), return 0
+      if (closestPoint.date === lastPoint.date) return 0;
+
+      return ((lastPoint.close - closestPoint.close) / closestPoint.close) * 100;
+  };
+
+  // Load assets and calculate returns on mount
   useEffect(() => {
       const load = async () => {
           setLoadingAssets(true);
@@ -417,17 +440,26 @@ export function PortfolioPage() {
               const data = await fetchAssetGroups();
               setAssetGroups(data);
               
-              // Helper to find asset with MAX return (using server-side pre-calculated return)
+              // Parallel Fetch for returns (Fetch all points to ensure we get the latest data for calc)
+              const returns: Record<string, number> = {};
+              await Promise.all(data.map(async (asset) => {
+                  try {
+                      // Fetch full history (default limit)
+                      const hist = await fetchStockHistory(asset.symbol); 
+                      returns[asset.symbol] = calcReturn(hist.data);
+                  } catch (e) {
+                      console.warn(`Could not calc return for ${asset.symbol}`);
+                      returns[asset.symbol] = 0;
+                  }
+              }));
+              setAssetReturns(returns);
+
+              // Helper to find asset with MAX return
               const getBestAsset = (type: string) => {
                   const subset = data.filter(d => d.type === type);
                   if (subset.length === 0) return '';
-                  
-                  // Sort by return descending using the one_year_return field
-                  subset.sort((a, b) => {
-                      const rA = Number(a.one_year_return || 0);
-                      const rB = Number(b.one_year_return || 0);
-                      return rB - rA;
-                  });
+                  // Sort by return descending
+                  subset.sort((a, b) => (returns[b.symbol] || 0) - (returns[a.symbol] || 0));
                   return subset[0].symbol;
               };
               
@@ -598,7 +630,9 @@ export function PortfolioPage() {
       };
 
       // --- Scenario Logic ---
+      let scenario = "";
       let sid = "";
+      let description = "";
       let alloc: { name: string; value: number; fill: string, type: 'gold' | 'stock' | 'fixed' }[] = [];
 
       const goldState = goldLogic.state;
@@ -607,7 +641,9 @@ export function PortfolioPage() {
       const fixedName = suggestedConfig.selectedFixed || "صندوق درآمد ثابت";
 
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
+          scenario = "فرصت نوسان‌گیری (واگرایی)";
           sid = "combat";
+          description = "یکی از دارایی ها حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: تبدیل سرمایه به سمت حباب منفی";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isAnomaly) {
               alloc = cheapAsset === 'gold'
@@ -625,19 +661,25 @@ export function PortfolioPage() {
           }
       } 
       else if (goldState === 'Ceiling' && stockState === 'Ceiling') {
+          scenario = "هشدار ریزش (نقد شوید)";
           sid = "bubble";
+          description = "هر دو دارایی گران شده اند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه";
           alloc = ratioTrendAbove
               ? [ { name: goldSymbol, value: 30, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 50, fill: '#3b82f6', type: 'fixed' } ]
               : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 30, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 50, fill: '#3b82f6', type: 'fixed' } ];
       }
       else if (goldState === 'Floor' && stockState === 'Floor') {
+          scenario = "فرصت خرید طلایی";
           sid = "opportunity";
+          description = "هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری";
           alloc = ratioTrendAbove 
             ? [ { name: goldSymbol, value: 45, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 25, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 30, fill: '#3b82f6', type: 'fixed' } ]
             : [ { name: goldSymbol, value: 25, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 45, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 30, fill: '#3b82f6', type: 'fixed' } ];
       }
       else if (goldState === 'Ceiling' || stockState === 'Ceiling') {
+          scenario = "ذخیره سود";
           sid = "one-ceiling";
+          description = "یک دارایی گران شده.\nپیشنهاد: تبدیل بخشی از سود به دارایی ارزان تر و اوراق";
           const highAsset = goldState === 'Ceiling' ? 'gold' : 'index';
           const ratioConfirmsSell = highAsset === 'gold' ? !ratioTrendAbove : ratioTrendAbove; 
           if (ratioConfirmsSell) {
@@ -649,7 +691,9 @@ export function PortfolioPage() {
           }
       }
       else if (goldState === 'Floor' || stockState === 'Floor') {
+          scenario = "شکار فرصت";
           sid = "one-floor";
+          description = "یک دارایی ارزان شده.\nپیشنهاد: تبدیل بخشی از سرمایه به دارایی ارزان تر";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isHighCorrRisk) {
               alloc = cheapAsset === 'gold'
@@ -667,7 +711,9 @@ export function PortfolioPage() {
           }
       }
       else {
+          scenario = "بازار متعادل (رونددار)";
           sid = "peace";
+          description = "بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.";
           if (isHighCorrRisk) {
               alloc = [ { name: goldSymbol, value: 25, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 25, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 50, fill: '#3b82f6', type: 'fixed' } ];
           } else if (isSafeCorr) {
@@ -681,17 +727,7 @@ export function PortfolioPage() {
           }
       }
 
-      const content = STRATEGIES[sid] || STRATEGIES['peace'];
-
-      return { 
-          metrics, 
-          baseStrategy: { 
-              allocation: alloc, 
-              scenario: content.title, 
-              id: sid, 
-              description: content.description 
-          } 
-      };
+      return { metrics, baseStrategy: { allocation: alloc, scenario, id: sid, description } };
   }
 
   const handleRunSuggested = async () => {
@@ -803,21 +839,16 @@ export function PortfolioPage() {
     return asset?.url;
   };
 
-  // Helper function to safely get return value
-  const getReturnVal = (symbol: string) => {
-    // With server-side logic, we read from assetGroups directly
-    const asset = assetGroups.find(a => a.symbol === symbol);
-    return asset ? Number(asset.one_year_return || 0) : 0;
-  };
+  const getReturnVal = (symbol: string) => assetReturns[symbol];
 
   // Sorting Helper
   const sortAssets = (assets: AssetGroup[]) => {
-      return [...assets].sort((a, b) => getReturnVal(b.symbol) - getReturnVal(a.symbol));
+      return [...assets].sort((a, b) => (getReturnVal(b.symbol) || 0) - (getReturnVal(a.symbol) || 0));
   };
 
-  const sortedStockAssets = useMemo(() => sortAssets(stockAssets), [stockAssets, assetGroups]);
-  const sortedGoldAssets = useMemo(() => sortAssets(getAssetsByType('gold')), [assetGroups]);
-  const sortedFixedAssets = useMemo(() => sortAssets(getAssetsByType('fixed')), [assetGroups]);
+  const sortedStockAssets = useMemo(() => sortAssets(stockAssets), [stockAssets, assetReturns]);
+  const sortedGoldAssets = useMemo(() => sortAssets(getAssetsByType('gold')), [assetGroups, assetReturns]);
+  const sortedFixedAssets = useMemo(() => sortAssets(getAssetsByType('fixed')), [assetGroups, assetReturns]);
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">
