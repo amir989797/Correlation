@@ -53,8 +53,13 @@ const initDB = async () => {
                 PRIMARY KEY (symbol, type)
             );
         `);
+
+        // Add last_return column if not exists
+        await client.query(`
+            ALTER TABLE asset_groups ADD COLUMN IF NOT EXISTS last_return FLOAT DEFAULT 0;
+        `);
         
-        // Backup Table Structure (Clone of daily_prices structure without data)
+        // Backup Table Structure
         await client.query(`
             CREATE TABLE IF NOT EXISTS daily_prices_backup (LIKE daily_prices INCLUDING ALL);
         `);
@@ -92,6 +97,106 @@ const syncSymbolsTable = async () => {
   } finally {
     client.release();
   }
+};
+
+// --- RETURN CALCULATION LOGIC (Ported from Frontend) ---
+
+const calcReturn = (data) => {
+    if (!data || data.length < 2) return 0;
+    
+    // Data is expected to be sorted ASC by date
+    const lastPoint = data[data.length - 1];
+    const lastDateStr = lastPoint.date; // YYYYMMDD
+    
+    // Parse YYYYMMDD to Date
+    const parseDate = (d) => {
+        const y = parseInt(d.substring(0, 4));
+        const m = parseInt(d.substring(4, 6)) - 1;
+        const dy = parseInt(d.substring(6, 8));
+        return new Date(y, m, dy);
+    };
+
+    const lastDate = parseDate(lastDateStr);
+    // Target date is 365 days ago
+    const targetTime = lastDate.getTime() - (365 * 24 * 60 * 60 * 1000);
+
+    let closestPoint = data[data.length - 1];
+    let minDiff = Infinity;
+
+    // Iterate backwards
+    for (let i = data.length - 1; i >= 0; i--) {
+        const p = data[i];
+        const pTime = parseDate(p.date).getTime();
+        const diff = Math.abs(pTime - targetTime);
+
+        if (diff < minDiff) {
+            minDiff = diff;
+            closestPoint = p;
+        } else if (diff > minDiff && pTime < targetTime) {
+            break; 
+        }
+    }
+
+    if (closestPoint.date === lastPoint.date) return 0;
+
+    return ((lastPoint.close - closestPoint.close) / closestPoint.close) * 100;
+};
+
+const calculateAllAssetReturns = async () => {
+    console.log('🔄 Calculating 1-year returns for all assets...');
+    const client = await pool.connect();
+    try {
+        // 1. Get list of assets
+        const assetsRes = await client.query('SELECT symbol, type FROM asset_groups');
+        const assets = assetsRes.rows;
+        let updatedCount = 0;
+
+        for (const asset of assets) {
+            try {
+                // 2. Fetch history (limit 400 days ~ 1.5 years is enough for 1y calc)
+                const historyRes = await client.query(`
+                    SELECT to_char(date, 'YYYYMMDD') as date, close 
+                    FROM daily_prices 
+                    WHERE symbol = $1 
+                    ORDER BY date ASC
+                    LIMIT 500
+                `, [asset.symbol]); // Note: In Postgres LIMIT applies after ORDER BY, but to get LATEST 500 we usually sort DESC. 
+                                    // However, our data might be large. Let's optimize:
+                                    // We need the *latest* dates. 
+                                    // Correct approach: SELECT ... ORDER BY date DESC LIMIT 500, then reverse in JS.
+                
+                // Optimized Query
+                const historyResOpt = await client.query(`
+                    SELECT * FROM (
+                        SELECT to_char(date, 'YYYYMMDD') as date, close 
+                        FROM daily_prices 
+                        WHERE symbol = $1 
+                        ORDER BY date DESC
+                        LIMIT 500
+                    ) sub ORDER BY date ASC
+                `, [asset.symbol]);
+
+                const history = historyResOpt.rows;
+                
+                if (history.length > 0) {
+                    const retVal = calcReturn(history);
+                    // 3. Update DB
+                    await client.query(`
+                        UPDATE asset_groups 
+                        SET last_return = $1 
+                        WHERE symbol = $2 AND type = $3
+                    `, [retVal, asset.symbol, asset.type]);
+                    updatedCount++;
+                }
+            } catch (err) {
+                console.error(`Failed to calc return for ${asset.symbol}:`, err.message);
+            }
+        }
+        console.log(`✅ Returns calculated and saved for ${updatedCount} assets.`);
+        return updatedCount;
+    } finally {
+        client.release();
+    }
 };
 
 // --- DATA BACKUP & RESTORE LOGIC ---
@@ -181,8 +286,14 @@ const runUpdateProcess = async () => {
             try {
                 const count = await syncSymbolsTable();
                 lastUpdateLog += `\n✨ لیست جستجو بروز شد (${count} نماد جدید).`;
+                
+                // Calculate Returns Automatically
+                lastUpdateLog += `\n🔄 در حال محاسبه بازدهی نمادهای منتخب...`;
+                const updated = await calculateAllAssetReturns();
+                lastUpdateLog += `\n✅ بازدهی ${updated} نماد محاسبه و ذخیره شد.`;
+
             } catch (e) {
-                lastUpdateLog += `\n⚠️ خطا در بروزرسانی لیست جستجو: ${e.message}`;
+                lastUpdateLog += `\n⚠️ خطا در پردازش پس از آپدیت: ${e.message}`;
             }
         } else {
             lastUpdateLog += `\n❌ عملیات متوقف شد (Code: ${code}).`;
@@ -326,6 +437,18 @@ app.post('/api/assets', requireAuth, async (req, res) => {
         res.status(500).json({ error: e.message });
     } finally {
         client.release();
+    }
+});
+
+// Endpoint to trigger calculation manually
+app.post('/api/assets/recalc', requireAuth, async (req, res) => {
+    if (isUpdating) return res.status(400).json({ message: 'سیستم در حال آپدیت است. لطفا صبر کنید.' });
+    
+    try {
+        const count = await calculateAllAssetReturns();
+        res.json({ message: `بازدهی ${count} صندوق با موفقیت محاسبه و ذخیره شد.` });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 

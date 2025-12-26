@@ -114,15 +114,21 @@
 
         <!-- Asset Management Section -->
         <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
-            <h3 class="text-white font-bold text-lg mb-4 flex items-center gap-2">
-                <span class="w-2 h-6 bg-cyan-500 rounded-full"></span>
-                مدیریت صندوق‌های منتخب
-            </h3>
-            <p class="text-slate-400 text-xs mb-6">
-                این لیست‌ها در بخش پرتفوی پیشنهادی نمایش داده می‌شوند. 
-                <span class="text-blue-400">آدرس سایت</span> برای هر نماد <span class="text-red-400 font-bold">اجباری</span> است.
-                نماد پیش‌فرض به صورت خودکار بر اساس بیشترین بازدهی انتخاب می‌شود.
-            </p>
+            <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-white font-bold text-lg flex items-center gap-2">
+                        <span class="w-2 h-6 bg-cyan-500 rounded-full"></span>
+                        مدیریت صندوق‌های منتخب
+                    </h3>
+                    <p class="text-slate-400 text-xs mt-1">
+                        این لیست‌ها در بخش پرتفوی پیشنهادی نمایش داده می‌شوند. 
+                    </p>
+                </div>
+                <button id="recalc-btn" class="mt-4 md:mt-0 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg transition text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20">
+                    <span id="recalc-text">محاسبه و ذخیره بازدهی نمادها</span>
+                    <div id="recalc-loader" class="loader hidden w-4 h-4 border-2"></div>
+                </button>
+            </div>
             
             <div class="grid md:grid-cols-4 gap-4" id="asset-containers">
                 <!-- Template for Asset Column -->
@@ -144,6 +150,7 @@
         const stopBtn = document.getElementById('stop-btn');
         const updateBtn = document.getElementById('update-btn');
         const restoreBtn = document.getElementById('restore-btn');
+        const recalcBtn = document.getElementById('recalc-btn');
 
         // Initial Check
         if (token) {
@@ -228,6 +235,35 @@
             }
         });
 
+        recalcBtn.addEventListener('click', async () => {
+            if (!confirm('آیا مایل به محاسبه مجدد بازدهی یکساله تمام نمادهای لیست هستید؟ این عملیات ممکن است چند لحظه طول بکشد.')) return;
+            
+            document.getElementById('recalc-loader').classList.remove('hidden');
+            recalcBtn.disabled = true;
+            document.getElementById('recalc-text').innerText = 'در حال محاسبه...';
+
+            try {
+                const res = await fetch(`${API_URL}/assets/recalc`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    alert(data.message);
+                } else {
+                    alert('خطا: ' + data.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('خطا در ارتباط با سرور');
+            } finally {
+                document.getElementById('recalc-loader').classList.add('hidden');
+                recalcBtn.disabled = false;
+                document.getElementById('recalc-text').innerText = 'محاسبه و ذخیره بازدهی نمادها';
+            }
+        });
+
         stopBtn.addEventListener('click', async () => {
             if (!confirm('آیا مایل به متوقف کردن اسکریپت هستید؟')) return;
             document.getElementById('stop-loader').classList.remove('hidden');
@@ -288,6 +324,7 @@
                 if (data.isUpdating) {
                     updateBtn.disabled = true;
                     restoreBtn.disabled = true; // Disable restore during update
+                    recalcBtn.disabled = true; // Disable manual recalc during update
                     updateBtn.classList.add('opacity-75');
                     document.getElementById('btn-text').innerText = 'در حال اجرا...';
                     loader.classList.remove('hidden');
@@ -306,6 +343,7 @@
                 } else {
                     updateBtn.disabled = false;
                     restoreBtn.disabled = false;
+                    recalcBtn.disabled = false;
                     updateBtn.classList.remove('opacity-75');
                     document.getElementById('btn-text').innerText = 'شروع آپدیت بازار';
                     loader.classList.add('hidden');
