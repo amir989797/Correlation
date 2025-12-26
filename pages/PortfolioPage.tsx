@@ -7,7 +7,7 @@ import {
   Search, Loader2, Info, X, Calendar, Clock, ChevronDown, ChevronUp, TrendingUp, 
   TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, 
   Zap, Target, Swords, Boxes, Sparkles, ShieldCheck, PieChart, Briefcase,
-  Coins, Landmark, GraduationCap, Lightbulb, Check, ExternalLink, Globe
+  Coins, Landmark, GraduationCap, Lightbulb, Check, ExternalLink, Globe, ArrowUpLeft
 } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
@@ -135,7 +135,7 @@ const CustomSelect = ({
                                     className="p-1.5 text-slate-600 hover:text-blue-400 hover:bg-slate-700 rounded-md transition-all"
                                     title="مشاهده سایت"
                                 >
-                                    <ExternalLink className="w-3 h-3" />
+                                    <ArrowUpLeft className="w-3 h-3" />
                                 </a>
                             )}
                         </div>
@@ -856,7 +856,7 @@ export function PortfolioPage() {
        {/* Enhanced Header Section */}
        <header className="mb-8 space-y-6">
           <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 inline-block mb-2">
-            دستیار پرتفوی شما
+            سبد دارایی
           </h2>
           
           <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50 backdrop-blur-sm shadow-xl transition-all duration-300">
@@ -962,7 +962,7 @@ export function PortfolioPage() {
                onClick={() => { setActiveTab('suggested'); setError(null); }}
                className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors rounded-tr-2xl ${activeTab === 'suggested' ? 'bg-slate-700/50 text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:bg-slate-700/30'}`}
              >
-                <PieChart className="w-4 h-4" /> پرتفوی پیشنهادی
+                <PieChart className="w-4 h-4" /> سبد پیشنهادی
              </button>
              <button 
                onClick={() => { setActiveTab('analysis'); setError(null); }}
@@ -992,9 +992,9 @@ export function PortfolioPage() {
                         <div className="space-y-6">
                            
                            {/* Stocks Row */}
-                           <div className="flex flex-col gap-4 p-6 rounded-2xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               {/* Top: Checkbox & Info */}
-                               <div className="flex items-start gap-4 border-b border-slate-700/50 pb-4">
+                           <div className="flex flex-col sm:flex-row gap-4 p-6 rounded-2xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
+                               {/* Left: Checkbox & Info */}
+                               <div className="flex items-start gap-4 border-b sm:border-b-0 sm:border-l border-slate-700/50 pb-4 sm:pb-0 sm:pl-4 sm:w-1/2">
                                    <div className="relative pt-1">
                                       <input 
                                         type="checkbox" 
@@ -1008,23 +1008,23 @@ export function PortfolioPage() {
                                    </div>
                                    <div className="flex flex-col gap-1">
                                        <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeStock ? 'text-white' : 'text-slate-500'}`}>بازار سهام</span>
-                                       <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                                       <p className="text-xs text-slate-400 leading-relaxed">
                                            صندوق‌های سهامی که ضریب آلفای بالای ۱۵ و ارزش دارایی بیشتر از ۱۰۰ میلیارد تومان دارند.
                                        </p>
                                    </div>
                                </div>
                                
-                               {/* Bottom: Controls */}
-                               <div className={`flex flex-col sm:flex-row gap-4 items-center transition-opacity duration-300 ${suggestedConfig.includeStock ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                               {/* Right: Controls */}
+                               <div className={`flex flex-col gap-4 items-start justify-center sm:w-1/2 transition-opacity duration-300 ${suggestedConfig.includeStock ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                                    {/* Type Toggle */}
-                                   <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-700 shrink-0 w-full sm:w-auto">
+                                   <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-700 w-full">
                                        <button 
                                          onClick={() => {
                                             if (!suggestedConfig.includeStock) return;
                                             const newType = 'equity';
-                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: '' })); // Reset selection to force user pick or auto-select logic
+                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: '' })); 
                                          }}
-                                         className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${suggestedConfig.stockType === 'equity' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                                         className={`flex-1 px-2 py-2.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center justify-center ${suggestedConfig.stockType === 'equity' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
                                        >
                                          سهامی (کم‌ریسک)
                                        </button>
@@ -1034,14 +1034,14 @@ export function PortfolioPage() {
                                             const newType = 'leveraged';
                                             setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: '' }));
                                          }}
-                                         className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${suggestedConfig.stockType === 'leveraged' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                                         className={`flex-1 px-2 py-2.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center justify-center ${suggestedConfig.stockType === 'leveraged' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
                                        >
                                          اهرمی (پرریسک)
                                        </button>
                                    </div>
 
                                    {/* Custom Dropdown */}
-                                   <div className="flex-1 w-full flex items-center gap-3">
+                                   <div className="w-full flex items-center gap-3">
                                        <CustomSelect 
                                             options={sortedStockAssets} 
                                             value={suggestedConfig.selectedStock}
@@ -1054,11 +1054,11 @@ export function PortfolioPage() {
                                              href={getActiveAssetLink(suggestedConfig.selectedStock, suggestedConfig.stockType)} 
                                              target="_blank" 
                                              rel="noreferrer"
-                                             className="text-slate-400 hover:text-cyan-400 flex items-center gap-2 transition-colors whitespace-nowrap"
+                                             className="text-slate-400 hover:text-cyan-400 flex items-center gap-1 transition-colors whitespace-nowrap"
                                              title="مشاهده سایت"
                                            >
-                                               <Globe className="w-4 h-4" />
-                                               <span className="text-xs font-bold hidden sm:inline">درباره {suggestedConfig.selectedStock}</span>
+                                               <span className="text-xs font-bold">{suggestedConfig.selectedStock}</span>
+                                               <ArrowUpLeft className="w-4 h-4" />
                                            </a>
                                        )}
                                    </div>
@@ -1066,8 +1066,8 @@ export function PortfolioPage() {
                            </div>
 
                            {/* Gold Row */}
-                           <div className="flex flex-col gap-4 p-6 rounded-2xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <div className="flex items-start gap-4 border-b border-slate-700/50 pb-4">
+                           <div className="flex flex-col sm:flex-row gap-4 p-6 rounded-2xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
+                               <div className="flex items-start gap-4 border-b sm:border-b-0 sm:border-l border-slate-700/50 pb-4 sm:pb-0 sm:pl-4 sm:w-1/2">
                                    <div className="relative pt-1">
                                       <input 
                                         type="checkbox" 
@@ -1081,14 +1081,14 @@ export function PortfolioPage() {
                                    </div>
                                    <div className="flex flex-col gap-1">
                                        <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeGold ? 'text-white' : 'text-slate-500'}`}>صندوق طلا</span>
-                                       <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                                       <p className="text-xs text-slate-400 leading-relaxed">
                                            صندوق‌های طلایی که ارزش دارایی بالای ۱۰ همت دارند.
                                        </p>
                                    </div>
                                </div>
                                
-                               <div className={`flex flex-col sm:flex-row gap-4 items-center transition-opacity duration-300 ${suggestedConfig.includeGold ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                                   <div className="flex-1 w-full flex items-center gap-3">
+                               <div className={`flex flex-col justify-center sm:w-1/2 transition-opacity duration-300 ${suggestedConfig.includeGold ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                   <div className="w-full flex items-center gap-3">
                                        <CustomSelect 
                                             options={sortedGoldAssets} 
                                             value={suggestedConfig.selectedGold}
@@ -1101,11 +1101,11 @@ export function PortfolioPage() {
                                              href={getActiveAssetLink(suggestedConfig.selectedGold, 'gold')} 
                                              target="_blank" 
                                              rel="noreferrer"
-                                             className="text-slate-400 hover:text-amber-400 flex items-center gap-2 transition-colors whitespace-nowrap"
+                                             className="text-slate-400 hover:text-amber-400 flex items-center gap-1 transition-colors whitespace-nowrap"
                                              title="مشاهده سایت"
                                            >
-                                               <Globe className="w-4 h-4" />
-                                               <span className="text-xs font-bold hidden sm:inline">درباره {suggestedConfig.selectedGold}</span>
+                                               <span className="text-xs font-bold">{suggestedConfig.selectedGold}</span>
+                                               <ArrowUpLeft className="w-4 h-4" />
                                            </a>
                                        )}
                                    </div>
@@ -1113,8 +1113,8 @@ export function PortfolioPage() {
                            </div>
 
                            {/* Fixed Income Row */}
-                           <div className="flex flex-col gap-4 p-6 rounded-2xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <div className="flex items-start gap-4 border-b border-slate-700/50 pb-4">
+                           <div className="flex flex-col sm:flex-row gap-4 p-6 rounded-2xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
+                               <div className="flex items-start gap-4 border-b sm:border-b-0 sm:border-l border-slate-700/50 pb-4 sm:pb-0 sm:pl-4 sm:w-1/2">
                                    <div className="relative pt-1">
                                       <input 
                                         type="checkbox" 
@@ -1128,14 +1128,14 @@ export function PortfolioPage() {
                                    </div>
                                    <div className="flex flex-col gap-1">
                                        <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeFixed ? 'text-white' : 'text-slate-500'}`}>درآمد ثابت</span>
-                                       <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                                       <p className="text-xs text-slate-400 leading-relaxed">
                                            صندوق‌های درآمد ثابت بدون ریسک که ارزش دارایی بالای ۱۰ همت دارند.
                                        </p>
                                    </div>
                                </div>
                                
-                               <div className={`flex flex-col sm:flex-row gap-4 items-center transition-opacity duration-300 ${suggestedConfig.includeFixed ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                                   <div className="flex-1 w-full flex items-center gap-3">
+                               <div className={`flex flex-col justify-center sm:w-1/2 transition-opacity duration-300 ${suggestedConfig.includeFixed ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                   <div className="w-full flex items-center gap-3">
                                        <CustomSelect 
                                             options={sortedFixedAssets} 
                                             value={suggestedConfig.selectedFixed}
@@ -1148,11 +1148,11 @@ export function PortfolioPage() {
                                              href={getActiveAssetLink(suggestedConfig.selectedFixed, 'fixed')} 
                                              target="_blank" 
                                              rel="noreferrer"
-                                             className="text-slate-400 hover:text-blue-400 flex items-center gap-2 transition-colors whitespace-nowrap"
+                                             className="text-slate-400 hover:text-blue-400 flex items-center gap-1 transition-colors whitespace-nowrap"
                                              title="مشاهده سایت"
                                            >
-                                               <Globe className="w-4 h-4" />
-                                               <span className="text-xs font-bold hidden sm:inline">درباره {suggestedConfig.selectedFixed}</span>
+                                               <span className="text-xs font-bold">{suggestedConfig.selectedFixed}</span>
+                                               <ArrowUpLeft className="w-4 h-4" />
                                            </a>
                                        )}
                                    </div>
@@ -1162,7 +1162,7 @@ export function PortfolioPage() {
                         </div>
                      </div>
                      <button onClick={handleRunSuggested} disabled={status === FetchStatus.LOADING} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all border-none">
-                       {status === FetchStatus.LOADING ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'محاسبه پرتفوی پیشنهادی'}
+                       {status === FetchStatus.LOADING ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'محاسبه سبد پیشنهادی'}
                      </button>
                   </div>
               )}
@@ -1251,7 +1251,7 @@ export function PortfolioPage() {
                         <div className="w-full p-6 bg-slate-900/60 rounded-[28px] border border-slate-700/50 backdrop-blur-xl shadow-2xl space-y-5">
                             <div className="flex flex-col sm:flex-row justify-between items-center border-b border-slate-700/50 pb-4 gap-4">
                                 <h5 className="text-sm font-black text-white flex items-center gap-2">
-                                    <CheckCircle2 className="w-5 h-5 text-emerald-400" /> پیشنهاد ترکیب پرتفوی
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-400" /> پیشنهاد ترکیب سبد
                                 </h5>
                                 <div className="flex gap-4">
                                   {strategy.allocation.map((a, i) => (
@@ -1347,7 +1347,7 @@ export function PortfolioPage() {
          <div className="flex flex-col items-center justify-center p-24 bg-slate-800/40 rounded-[40px] border border-slate-700 border-dashed opacity-40 group hover:opacity-100 transition-opacity">
             <Activity className="w-20 h-20 text-slate-700 mb-6 group-hover:text-cyan-500 transition-colors animate-pulse" />
             <p className="text-slate-500 font-medium group-hover:text-slate-300 transition-colors text-center max-w-sm leading-relaxed">
-              سیستم در انتظار ورودی... لطفا تنظیمات پرتفوی پیشنهادی یا تحلیل نماد را انجام دهید.
+              سیستم در انتظار ورودی... لطفا تنظیمات سبد پیشنهادی یا تحلیل نماد را انجام دهید.
             </p>
          </div>
        )}
