@@ -7,7 +7,7 @@ import {
   Search, Loader2, Info, X, Calendar, Clock, ChevronDown, ChevronUp, TrendingUp, 
   TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, 
   Zap, Target, Swords, Boxes, Sparkles, ShieldCheck, PieChart, Briefcase,
-  Coins, Landmark, GraduationCap, Lightbulb, Check, ExternalLink
+  Coins, Landmark, GraduationCap, Lightbulb, Check, ExternalLink, Globe
 } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
@@ -39,9 +39,115 @@ interface StrategyResult {
   description: string;
 }
 
+// --- Helper Components ---
+
 /**
- * MarketStateCard - Visualizes the 3/3 Hysteresis Lock logic for an asset
+ * Custom Dropdown Component
  */
+const CustomSelect = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder = "انتخاب کنید",
+  disabled = false,
+  getReturnVal // Function to get return value
+}: { 
+  options: AssetGroup[], 
+  value: string, 
+  onChange: (val: string) => void,
+  placeholder?: string,
+  disabled?: boolean,
+  getReturnVal: (symbol: string) => number | undefined
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [wrapperRef]);
+
+  const selectedOption = options.find(o => o.symbol === value);
+  const selectedReturn = value ? getReturnVal(value) : undefined;
+
+  return (
+    <div className={`relative w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`} ref={wrapperRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-right flex items-center justify-between transition-all hover:border-cyan-500 focus:border-cyan-500 group"
+      >
+        <div className="flex items-center gap-3 overflow-hidden">
+            {selectedOption ? (
+                <>
+                    <span className="font-bold text-white text-sm truncate">{selectedOption.symbol}</span>
+                    {selectedReturn !== undefined && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedReturn >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`} dir="ltr">
+                            {selectedReturn > 0 ? '+' : ''}{selectedReturn.toFixed(1)}%
+                        </span>
+                    )}
+                </>
+            ) : (
+                <span className="text-slate-500 text-sm">{placeholder}</span>
+            )}
+        </div>
+        <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''} group-hover:text-cyan-400`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar animate-fade-in p-1">
+            {options.length === 0 ? (
+                <div className="p-3 text-center text-xs text-slate-500">لیست خالی است</div>
+            ) : (
+                options.map((opt) => {
+                    const ret = getReturnVal(opt.symbol);
+                    const isSelected = opt.symbol === value;
+                    return (
+                        <div 
+                            key={opt.symbol}
+                            className={`flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-slate-800' : 'hover:bg-slate-800'}`}
+                            onClick={() => {
+                                onChange(opt.symbol);
+                                setIsOpen(false);
+                            }}
+                        >
+                            <div className="flex items-center gap-2">
+                                <span className={`text-sm font-bold ${isSelected ? 'text-cyan-400' : 'text-slate-200'}`}>{opt.symbol}</span>
+                                {ret !== undefined && (
+                                    <span className={`text-[10px] font-medium ${ret >= 0 ? 'text-emerald-500' : 'text-red-500'}`} dir="ltr">
+                                        ({ret > 0 ? '+' : ''}{ret.toFixed(1)}%)
+                                    </span>
+                                )}
+                            </div>
+                            
+                            {/* Inner Link */}
+                            {opt.url && (
+                                <a 
+                                    href={opt.url} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="p-1.5 text-slate-600 hover:text-blue-400 hover:bg-slate-700 rounded-md transition-all"
+                                    title="مشاهده سایت"
+                                >
+                                    <ExternalLink className="w-3 h-3" />
+                                </a>
+                            )}
+                        </div>
+                    );
+                })
+            )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const MarketStateCard = ({ metrics }: { metrics: AssetMetrics }) => {
   const { symbol, dev, state, devHistory, stateSince, daysActive, timer, timerType } = metrics;
 
@@ -265,7 +371,6 @@ export function PortfolioPage() {
   const [assetReturns, setAssetReturns] = useState<Record<string, number>>({});
 
   // Suggested Tab State
-  // We now store the SELECTED symbol for each category
   const [suggestedConfig, setSuggestedConfig] = useState({
       includeStock: true,
       stockType: 'equity' as 'equity' | 'leveraged',
@@ -276,17 +381,47 @@ export function PortfolioPage() {
       selectedFixed: ''
   });
 
-  // Calculate 1 Year Return (approx)
+  // Accurate 1 Year Return Calculation
   const calcReturn = (data: TsetmcDataPoint[]) => {
       if (data.length < 2) return 0;
-      const current = data[data.length - 1].close;
-      // Approximate 240 trading days or look back 365 days
-      // Since data is just date/close, let's take index ~240 back if available, or just the first one if history is short but > 1 year
-      // Or simply find the date 1 year ago.
-      // For simplicity/speed in this context, let's take the price ~240 trading days ago (approx 1 year).
-      const index = Math.max(0, data.length - 240); 
-      const old = data[index].close;
-      return ((current - old) / old) * 100;
+      
+      const lastPoint = data[data.length - 1];
+      const lastDateStr = lastPoint.date;
+      
+      // Parse YYYYMMDD to Date
+      const parseDate = (d: string) => {
+          const y = parseInt(d.substring(0, 4));
+          const m = parseInt(d.substring(4, 6)) - 1;
+          const dy = parseInt(d.substring(6, 8));
+          return new Date(y, m, dy);
+      };
+
+      const lastDate = parseDate(lastDateStr);
+      // Target date is 365 days ago
+      const targetTime = lastDate.getTime() - (365 * 24 * 60 * 60 * 1000);
+
+      // Find closest data point to targetTime
+      let closestPoint = data[0];
+      let minDiff = Infinity;
+
+      // We only need to check indices that are plausible (e.g., look back ~200-300 trading days)
+      // But scanning the whole array is fast enough for <1000 items usually
+      // Since data is sorted, we could binary search, but linear scan is fine here.
+      for (const p of data) {
+          const pTime = parseDate(p.date).getTime();
+          const diff = Math.abs(pTime - targetTime);
+          if (diff < minDiff) {
+              minDiff = diff;
+              closestPoint = p;
+          }
+          // Optimization: if we moved past target significantly, break? 
+          // Data is sorted ascending. Target is in the past.
+      }
+
+      // If closest point is the same as last point (e.g. only 1 data point), return 0
+      if (closestPoint.date === lastPoint.date) return 0;
+
+      return ((lastPoint.close - closestPoint.close) / closestPoint.close) * 100;
   };
 
   // Load assets and calculate returns on mount
@@ -297,11 +432,10 @@ export function PortfolioPage() {
               const data = await fetchAssetGroups();
               setAssetGroups(data);
               
-              // Parallel Fetch for returns (Optimized limit 400 days)
+              // Parallel Fetch for returns (Fetch ~400 points to cover >1 year of trading days)
               const returns: Record<string, number> = {};
               await Promise.all(data.map(async (asset) => {
                   try {
-                      // Fetch enough history for 1 year calculation
                       const hist = await fetchStockHistory(asset.symbol, 400); 
                       returns[asset.symbol] = calcReturn(hist.data);
                   } catch (e) {
@@ -315,7 +449,6 @@ export function PortfolioPage() {
               const getBestAsset = (type: string) => {
                   const subset = data.filter(d => d.type === type);
                   if (subset.length === 0) return '';
-                  
                   // Sort by return descending
                   subset.sort((a, b) => (returns[b.symbol] || 0) - (returns[a.symbol] || 0));
                   return subset[0].symbol;
@@ -323,7 +456,7 @@ export function PortfolioPage() {
               
               setSuggestedConfig(prev => ({
                   ...prev,
-                  selectedStock: getBestAsset('equity'), // Default to equity best
+                  selectedStock: getBestAsset('equity'), 
                   selectedGold: getBestAsset('gold'),
                   selectedFixed: getBestAsset('fixed')
               }));
@@ -697,12 +830,7 @@ export function PortfolioPage() {
     return asset?.url;
   };
 
-  const getReturnText = (symbol: string) => {
-      const val = assetReturns[symbol];
-      if (val === undefined) return '';
-      const sign = val > 0 ? '+' : '';
-      return `(${sign}${val.toFixed(1)}%)`;
-  };
+  const getReturnVal = (symbol: string) => assetReturns[symbol];
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">
@@ -843,38 +971,39 @@ export function PortfolioPage() {
                             </div>
                         )}
 
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                            
                            {/* Stocks Row */}
-                           <div className="flex flex-col xl:flex-row gap-4 p-4 rounded-xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors items-start xl:items-center">
-                               {/* Checkbox */}
-                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px] group">
-                                   <div className="relative">
+                           <div className="flex flex-col gap-4 p-6 rounded-2xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
+                               {/* Top: Checkbox & Info */}
+                               <div className="flex items-start gap-4 border-b border-slate-700/50 pb-4">
+                                   <div className="relative pt-1">
                                       <input 
                                         type="checkbox" 
                                         checked={suggestedConfig.includeStock} 
                                         onChange={(e) => setSuggestedConfig(prev => ({...prev, includeStock: e.target.checked}))}
                                         className="peer sr-only"
                                       />
-                                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${suggestedConfig.includeStock ? 'bg-cyan-500 border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'border-slate-600 bg-slate-900 group-hover:border-slate-500'}`}>
+                                      <label onClick={() => setSuggestedConfig(prev => ({...prev, includeStock: !prev.includeStock}))} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer ${suggestedConfig.includeStock ? 'bg-cyan-500 border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'border-slate-600 bg-slate-900 hover:border-slate-500'}`}>
                                          {suggestedConfig.includeStock && <Check size={14} className="text-white" strokeWidth={4} />}
-                                      </div>
+                                      </label>
                                    </div>
-                                   <div className="flex flex-col">
-                                       <span className={`font-bold transition-colors ${suggestedConfig.includeStock ? 'text-white' : 'text-slate-500'}`}>بازار سهام</span>
-                                       <span className="text-[9px] text-slate-500">صندوق های سهامی که ضریب الفای بالای ۱۵ و ارزش دارایی بیشتر از ۱۰۰ میلیارد تومان دارند.</span>
+                                   <div className="flex flex-col gap-1">
+                                       <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeStock ? 'text-white' : 'text-slate-500'}`}>بازار سهام</span>
+                                       <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                                           صندوق‌های سهامی که ضریب آلفای بالای ۱۵ و ارزش دارایی بیشتر از ۱۰۰ میلیارد تومان دارند.
+                                       </p>
                                    </div>
-                               </label>
+                               </div>
                                
-                               <div className={`flex-1 flex flex-col sm:flex-row gap-3 w-full transition-opacity ${suggestedConfig.includeStock ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                                   
-                                   {/* Radio Buttons Group (Toggle Switch) */}
-                                   <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-700 shrink-0">
+                               {/* Bottom: Controls */}
+                               <div className={`flex flex-col sm:flex-row gap-4 items-center transition-opacity duration-300 ${suggestedConfig.includeStock ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                   {/* Type Toggle */}
+                                   <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-700 shrink-0 w-full sm:w-auto">
                                        <button 
                                          onClick={() => {
                                             if (!suggestedConfig.includeStock) return;
                                             const newType = 'equity';
-                                            // Find max return for new type
                                             const assets = assetGroups.filter(g => g.type === newType);
                                             let best = assets.length > 0 ? assets[0].symbol : '';
                                             if (assets.length > 0) {
@@ -883,7 +1012,7 @@ export function PortfolioPage() {
                                             }
                                             setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: best }));
                                          }}
-                                         className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${suggestedConfig.stockType === 'equity' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                                         className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${suggestedConfig.stockType === 'equity' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
                                        >
                                          سهامی (کم‌ریسک)
                                        </button>
@@ -899,37 +1028,30 @@ export function PortfolioPage() {
                                             }
                                             setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: best }));
                                          }}
-                                         className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${suggestedConfig.stockType === 'leveraged' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                                         className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${suggestedConfig.stockType === 'leveraged' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
                                        >
                                          اهرمی (پرریسک)
                                        </button>
                                    </div>
 
-                                   {/* Select Dropdown */}
-                                   <div className="flex-1 flex gap-2">
-                                       <select
-                                         disabled={!suggestedConfig.includeStock}
-                                         value={suggestedConfig.selectedStock}
-                                         onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedStock: e.target.value}))}
-                                         className="flex-1 bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-cyan-500 disabled:opacity-50 min-h-[42px]"
-                                       >
-                                           {stockAssets.length === 0 && <option value="">لیست خالی است</option>}
-                                           {stockAssets.map(a => (
-                                               <option key={a.symbol} value={a.symbol}>
-                                                   {a.symbol} {getReturnText(a.symbol)}
-                                               </option>
-                                           ))}
-                                       </select>
-                                       
+                                   {/* Custom Dropdown */}
+                                   <div className="flex-1 w-full flex items-center gap-3">
+                                       <CustomSelect 
+                                            options={stockAssets} 
+                                            value={suggestedConfig.selectedStock}
+                                            onChange={(val) => setSuggestedConfig(prev => ({...prev, selectedStock: val}))}
+                                            disabled={!suggestedConfig.includeStock}
+                                            getReturnVal={getReturnVal}
+                                       />
                                        {getActiveAssetLink(suggestedConfig.selectedStock, suggestedConfig.stockType) && (
                                            <a 
                                              href={getActiveAssetLink(suggestedConfig.selectedStock, suggestedConfig.stockType)} 
                                              target="_blank" 
                                              rel="noreferrer"
-                                             className="bg-slate-700 hover:bg-cyan-600 text-white p-2.5 rounded-lg transition-colors flex items-center justify-center border border-slate-600"
+                                             className="text-slate-500 hover:text-cyan-400 transition-colors p-2"
                                              title="مشاهده سایت"
                                            >
-                                               <ExternalLink className="w-4 h-4" />
+                                               <ExternalLink className="w-5 h-5" />
                                            </a>
                                        )}
                                    </div>
@@ -937,48 +1059,45 @@ export function PortfolioPage() {
                            </div>
 
                            {/* Gold Row */}
-                           <div className="flex flex-col xl:flex-row gap-4 p-4 rounded-xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors items-center">
-                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px] group w-full xl:w-auto">
-                                   <div className="relative">
+                           <div className="flex flex-col gap-4 p-6 rounded-2xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
+                               <div className="flex items-start gap-4 border-b border-slate-700/50 pb-4">
+                                   <div className="relative pt-1">
                                       <input 
                                         type="checkbox" 
                                         checked={suggestedConfig.includeGold} 
                                         onChange={(e) => setSuggestedConfig(prev => ({...prev, includeGold: e.target.checked}))}
                                         className="peer sr-only"
                                       />
-                                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${suggestedConfig.includeGold ? 'bg-amber-500 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'border-slate-600 bg-slate-900 group-hover:border-slate-500'}`}>
+                                      <label onClick={() => setSuggestedConfig(prev => ({...prev, includeGold: !prev.includeGold}))} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer ${suggestedConfig.includeGold ? 'bg-amber-500 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'border-slate-600 bg-slate-900 hover:border-slate-500'}`}>
                                          {suggestedConfig.includeGold && <Check size={14} className="text-white" strokeWidth={4} />}
-                                      </div>
+                                      </label>
                                    </div>
-                                   <div className="flex flex-col">
-                                      <span className={`font-bold transition-colors ${suggestedConfig.includeGold ? 'text-white' : 'text-slate-500'}`}>صندوق طلا</span>
-                                      <span className="text-[9px] text-slate-500">صندوق های طلایی که ارزش دارایی بالای ۱۰ همت دارند.</span>
+                                   <div className="flex flex-col gap-1">
+                                       <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeGold ? 'text-white' : 'text-slate-500'}`}>صندوق طلا</span>
+                                       <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                                           صندوق‌های طلایی که ارزش دارایی بالای ۱۰ همت دارند.
+                                       </p>
                                    </div>
-                               </label>
-                               <div className={`flex-1 w-full transition-opacity ${suggestedConfig.includeGold ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                                   <div className="flex gap-2">
-                                       <select
-                                         disabled={!suggestedConfig.includeGold}
-                                         value={suggestedConfig.selectedGold}
-                                         onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedGold: e.target.value}))}
-                                         className="w-full bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-amber-500 disabled:opacity-50 min-h-[42px]"
-                                       >
-                                           {getAssetsByType('gold').length === 0 && <option value="">لیست خالی است</option>}
-                                           {getAssetsByType('gold').map(a => (
-                                               <option key={a.symbol} value={a.symbol}>
-                                                    {a.symbol} {getReturnText(a.symbol)}
-                                               </option>
-                                           ))}
-                                       </select>
+                               </div>
+                               
+                               <div className={`flex flex-col sm:flex-row gap-4 items-center transition-opacity duration-300 ${suggestedConfig.includeGold ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                   <div className="flex-1 w-full flex items-center gap-3">
+                                       <CustomSelect 
+                                            options={getAssetsByType('gold')} 
+                                            value={suggestedConfig.selectedGold}
+                                            onChange={(val) => setSuggestedConfig(prev => ({...prev, selectedGold: val}))}
+                                            disabled={!suggestedConfig.includeGold}
+                                            getReturnVal={getReturnVal}
+                                       />
                                        {getActiveAssetLink(suggestedConfig.selectedGold, 'gold') && (
                                            <a 
                                              href={getActiveAssetLink(suggestedConfig.selectedGold, 'gold')} 
                                              target="_blank" 
                                              rel="noreferrer"
-                                             className="bg-slate-700 hover:bg-amber-600 text-white p-2.5 rounded-lg transition-colors flex items-center justify-center border border-slate-600"
+                                             className="text-slate-500 hover:text-amber-400 transition-colors p-2"
                                              title="مشاهده سایت"
                                            >
-                                               <ExternalLink className="w-4 h-4" />
+                                               <ExternalLink className="w-5 h-5" />
                                            </a>
                                        )}
                                    </div>
@@ -986,48 +1105,45 @@ export function PortfolioPage() {
                            </div>
 
                            {/* Fixed Income Row */}
-                           <div className="flex flex-col xl:flex-row gap-4 p-4 rounded-xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors items-center">
-                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px] group w-full xl:w-auto">
-                                   <div className="relative">
+                           <div className="flex flex-col gap-4 p-6 rounded-2xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
+                               <div className="flex items-start gap-4 border-b border-slate-700/50 pb-4">
+                                   <div className="relative pt-1">
                                       <input 
                                         type="checkbox" 
                                         checked={suggestedConfig.includeFixed} 
                                         onChange={(e) => setSuggestedConfig(prev => ({...prev, includeFixed: e.target.checked}))}
                                         className="peer sr-only"
                                       />
-                                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${suggestedConfig.includeFixed ? 'bg-blue-500 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-slate-600 bg-slate-900 group-hover:border-slate-500'}`}>
+                                      <label onClick={() => setSuggestedConfig(prev => ({...prev, includeFixed: !prev.includeFixed}))} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer ${suggestedConfig.includeFixed ? 'bg-blue-500 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-slate-600 bg-slate-900 hover:border-slate-500'}`}>
                                          {suggestedConfig.includeFixed && <Check size={14} className="text-white" strokeWidth={4} />}
-                                      </div>
+                                      </label>
                                    </div>
-                                   <div className="flex flex-col">
-                                       <span className={`font-bold transition-colors ${suggestedConfig.includeFixed ? 'text-white' : 'text-slate-500'}`}>درآمد ثابت</span>
-                                       <span className="text-[9px] text-slate-500">صندوق های درامد ثابت بدون ریسک که ارزش دارایی بالای ۱۰ همت دارند.</span>
+                                   <div className="flex flex-col gap-1">
+                                       <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeFixed ? 'text-white' : 'text-slate-500'}`}>درآمد ثابت</span>
+                                       <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                                           صندوق‌های درآمد ثابت بدون ریسک که ارزش دارایی بالای ۱۰ همت دارند.
+                                       </p>
                                    </div>
-                               </label>
-                               <div className={`flex-1 w-full transition-opacity ${suggestedConfig.includeFixed ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                                   <div className="flex gap-2">
-                                       <select
-                                         disabled={!suggestedConfig.includeFixed}
-                                         value={suggestedConfig.selectedFixed}
-                                         onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedFixed: e.target.value}))}
-                                         className="w-full bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-blue-500 disabled:opacity-50 min-h-[42px]"
-                                       >
-                                           {getAssetsByType('fixed').length === 0 && <option value="">لیست خالی است</option>}
-                                           {getAssetsByType('fixed').map(a => (
-                                               <option key={a.symbol} value={a.symbol}>
-                                                   {a.symbol} {getReturnText(a.symbol)}
-                                               </option>
-                                           ))}
-                                       </select>
+                               </div>
+                               
+                               <div className={`flex flex-col sm:flex-row gap-4 items-center transition-opacity duration-300 ${suggestedConfig.includeFixed ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                   <div className="flex-1 w-full flex items-center gap-3">
+                                       <CustomSelect 
+                                            options={getAssetsByType('fixed')} 
+                                            value={suggestedConfig.selectedFixed}
+                                            onChange={(val) => setSuggestedConfig(prev => ({...prev, selectedFixed: val}))}
+                                            disabled={!suggestedConfig.includeFixed}
+                                            getReturnVal={getReturnVal}
+                                       />
                                        {getActiveAssetLink(suggestedConfig.selectedFixed, 'fixed') && (
                                            <a 
                                              href={getActiveAssetLink(suggestedConfig.selectedFixed, 'fixed')} 
                                              target="_blank" 
                                              rel="noreferrer"
-                                             className="bg-slate-700 hover:bg-blue-600 text-white p-2.5 rounded-lg transition-colors flex items-center justify-center border border-slate-600"
+                                             className="text-slate-500 hover:text-blue-400 transition-colors p-2"
                                              title="مشاهده سایت"
                                            >
-                                               <ExternalLink className="w-4 h-4" />
+                                               <ExternalLink className="w-5 h-5" />
                                            </a>
                                        )}
                                    </div>
