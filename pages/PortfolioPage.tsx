@@ -638,7 +638,7 @@ export function PortfolioPage() {
       const goldState = goldLogic.state;
       const stockState = stockLogic.state;
 
-      const fixedName = suggestedConfig.selectedFixed || "درآمد ثابت";
+      const fixedName = suggestedConfig.selectedFixed || "صندوق درآمد ثابت";
 
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
           scenario = "فرصت نوسان‌گیری (واگرایی)";
@@ -855,7 +855,7 @@ export function PortfolioPage() {
        
        {/* Enhanced Header Section */}
        <header className="mb-8 space-y-6">
-          <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 inline-block mb-2">
+          <h2 className="hidden md:inline-block text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">
             سبد دارایی
           </h2>
           
@@ -892,7 +892,7 @@ export function PortfolioPage() {
                           <span>صندوق طلا</span>
                       </div>
                       <p className="text-xs text-slate-400 leading-6 text-justify">
-                        این صندوق‌ها دارایی‌های طلا نگهداری می‌کنند و قیمت آن‌ها دقیقاً همگام با قیمت طلا بالا و پایین می‌رود (مناسب برای حفظ ارزش پول).
+                        این صندوق‌ها دارایی‌های طلا نگهداری می‌کنند و قیمت آن‌ها دقیقاً همگام با قیمت طلا بالا و پایین می‌رود (مناسب برای حفظ ارزش پول) و حداقل دو سال از فعالیت صندوق گذشته است.
                       </p>
                     </div>
 
@@ -900,10 +900,10 @@ export function PortfolioPage() {
                     <div className="bg-slate-900/80 p-5 rounded-2xl border border-blue-500/20 shadow-lg flex flex-col gap-3 group hover:border-blue-500/50 transition-colors">
                       <div className="flex items-center gap-2 text-blue-400 font-bold border-b border-slate-800 pb-2">
                           <ShieldCheck className="w-5 h-5" />
-                          <span>درآمد ثابت (بدون ریسک)</span>
+                          <span>صندوق درآمد ثابت (بدون ریسک)</span>
                       </div>
                       <p className="text-xs text-slate-400 leading-6 text-justify">
-                        این صندوق‌ها جایگزین سپرده بانکی هستند و سودی حدود ۳۰ تا ۳۵ درصد سالانه دارند. امنیت آن‌ها بسیار بالاست و ریسک ندارد.
+                        این صندوق‌ها جایگزین سپرده بانکی هستند و سودی حدود ۳۰ تا ۳۵ درصد سالانه دارند. امنیت آن‌ها بسیار بالاست و ریسک ندارد و حداقل دو سال از فعالیت صندوق گذشته است.
                       </p>
                     </div>
 
@@ -914,7 +914,7 @@ export function PortfolioPage() {
                           <span>بازار سهام</span>
                       </div>
                       <p className="text-xs text-slate-400 leading-6 text-justify">
-                        شامل دو نوع صندوق است: ۱. صندوق‌های سهامی: با ریسک استاندارد و پتانسیل رشد. ۲. صندوق‌های شتابی (اهرمی): با ریسک بالاتر برای کسانی که دنبال هیجان و سود بیشتر هستند.
+                        شامل دو نوع صندوق است: ۱. صندوق‌های سهامی: با ریسک استاندارد و پتانسیل رشد. ۲. صندوق‌های شتابی (اهرمی): با ریسک بالاتر برای کسانی که دنبال هیجان و سود بیشتر هستند و حداقل دو سال از فعالیت صندوق گذشته است.
                       </p>
                     </div>
                 </div>
@@ -1009,7 +1009,7 @@ export function PortfolioPage() {
                                    <div className="flex flex-col gap-1">
                                        <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeStock ? 'text-white' : 'text-slate-500'}`}>بازار سهام</span>
                                        <p className="text-xs text-slate-400 leading-relaxed">
-                                           صندوق‌های سهامی که ضریب آلفای بالای ۱۵ و ارزش دارایی بیشتر از ۱۰۰ میلیارد تومان دارند.
+                                           صندوق‌های سهامی که ضریب آلفای بالای ۱۵ و ارزش دارایی بیشتر از ۱۰۰ میلیارد تومان دارند و حداقل ۲ سال سابقه دارند.
                                        </p>
                                    </div>
                                </div>
@@ -1082,7 +1082,7 @@ export function PortfolioPage() {
                                    <div className="flex flex-col gap-1">
                                        <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeGold ? 'text-white' : 'text-slate-500'}`}>صندوق طلا</span>
                                        <p className="text-xs text-slate-400 leading-relaxed">
-                                           صندوق‌های طلایی که ارزش دارایی بالای ۱۰ همت دارند.
+                                           صندوق‌های طلایی که ارزش دارایی بالای ۱۰ همت دارند و حداقل ۲ سال سابقه دارند.
                                        </p>
                                    </div>
                                </div>
@@ -1127,9 +1127,9 @@ export function PortfolioPage() {
                                       </label>
                                    </div>
                                    <div className="flex flex-col gap-1">
-                                       <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeFixed ? 'text-white' : 'text-slate-500'}`}>درآمد ثابت</span>
+                                       <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeFixed ? 'text-white' : 'text-slate-500'}`}>صندوق درآمد ثابت</span>
                                        <p className="text-xs text-slate-400 leading-relaxed">
-                                           صندوق‌های درآمد ثابت بدون ریسک که ارزش دارایی بالای ۱۰ همت دارند.
+                                           صندوق‌های درآمد ثابت بدون ریسک که ارزش دارایی بالای ۱۰ همت دارند و حداقل ۲ سال سابقه دارند.
                                        </p>
                                    </div>
                                </div>
@@ -1166,202 +1166,3 @@ export function PortfolioPage() {
                      </button>
                   </div>
               )}
-
-              {/* TAB 2: ANALYSIS */}
-              {activeTab === 'analysis' && (
-                  <div className="animate-fade-in grid md:grid-cols-3 gap-6">
-                      <SearchInput label="انتخاب صندوق یا سهام" value={symbol} onSelect={setSymbol} />
-                      <div className="space-y-2">
-                          <label className="block text-sm font-medium text-slate-400">تاریخ محاسبه</label>
-                          <div className="flex gap-2">
-                            <button onClick={() => setDateMode('current')} className={`flex-1 p-3 rounded-lg border text-sm font-bold flex items-center justify-center gap-2 transition-all ${dateMode === 'current' ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}><Clock className="w-4 h-4" /> آخرین قیمت</button>
-                            <button onClick={() => setDateMode('custom')} className={`flex-1 p-3 rounded-lg border text-sm font-bold flex items-center justify-center gap-2 transition-all ${dateMode === 'custom' ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}><Calendar className="w-4 h-4" /> تاریخ خاص</button>
-                          </div>
-                      </div>
-                      <div className={dateMode === 'custom' ? '' : 'opacity-30 pointer-events-none'}>
-                          <label className="block text-sm font-medium text-slate-400 mb-2">انتخاب تاریخ</label>
-                          <ShamsiDatePicker value={shamsiDate} onChange={setShamsiDate} />
-                      </div>
-                      <div className="md:col-span-3">
-                        <button onClick={handleRunAnalysis} disabled={status === FetchStatus.LOADING} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all border-none">
-                            {status === FetchStatus.LOADING ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'تحلیل نماد'}
-                        </button>
-                      </div>
-                  </div>
-              )}
-          </div>
-       </div>
-
-       {status === FetchStatus.SUCCESS && marketMetrics && strategy && (
-         <div className="flex flex-col gap-8 animate-fade-in">
-            
-            {/* 1. Results Display Panel (Chart) - Full Width */}
-            <div className="w-full">
-                <div className="bg-slate-800 rounded-3xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
-                    <div className="p-6 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
-                        <div>
-                            <span className="text-xs text-slate-500 block mb-1 uppercase tracking-tighter">استراتژی</span>
-                            <h3 className="text-2xl font-black text-white flex items-center gap-3">
-                                {strategy.scenario}
-                                <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></div>
-                            </h3>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 flex flex-col p-6 items-center gap-6">
-                        {/* Chart Area */}
-                        <div className="w-full h-[320px] relative group">
-                            <ResponsiveContainer>
-                                <RechartsPieChart>
-                                    <Pie 
-                                      data={strategy.allocation} 
-                                      cx="50%" 
-                                      cy="50%" 
-                                      innerRadius={80} 
-                                      outerRadius={120} 
-                                      paddingAngle={8} 
-                                      dataKey="value" 
-                                      stroke="none"
-                                    >
-                                        {strategy.allocation.map((entry, index) => (
-                                          <Cell key={index} fill={entry.fill} className="hover:opacity-90 transition-opacity cursor-pointer shadow-2xl" />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip 
-                                        contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '16px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', color: '#fff' }} 
-                                        itemStyle={{ color: '#fff', fontSize: '13px', fontWeight: 'bold' }}
-                                    />
-                                    <Legend 
-                                      verticalAlign="bottom" 
-                                      height={36} 
-                                      iconType="circle" 
-                                      formatter={(value) => <span className="text-slate-400 font-bold text-xs hover:text-white transition-colors">{value}</span>} 
-                                    />
-                                </RechartsPieChart>
-                            </ResponsiveContainer>
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
-                                <div className="text-center">
-                                    <span className="block text-3xl font-black text-white drop-shadow-lg">دارایی</span>
-                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">تخصیص بهینه</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {/* Action Description */}
-                        <div className="w-full p-6 bg-slate-900/60 rounded-[28px] border border-slate-700/50 backdrop-blur-xl shadow-2xl space-y-5">
-                            <div className="flex flex-col sm:flex-row justify-between items-center border-b border-slate-700/50 pb-4 gap-4">
-                                <h5 className="text-sm font-black text-white flex items-center gap-2">
-                                    <CheckCircle2 className="w-5 h-5 text-emerald-400" /> پیشنهاد ترکیب سبد
-                                </h5>
-                                <div className="flex gap-4">
-                                  {strategy.allocation.map((a, i) => (
-                                      <div key={i} className="flex items-center gap-2">
-                                          <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: a.fill}}></div>
-                                          <span className="font-black text-[11px] text-white">{a.value}%</span>
-                                      </div>
-                                  ))}
-                                </div>
-                            </div>
-                            <p className="text-[12px] text-slate-300 leading-7 text-justify font-medium whitespace-pre-line">{strategy.description}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* 2. Calculation Details */}
-            <div className="space-y-6">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-cyan-400" />
-                    نحوه محاسبه
-                </h3>
-
-                {/* Cards Grid */}
-                <div className="grid md:grid-cols-2 gap-6">
-                    <MarketStateCard metrics={marketMetrics.gold} />
-                    <MarketStateCard metrics={marketMetrics.index} />
-                </div>
-
-                {/* Secondary Indicators (Below Cards) */}
-                <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-lg">
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <div className={`p-4 rounded-2xl border transition-all ${marketMetrics.anomaly ? 'bg-red-500/10 border-red-500/40' : 'bg-slate-900 border-slate-700 opacity-60'}`}>
-                            <div className="flex items-center gap-2 mb-1">
-                                <ShieldAlert className={`w-4 h-4 ${marketMetrics.anomaly ? 'text-red-500' : 'text-slate-500'}`} />
-                                <span className={`text-[10px] font-black ${marketMetrics.anomaly ? 'text-white' : 'text-slate-500'}`}>هشدار رفتار غیرعادی بازار</span>
-                            </div>
-                            <span className="text-[9px] text-slate-500 block leading-relaxed">تضاد جهت‌گیری پول هوشمند در کوتاه‌مدت و بلندمدت</span>
-                        </div>
-                        <div className="p-4 rounded-2xl border bg-slate-900 border-slate-700">
-                            <div className="flex justify-between items-center mb-1">
-                                <div className="flex items-center gap-2">
-                                    <Zap className="w-4 h-4 text-orange-500" />
-                                    <span className="text-[10px] font-black text-white">ریسک همبستگی</span>
-                                </div>
-                                <span className="text-[10px] font-mono text-slate-400" dir="ltr">{marketMetrics.corr2M.toFixed(2)}</span>
-                            </div>
-                            <div className="bg-slate-800 h-1.5 rounded-full overflow-hidden mt-2">
-                               <div className="h-full bg-orange-500" style={{ width: `${(marketMetrics.corr2M + 1) * 50}%` }}></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-         </div>
-       )}
-
-       {/* Scenario Guide Section */}
-       {status === FetchStatus.SUCCESS && strategy && (
-         <section className="animate-fade-in mt-12">
-            <h3 className="text-xl font-black text-white mb-8 flex items-center gap-3"><Target className="w-7 h-7 text-amber-500" /> استراتژی ها</h3>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[
-                  { id: 'combat', icon: Swords, title: 'فرصت نوسان‌گیری (واگرایی)', desc: 'یکی از دارایی ها حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: تبدیل سرمایه به سمت حباب منفی' },
-                  { id: 'bubble', icon: Boxes, title: 'هشدار ریزش (نقد شوید)', desc: 'هر دو دارایی گران شده اند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه' },
-                  { id: 'opportunity', icon: Sparkles, title: 'فرصت خرید طلایی', desc: 'هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری' },
-                  { id: 'one-ceiling', icon: TrendingDown, title: 'ذخیره سود', desc: 'یک دارایی گران شده.\nپیشنهاد: تبدیل بخشی از سود به دارایی ارزان تر و اوراق' },
-                  { id: 'one-floor', icon: TrendingUp, title: 'شکار فرصت', desc: 'یک دارایی ارزان شده.\nپیشنهاد: تبدیل بخشی از سرمایه به دارایی ارزان تر' },
-                  { id: 'peace', icon: CheckCircle2, title: 'بازار متعادل (رونددار)', desc: 'بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.' },
-                ].map((s) => {
-                    const isActive = strategy.id === s.id;
-                    return (
-                        <div key={s.id} className={`group p-6 rounded-3xl border transition-all duration-500 flex flex-col relative overflow-hidden ${isActive ? 'bg-slate-800 border-cyan-500/50 shadow-[0_20px_50px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/50 scale-[1.02]' : 'bg-slate-900/40 border-slate-800 grayscale hover:grayscale-0 opacity-40 hover:opacity-100 hover:border-slate-700'}`}>
-                            {isActive && (
-                              <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-cyan-500 text-white text-[8px] font-black px-2.5 py-1 rounded-full animate-bounce shadow-lg uppercase">
-                                <Activity className="w-2.5 h-2.5" /> وضعیت فعال
-                              </div>
-                            )}
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-5 transition-all duration-500 ${isActive ? 'bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)]' : 'bg-slate-800 text-slate-500 group-hover:bg-slate-700'}`}>
-                                <s.icon className="w-7 h-7" />
-                            </div>
-                            <h4 className={`font-black mb-3 text-sm transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{s.title}</h4>
-                            <p className="text-[11px] text-slate-500 leading-7 text-justify transition-colors group-hover:text-slate-400 whitespace-pre-line">{s.desc}</p>
-                        </div>
-                    );
-                })}
-            </div>
-         </section>
-       )}
-
-       {/* Initial State Helper */}
-       {status === FetchStatus.IDLE && (
-         <div className="flex flex-col items-center justify-center p-24 bg-slate-800/40 rounded-[40px] border border-slate-700 border-dashed opacity-40 group hover:opacity-100 transition-opacity">
-            <Activity className="w-20 h-20 text-slate-700 mb-6 group-hover:text-cyan-500 transition-colors animate-pulse" />
-            <p className="text-slate-500 font-medium group-hover:text-slate-300 transition-colors text-center max-w-sm leading-relaxed">
-              سیستم در انتظار ورودی... لطفا تنظیمات سبد پیشنهادی یا تحلیل نماد را انجام دهید.
-            </p>
-         </div>
-       )}
-
-       {/* Error Handler */}
-       {error && (
-         <div className="bg-red-500/10 border border-red-500/30 p-5 rounded-2xl text-red-400 text-sm flex items-center gap-4 animate-shake">
-             <AlertTriangle className="w-6 h-6 shrink-0" />
-             <div className="flex-1">
-               <span className="font-bold block mb-0.5">خطای محاسباتی</span>
-               {error}
-             </div>
-         </div>
-       )}
-    </div>
-  );
-}

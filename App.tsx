@@ -13,7 +13,7 @@ const MENU_ITEMS = [
   { path: '/', label: 'خانه', icon: Home },
   { path: '/correlation', label: 'همبستگی', icon: LineChart },
   { path: '/ratio', label: 'نسبت', icon: Scale },
-  { path: '/portfolio', label: 'پرتفوی', icon: Briefcase },
+  { path: '/portfolio', label: 'سبد دارایی', icon: Briefcase },
   { path: '/signal', label: 'سیگنال', icon: Zap },
 ];
 
