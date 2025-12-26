@@ -1166,3 +1166,136 @@ export function PortfolioPage() {
                      </button>
                   </div>
               )}
+
+              {/* TAB 2: CUSTOM ANALYSIS */}
+              {activeTab === 'analysis' && (
+                  <div className="space-y-6 animate-fade-in">
+                      <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-700/50 space-y-6">
+                           <SearchInput label="جستجوی نماد (سهامی/اهرمی)" value={symbol} onSelect={setSymbol} />
+                           
+                           <div className="space-y-3">
+                              <label className="block text-sm font-medium text-slate-400">تاریخ تحلیل</label>
+                              <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-600 w-fit">
+                                  <button onClick={() => setDateMode('current')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${dateMode === 'current' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>آخرین روز معاملاتی</button>
+                                  <button onClick={() => setDateMode('custom')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${dateMode === 'custom' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>تاریخ خاص</button>
+                              </div>
+                              
+                              {dateMode === 'custom' && (
+                                  <div className="animate-fade-in pt-2">
+                                      <ShamsiDatePicker value={shamsiDate} onChange={setShamsiDate} />
+                                  </div>
+                              )}
+                           </div>
+                      </div>
+
+                      <button onClick={handleRunAnalysis} disabled={status === FetchStatus.LOADING} className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all border-none">
+                       {status === FetchStatus.LOADING ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'شروع تحلیل استراتژی'}
+                     </button>
+                  </div>
+              )}
+          </div>
+       </div>
+
+       {/* Error */}
+       {error && (
+            <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-4 rounded-xl flex items-center gap-3 mt-6 animate-fade-in">
+                <ShieldAlert className="w-5 h-5" />
+                <span className="text-sm font-bold">{error}</span>
+            </div>
+       )}
+
+       {/* Results */}
+       {status === FetchStatus.SUCCESS && strategy && marketMetrics && (
+           <div className="space-y-8 mt-8 animate-fade-in border-t border-slate-700 pt-8">
+               <div className="flex items-center gap-2 mb-4">
+                   <Target className="w-6 h-6 text-cyan-400" />
+                   <h3 className="text-2xl font-black text-white">نتیجه تحلیل هوشمند</h3>
+               </div>
+
+               {/* Metrics Cards */}
+               <div className="grid md:grid-cols-2 gap-6 h-full">
+                   <MarketStateCard metrics={marketMetrics.gold} />
+                   <MarketStateCard metrics={marketMetrics.index} />
+               </div>
+
+               {/* Strategy Output */}
+               <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl border border-slate-700 overflow-hidden shadow-2xl relative">
+                   {/* Background Effects */}
+                   <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+                   
+                   <div className="p-6 md:p-8 flex flex-col md:flex-row gap-8 items-center">
+                       {/* Left: Text Info */}
+                       <div className="flex-1 space-y-6 z-10">
+                           <div>
+                               <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">
+                                   <Sparkles className="w-4 h-4 text-yellow-400" />
+                                   سناریوی تشخیص داده شده
+                               </div>
+                               <h2 className="text-3xl md:text-4xl font-black text-white leading-tight mb-4">
+                                   {strategy.scenario}
+                               </h2>
+                               <p className="text-slate-300 leading-8 text-justify border-l-2 border-cyan-500 pl-4">
+                                   {strategy.description}
+                               </p>
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-4">
+                               <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+                                   <div className="text-slate-500 text-[10px] mb-1">همبستگی ۱ ساله</div>
+                                   <div className={`text-lg font-bold ${marketMetrics.corr1Y > 0 ? 'text-emerald-400' : 'text-red-400'}`} dir="ltr">{marketMetrics.corr1Y.toFixed(2)}</div>
+                               </div>
+                               <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+                                   <div className="text-slate-500 text-[10px] mb-1">همبستگی ۲ ماهه</div>
+                                   <div className={`text-lg font-bold ${marketMetrics.corr2M > 0 ? 'text-emerald-400' : 'text-red-400'}`} dir="ltr">{marketMetrics.corr2M.toFixed(2)}</div>
+                               </div>
+                           </div>
+                       </div>
+
+                       {/* Right: Pie Chart */}
+                       <div className="w-full md:w-1/3 h-[300px] relative z-10">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <RechartsPieChart>
+                                    <Pie
+                                        data={strategy.allocation}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                        stroke="none"
+                                    >
+                                        {strategy.allocation.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '12px', color: '#f8fafc' }}
+                                        itemStyle={{ color: '#f8fafc' }}
+                                        formatter={(value: number) => [`${value}%`, '']}
+                                    />
+                                    <Legend 
+                                        layout="vertical" 
+                                        verticalAlign="middle" 
+                                        align="right"
+                                        iconType="circle"
+                                        wrapperStyle={{ fontSize: '12px', fontFamily: 'Vazirmatn' }}
+                                    />
+                                </RechartsPieChart>
+                            </ResponsiveContainer>
+                            {/* Center Label */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="text-center">
+                                    <div className="text-[10px] text-slate-500">تخصیص</div>
+                                    <div className="text-xl font-black text-white">پرتفوی</div>
+                                </div>
+                            </div>
+                       </div>
+                   </div>
+               </div>
+           </div>
+       )}
+
+    </div>
+  );
+}
