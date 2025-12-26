@@ -432,11 +432,12 @@ export function PortfolioPage() {
               const data = await fetchAssetGroups();
               setAssetGroups(data);
               
-              // Parallel Fetch for returns (Fetch ~400 points to cover >1 year of trading days)
+              // Parallel Fetch for returns (Fetch all points to ensure we get the latest data for calc)
               const returns: Record<string, number> = {};
               await Promise.all(data.map(async (asset) => {
                   try {
-                      const hist = await fetchStockHistory(asset.symbol, 400); 
+                      // Fetch full history (default limit)
+                      const hist = await fetchStockHistory(asset.symbol); 
                       returns[asset.symbol] = calcReturn(hist.data);
                   } catch (e) {
                       console.warn(`Could not calc return for ${asset.symbol}`);
