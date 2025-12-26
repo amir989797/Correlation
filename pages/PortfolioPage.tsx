@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { fetchStockHistory, searchSymbols, fetchAssetGroups } from '../services/tsetmcService';
 import { calculateFullHistorySMA, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson, toShamsi } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus, AssetGroup } from '../types';
@@ -381,7 +381,7 @@ export function PortfolioPage() {
       selectedFixed: ''
   });
 
-  // Accurate 1 Year Return Calculation
+  // Optimized 1 Year Return Calculation
   const calcReturn = (data: TsetmcDataPoint[]) => {
       if (data.length < 2) return 0;
       
@@ -400,22 +400,30 @@ export function PortfolioPage() {
       // Target date is 365 days ago
       const targetTime = lastDate.getTime() - (365 * 24 * 60 * 60 * 1000);
 
-      // Find closest data point to targetTime
-      let closestPoint = data[0];
+      // Find closest data point to targetTime by iterating BACKWARDS from end
+      // Since array is sorted, we start from today and go back in time.
+      // This is much faster than iterating from the beginning (oldest) to find recent past.
+      
+      let closestPoint = data[data.length - 1];
       let minDiff = Infinity;
 
-      // We only need to check indices that are plausible (e.g., look back ~200-300 trading days)
-      // But scanning the whole array is fast enough for <1000 items usually
-      // Since data is sorted, we could binary search, but linear scan is fine here.
-      for (const p of data) {
+      // We only need to check back roughly 250-300 trading days (indexes)
+      // But to be safe and accurate for gaps, we loop.
+      // Optimization: break loop when difference starts increasing significantly or date is way past target
+      
+      for (let i = data.length - 1; i >= 0; i--) {
+          const p = data[i];
           const pTime = parseDate(p.date).getTime();
           const diff = Math.abs(pTime - targetTime);
+
           if (diff < minDiff) {
               minDiff = diff;
               closestPoint = p;
+          } else if (diff > minDiff && pTime < targetTime) {
+              // If we moved past the target time (to older dates) and difference is getting larger,
+              // we found our local minimum.
+              break; 
           }
-          // Optimization: if we moved past target significantly, break? 
-          // Data is sorted ascending. Target is in the past.
       }
 
       // If closest point is the same as last point (e.g. only 1 data point), return 0
@@ -833,6 +841,15 @@ export function PortfolioPage() {
 
   const getReturnVal = (symbol: string) => assetReturns[symbol];
 
+  // Sorting Helper
+  const sortAssets = (assets: AssetGroup[]) => {
+      return [...assets].sort((a, b) => (getReturnVal(b.symbol) || 0) - (getReturnVal(a.symbol) || 0));
+  };
+
+  const sortedStockAssets = useMemo(() => sortAssets(stockAssets), [stockAssets, assetReturns]);
+  const sortedGoldAssets = useMemo(() => sortAssets(getAssetsByType('gold')), [assetGroups, assetReturns]);
+  const sortedFixedAssets = useMemo(() => sortAssets(getAssetsByType('fixed')), [assetGroups, assetReturns]);
+
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">
        
@@ -1005,13 +1022,7 @@ export function PortfolioPage() {
                                          onClick={() => {
                                             if (!suggestedConfig.includeStock) return;
                                             const newType = 'equity';
-                                            const assets = assetGroups.filter(g => g.type === newType);
-                                            let best = assets.length > 0 ? assets[0].symbol : '';
-                                            if (assets.length > 0) {
-                                                const sorted = [...assets].sort((a,b) => (assetReturns[b.symbol] || 0) - (assetReturns[a.symbol] || 0));
-                                                best = sorted[0].symbol;
-                                            }
-                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: best }));
+                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: '' })); // Reset selection to force user pick or auto-select logic
                                          }}
                                          className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${suggestedConfig.stockType === 'equity' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
                                        >
@@ -1021,13 +1032,7 @@ export function PortfolioPage() {
                                          onClick={() => {
                                             if (!suggestedConfig.includeStock) return;
                                             const newType = 'leveraged';
-                                            const assets = assetGroups.filter(g => g.type === newType);
-                                            let best = assets.length > 0 ? assets[0].symbol : '';
-                                            if (assets.length > 0) {
-                                                const sorted = [...assets].sort((a,b) => (assetReturns[b.symbol] || 0) - (assetReturns[a.symbol] || 0));
-                                                best = sorted[0].symbol;
-                                            }
-                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: best }));
+                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: '' }));
                                          }}
                                          className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${suggestedConfig.stockType === 'leveraged' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
                                        >
@@ -1038,7 +1043,7 @@ export function PortfolioPage() {
                                    {/* Custom Dropdown */}
                                    <div className="flex-1 w-full flex items-center gap-3">
                                        <CustomSelect 
-                                            options={stockAssets} 
+                                            options={sortedStockAssets} 
                                             value={suggestedConfig.selectedStock}
                                             onChange={(val) => setSuggestedConfig(prev => ({...prev, selectedStock: val}))}
                                             disabled={!suggestedConfig.includeStock}
@@ -1049,10 +1054,11 @@ export function PortfolioPage() {
                                              href={getActiveAssetLink(suggestedConfig.selectedStock, suggestedConfig.stockType)} 
                                              target="_blank" 
                                              rel="noreferrer"
-                                             className="text-slate-500 hover:text-cyan-400 transition-colors p-2"
+                                             className="text-slate-400 hover:text-cyan-400 flex items-center gap-2 transition-colors whitespace-nowrap"
                                              title="مشاهده سایت"
                                            >
-                                               <ExternalLink className="w-5 h-5" />
+                                               <Globe className="w-4 h-4" />
+                                               <span className="text-xs font-bold hidden sm:inline">درباره {suggestedConfig.selectedStock}</span>
                                            </a>
                                        )}
                                    </div>
@@ -1084,7 +1090,7 @@ export function PortfolioPage() {
                                <div className={`flex flex-col sm:flex-row gap-4 items-center transition-opacity duration-300 ${suggestedConfig.includeGold ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                                    <div className="flex-1 w-full flex items-center gap-3">
                                        <CustomSelect 
-                                            options={getAssetsByType('gold')} 
+                                            options={sortedGoldAssets} 
                                             value={suggestedConfig.selectedGold}
                                             onChange={(val) => setSuggestedConfig(prev => ({...prev, selectedGold: val}))}
                                             disabled={!suggestedConfig.includeGold}
@@ -1095,10 +1101,11 @@ export function PortfolioPage() {
                                              href={getActiveAssetLink(suggestedConfig.selectedGold, 'gold')} 
                                              target="_blank" 
                                              rel="noreferrer"
-                                             className="text-slate-500 hover:text-amber-400 transition-colors p-2"
+                                             className="text-slate-400 hover:text-amber-400 flex items-center gap-2 transition-colors whitespace-nowrap"
                                              title="مشاهده سایت"
                                            >
-                                               <ExternalLink className="w-5 h-5" />
+                                               <Globe className="w-4 h-4" />
+                                               <span className="text-xs font-bold hidden sm:inline">درباره {suggestedConfig.selectedGold}</span>
                                            </a>
                                        )}
                                    </div>
@@ -1130,7 +1137,7 @@ export function PortfolioPage() {
                                <div className={`flex flex-col sm:flex-row gap-4 items-center transition-opacity duration-300 ${suggestedConfig.includeFixed ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                                    <div className="flex-1 w-full flex items-center gap-3">
                                        <CustomSelect 
-                                            options={getAssetsByType('fixed')} 
+                                            options={sortedFixedAssets} 
                                             value={suggestedConfig.selectedFixed}
                                             onChange={(val) => setSuggestedConfig(prev => ({...prev, selectedFixed: val}))}
                                             disabled={!suggestedConfig.includeFixed}
@@ -1141,10 +1148,11 @@ export function PortfolioPage() {
                                              href={getActiveAssetLink(suggestedConfig.selectedFixed, 'fixed')} 
                                              target="_blank" 
                                              rel="noreferrer"
-                                             className="text-slate-500 hover:text-blue-400 transition-colors p-2"
+                                             className="text-slate-400 hover:text-blue-400 flex items-center gap-2 transition-colors whitespace-nowrap"
                                              title="مشاهده سایت"
                                            >
-                                               <ExternalLink className="w-5 h-5" />
+                                               <Globe className="w-4 h-4" />
+                                               <span className="text-xs font-bold hidden sm:inline">درباره {suggestedConfig.selectedFixed}</span>
                                            </a>
                                        )}
                                    </div>
