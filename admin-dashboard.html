@@ -64,6 +64,10 @@
                         <span class="text-slate-300">آخرین تاریخ دیتا</span>
                         <span id="stat-date" class="text-xl font-bold text-emerald-400" dir="ltr">...</span>
                     </div>
+                    <div class="flex items-center gap-2 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        <span class="text-xs text-slate-400">زمان‌بندی خودکار فعال است: <strong class="text-white">هر روز ساعت ۱۸:۰۰</strong></span>
+                    </div>
                 </div>
             </div>
 
@@ -73,7 +77,7 @@
                 <h3 class="text-slate-400 text-sm font-bold mb-4">عملیات بروزرسانی</h3>
                 
                 <p class="text-xs text-slate-500 mb-6 leading-5">
-                    با کلیک روی دکمه زیر، اسکریپت پایتون اجرا شده و اطلاعات جدید بازار دریافت می‌شود. این عملیات ممکن است زمان‌بر باشد.
+                    با کلیک روی دکمه زیر، ابتدا از دیتای فعلی <strong>بکاپ</strong> گرفته می‌شود و سپس اطلاعات جدید بازار دریافت می‌شود.
                 </p>
 
                 <div class="flex flex-col gap-3">
@@ -88,8 +92,14 @@
                             <div id="stop-loader" class="loader hidden border-white border-t-red-500"></div>
                         </button>
                     </div>
+
+                    <!-- Restore Button -->
+                    <button id="restore-btn" class="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 hover:text-white font-bold py-2 rounded-lg transition flex items-center justify-center gap-2 text-sm">
+                        <span>بازگردانی بکاپ (دیتای روز قبل)</span>
+                        <div id="restore-loader" class="loader hidden w-4 h-4 border-2"></div>
+                    </button>
                     
-                    <div class="flex items-center gap-2 text-xs text-slate-400 justify-center">
+                    <div class="flex items-center gap-2 text-xs text-slate-400 justify-center mt-2">
                         <span id="status-indicator" class="w-2 h-2 rounded-full bg-slate-500"></span>
                         <span id="status-text">آماده به کار</span>
                     </div>
@@ -133,6 +143,7 @@
         const logTerminal = document.getElementById('log-terminal');
         const stopBtn = document.getElementById('stop-btn');
         const updateBtn = document.getElementById('update-btn');
+        const restoreBtn = document.getElementById('restore-btn');
 
         // Initial Check
         if (token) {
@@ -173,7 +184,7 @@
         });
 
         updateBtn.addEventListener('click', async () => {
-            if (!confirm('آیا مطمئن هستید؟ این عملیات سنگین است.')) return;
+            if (!confirm('آیا مطمئن هستید؟ ابتدا از دیتای فعلی بکاپ گرفته می‌شود.')) return;
             try {
                 const res = await fetch(`${API_URL}/update`, {
                     method: 'POST',
@@ -186,6 +197,34 @@
                 fetchStats();
             } catch (err) {
                 console.error(err);
+            }
+        });
+
+        restoreBtn.addEventListener('click', async () => {
+            if (!confirm('هشدار: دیتای فعلی حذف شده و با دیتای بکاپ (روز قبل) جایگزین می‌شود. آیا مطمئن هستید؟')) return;
+            
+            document.getElementById('restore-loader').classList.remove('hidden');
+            restoreBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_URL}/restore`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    alert(data.message);
+                } else {
+                    alert('خطا: ' + data.message);
+                }
+                fetchStats();
+            } catch (err) {
+                console.error(err);
+                alert('خطا در ارتباط با سرور');
+            } finally {
+                document.getElementById('restore-loader').classList.add('hidden');
+                restoreBtn.disabled = false;
             }
         });
 
@@ -245,26 +284,36 @@
                 const statusDot = document.getElementById('status-indicator');
                 const statusText = document.getElementById('status-text');
 
+                // UI Logic based on state
                 if (data.isUpdating) {
                     updateBtn.disabled = true;
+                    restoreBtn.disabled = true; // Disable restore during update
                     updateBtn.classList.add('opacity-75');
                     document.getElementById('btn-text').innerText = 'در حال اجرا...';
                     loader.classList.remove('hidden');
                     stopBtn.classList.remove('hidden');
                     statusDot.classList.remove('bg-slate-500', 'bg-red-500');
                     statusDot.classList.add('bg-green-500', 'animate-pulse');
-                    statusText.innerText = 'اسکریپت در حال اجراست';
+                    statusText.innerText = 'اسکریپت آپدیت در حال اجراست';
                     statusText.classList.add('text-green-400');
+                } else if (data.isRestoring) {
+                    updateBtn.disabled = true;
+                    restoreBtn.disabled = true;
+                    stopBtn.classList.add('hidden');
+                    statusDot.classList.add('bg-yellow-500', 'animate-pulse');
+                    statusText.innerText = 'در حال بازیابی بکاپ...';
+                    statusText.classList.add('text-yellow-400');
                 } else {
                     updateBtn.disabled = false;
+                    restoreBtn.disabled = false;
                     updateBtn.classList.remove('opacity-75');
                     document.getElementById('btn-text').innerText = 'شروع آپدیت بازار';
                     loader.classList.add('hidden');
                     stopBtn.classList.add('hidden');
-                    statusDot.classList.remove('bg-green-500', 'animate-pulse', 'bg-red-500');
+                    statusDot.classList.remove('bg-green-500', 'animate-pulse', 'bg-red-500', 'bg-yellow-500');
                     statusDot.classList.add('bg-slate-500');
                     statusText.innerText = 'آماده به کار';
-                    statusText.classList.remove('text-green-400');
+                    statusText.classList.remove('text-green-400', 'text-yellow-400');
                 }
 
                 if (data.lastLog) {

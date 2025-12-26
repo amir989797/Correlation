@@ -6,6 +6,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import cron from 'node-cron';
 import 'dotenv/config';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -21,6 +22,7 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123';
 
 let isUpdating = false;
+let isRestoring = false;
 let lastUpdateLog = "هنوز آپدیتی انجام نشده است.";
 let currentProcess = null;
 
@@ -37,10 +39,11 @@ const dbConfig = {
 
 const pool = new Pool(dbConfig);
 
-// Init DB for Assets
-const initAssetDB = async () => {
+// Init DB for Assets & Backup Table
+const initDB = async () => {
     const client = await pool.connect();
     try {
+        // Asset Groups
         await client.query(`
             CREATE TABLE IF NOT EXISTS asset_groups (
                 symbol VARCHAR(50),
@@ -50,18 +53,20 @@ const initAssetDB = async () => {
                 PRIMARY KEY (symbol, type)
             );
         `);
-        // Add columns if they don't exist (Migration)
-        await client.query(`ALTER TABLE asset_groups ADD COLUMN IF NOT EXISTS url TEXT;`);
-        await client.query(`ALTER TABLE asset_groups ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE;`);
         
-        console.log("✅ Asset Groups table checked/updated.");
+        // Backup Table Structure (Clone of daily_prices structure without data)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS daily_prices_backup (LIKE daily_prices INCLUDING ALL);
+        `);
+        
+        console.log("✅ Database tables checked/initialized.");
     } catch (e) {
-        console.error("Error creating/updating asset_groups table:", e);
+        console.error("Error creating/updating tables:", e);
     } finally {
         client.release();
     }
 };
-initAssetDB();
+initDB();
 
 const requireAuth = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -88,6 +93,113 @@ const syncSymbolsTable = async () => {
     client.release();
   }
 };
+
+// --- DATA BACKUP & RESTORE LOGIC ---
+
+const createBackup = async () => {
+    const client = await pool.connect();
+    try {
+        console.log('📦 Starting backup process...');
+        await client.query('TRUNCATE daily_prices_backup');
+        await client.query('INSERT INTO daily_prices_backup SELECT * FROM daily_prices');
+        console.log('✅ Backup created successfully.');
+        return true;
+    } catch (e) {
+        console.error('❌ Backup failed:', e);
+        lastUpdateLog += `\n❌ خطای بکاپ گیری: ${e.message}`;
+        return false;
+    } finally {
+        client.release();
+    }
+};
+
+const restoreBackupData = async () => {
+    const client = await pool.connect();
+    try {
+        console.log('♻️ Starting restore process...');
+        await client.query('BEGIN');
+        await client.query('TRUNCATE daily_prices');
+        await client.query('INSERT INTO daily_prices SELECT * FROM daily_prices_backup');
+        await client.query('COMMIT');
+        console.log('✅ Data restored from backup.');
+        return true;
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error('❌ Restore failed:', e);
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+
+// --- CORE UPDATE LOGIC ---
+
+const runUpdateProcess = async () => {
+    if (isUpdating) return;
+    if (!fs.existsSync(PYTHON_SCRIPT_PATH)) {
+        lastUpdateLog += `\n❌ فایل اسکریپت یافت نشد.`;
+        return;
+    }
+
+    isUpdating = true;
+    lastUpdateLog = "📦 در حال ایجاد نسخه پشتیبان (Backup)...\n";
+
+    // 1. Backup First
+    const backupSuccess = await createBackup();
+    if (!backupSuccess) {
+        lastUpdateLog += "\n❌ عملیات به دلیل شکست در بکاپ‌گیری متوقف شد.";
+        isUpdating = false;
+        return;
+    }
+
+    lastUpdateLog += "✅ بکاپ گرفته شد.\n🚀 آپدیت شروع شد (حالت چند رشته‌ای)...\n";
+    
+    currentProcess = spawn('python3', ['-u', PYTHON_SCRIPT_PATH]);
+
+    currentProcess.stdout.on('data', (data) => {
+        const chunk = data.toString();
+        lastUpdateLog = (lastUpdateLog + chunk).slice(-5000); 
+    });
+
+    currentProcess.stderr.on('data', (data) => {
+        const text = data.toString();
+        if (text.includes('%') || text.includes('it/s')) {
+            lastUpdateLog += `\n[PROGRESS]: ${text}`; 
+        } else {
+            lastUpdateLog += `\n[ERROR]: ${text}`;
+        }
+        lastUpdateLog = lastUpdateLog.slice(-5000);
+    });
+
+    currentProcess.on('close', async (code) => {
+        console.log(`Script finished: ${code}`);
+        currentProcess = null;
+        isUpdating = false;
+
+        if (code === 0) {
+            lastUpdateLog += `\n✅ دریافت دیتا تمام شد.`;
+            try {
+                const count = await syncSymbolsTable();
+                lastUpdateLog += `\n✨ لیست جستجو بروز شد (${count} نماد جدید).`;
+            } catch (e) {
+                lastUpdateLog += `\n⚠️ خطا در بروزرسانی لیست جستجو: ${e.message}`;
+            }
+        } else {
+            lastUpdateLog += `\n❌ عملیات متوقف شد (Code: ${code}).`;
+        }
+    });
+};
+
+// --- SCHEDULER (Every Day at 18:00 Tehran Time) ---
+cron.schedule('0 18 * * *', () => {
+    console.log('⏰ Running scheduled daily update...');
+    runUpdateProcess();
+}, {
+    scheduled: true,
+    timezone: "Asia/Tehran"
+});
+
+// --- API ENDPOINTS ---
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin-dashboard.html'));
@@ -142,6 +254,7 @@ app.get('/api/stats', requireAuth, async (req, res) => {
       symbolCount: result.rows[0].symbol_count || 0,
       lastDate: result.rows[0].last_date,
       isUpdating,
+      isRestoring,
       lastLog: lastUpdateLog,
       scriptPath: PYTHON_SCRIPT_PATH,
       scriptExists
@@ -156,47 +269,25 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 
 app.post('/api/update', requireAuth, (req, res) => {
   if (isUpdating) return res.status(400).json({ message: 'عملیات آپدیت هم‌اکنون در حال اجراست.' });
-  if (!fs.existsSync(PYTHON_SCRIPT_PATH)) return res.status(500).json({ message: `فایل اسکریپت یافت نشد.` });
-
-  isUpdating = true;
-  lastUpdateLog = "🚀 آپدیت شروع شد (حالت چند رشته‌ای)...\n";
+  if (isRestoring) return res.status(400).json({ message: 'عملیات بازیابی بکاپ در حال اجراست.' });
   
-  currentProcess = spawn('python3', ['-u', PYTHON_SCRIPT_PATH]);
+  runUpdateProcess();
+  res.json({ message: 'دستور آپدیت و بکاپ‌گیری ارسال شد.', status: 'started' });
+});
 
-  currentProcess.stdout.on('data', (data) => {
-    const chunk = data.toString();
-    lastUpdateLog = (lastUpdateLog + chunk).slice(-5000); 
-  });
+app.post('/api/restore', requireAuth, async (req, res) => {
+    if (isUpdating) return res.status(400).json({ message: 'نمی‌توان هنگام آپدیت، بکاپ را برگرداند.' });
+    if (isRestoring) return res.status(400).json({ message: 'عملیات بازیابی هم‌اکنون در حال اجراست.' });
 
-  currentProcess.stderr.on('data', (data) => {
-    const text = data.toString();
-    if (text.includes('%') || text.includes('it/s')) {
-        lastUpdateLog += `\n[PROGRESS]: ${text}`; 
-    } else {
-        lastUpdateLog += `\n[ERROR]: ${text}`;
+    isRestoring = true;
+    try {
+        await restoreBackupData();
+        isRestoring = false;
+        res.json({ message: 'اطلاعات با موفقیت به روز قبل (بکاپ) بازگردانده شد.' });
+    } catch (e) {
+        isRestoring = false;
+        res.status(500).json({ message: `خطا در بازیابی: ${e.message}` });
     }
-    lastUpdateLog = lastUpdateLog.slice(-5000);
-  });
-
-  currentProcess.on('close', async (code) => {
-    console.log(`Script finished: ${code}`);
-    currentProcess = null;
-    isUpdating = false;
-
-    if (code === 0) {
-        lastUpdateLog += `\n✅ دریافت دیتا تمام شد.`;
-        try {
-            const count = await syncSymbolsTable();
-            lastUpdateLog += `\n✨ لیست جستجو بروز شد (${count} نماد جدید).`;
-        } catch (e) {
-            lastUpdateLog += `\n⚠️ خطا در بروزرسانی لیست جستجو: ${e.message}`;
-        }
-    } else {
-        lastUpdateLog += `\n❌ عملیات متوقف شد (Code: ${code}).`;
-    }
-  });
-
-  res.json({ message: 'دستور آپدیت ارسال شد.', status: 'started' });
 });
 
 app.post('/api/stop', requireAuth, (req, res) => {
@@ -237,8 +328,6 @@ app.post('/api/assets', requireAuth, async (req, res) => {
         client.release();
     }
 });
-
-// Removed PUT default endpoint as default is now calculated dynamically
 
 app.delete('/api/assets', requireAuth, async (req, res) => {
     const { symbol, type } = req.body;
