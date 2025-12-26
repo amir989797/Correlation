@@ -39,6 +39,35 @@ interface StrategyResult {
   description: string;
 }
 
+// --- CONSTANTS ---
+
+const STRATEGIES: Record<string, { title: string; description: string }> = {
+  combat: {
+    title: "فرصت نوسان‌گیری (واگرایی)",
+    description: "یکی از دارایی ها حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: تبدیل سرمایه به سمت حباب منفی"
+  },
+  bubble: {
+    title: "هشدار ریزش (نقد شوید)",
+    description: "هر دو دارایی گران شده اند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه"
+  },
+  opportunity: {
+    title: "فرصت خرید طلایی",
+    description: "هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری"
+  },
+  "one-ceiling": {
+    title: "ذخیره سود",
+    description: "یک دارایی گران شده.\nپیشنهاد: تبدیل بخشی از سود به دارایی ارزان تر و اوراق"
+  },
+  "one-floor": {
+    title: "شکار فرصت",
+    description: "یک دارایی ارزان شده.\nپیشنهاد: تبدیل بخشی از سرمایه به دارایی ارزان تر"
+  },
+  peace: {
+    title: "بازار متعادل (رونددار)",
+    description: "بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید."
+  }
+};
+
 // --- Helper Components ---
 
 /**
@@ -368,8 +397,6 @@ export function PortfolioPage() {
   // Asset Lists from API
   const [assetGroups, setAssetGroups] = useState<AssetGroup[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
-  // We use the one_year_return directly from assetGroups now
-  // const [assetReturns, setAssetReturns] = useState<Record<string, number>>({});
 
   // Suggested Tab State
   const [suggestedConfig, setSuggestedConfig] = useState({
@@ -396,7 +423,6 @@ export function PortfolioPage() {
                   if (subset.length === 0) return '';
                   
                   // Sort by return descending using the one_year_return field
-                  // Note: DB returns numeric strings often, handle safety
                   subset.sort((a, b) => {
                       const rA = Number(a.one_year_return || 0);
                       const rB = Number(b.one_year_return || 0);
@@ -572,9 +598,7 @@ export function PortfolioPage() {
       };
 
       // --- Scenario Logic ---
-      let scenario = "";
       let sid = "";
-      let description = "";
       let alloc: { name: string; value: number; fill: string, type: 'gold' | 'stock' | 'fixed' }[] = [];
 
       const goldState = goldLogic.state;
@@ -583,9 +607,7 @@ export function PortfolioPage() {
       const fixedName = suggestedConfig.selectedFixed || "صندوق درآمد ثابت";
 
       if ((goldState === 'Ceiling' && stockState === 'Floor') || (goldState === 'Floor' && stockState === 'Ceiling')) {
-          scenario = "فرصت نوسان‌گیری (واگرایی)";
           sid = "combat";
-          description = "یکی از دارایی ها حباب مثبت و دیگری حباب منفی دارد.\nپیشنهاد: تبدیل سرمایه به سمت حباب منفی";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isAnomaly) {
               alloc = cheapAsset === 'gold'
@@ -603,25 +625,19 @@ export function PortfolioPage() {
           }
       } 
       else if (goldState === 'Ceiling' && stockState === 'Ceiling') {
-          scenario = "هشدار ریزش (نقد شوید)";
           sid = "bubble";
-          description = "هر دو دارایی گران شده اند.\nپیشنهاد: افزایش سطح نقدینگی (اوراق) برای حفظ اصل سرمایه";
           alloc = ratioTrendAbove
               ? [ { name: goldSymbol, value: 30, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 20, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 50, fill: '#3b82f6', type: 'fixed' } ]
               : [ { name: goldSymbol, value: 20, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 30, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 50, fill: '#3b82f6', type: 'fixed' } ];
       }
       else if (goldState === 'Floor' && stockState === 'Floor') {
-          scenario = "فرصت خرید طلایی";
           sid = "opportunity";
-          description = "هر دو دارایی ارزان شده اند.\nپیشنهاد: کاهش سطح نقدینگی (اوراق) برای سرمایه گزاری";
           alloc = ratioTrendAbove 
             ? [ { name: goldSymbol, value: 45, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 25, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 30, fill: '#3b82f6', type: 'fixed' } ]
             : [ { name: goldSymbol, value: 25, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 45, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 30, fill: '#3b82f6', type: 'fixed' } ];
       }
       else if (goldState === 'Ceiling' || stockState === 'Ceiling') {
-          scenario = "ذخیره سود";
           sid = "one-ceiling";
-          description = "یک دارایی گران شده.\nپیشنهاد: تبدیل بخشی از سود به دارایی ارزان تر و اوراق";
           const highAsset = goldState === 'Ceiling' ? 'gold' : 'index';
           const ratioConfirmsSell = highAsset === 'gold' ? !ratioTrendAbove : ratioTrendAbove; 
           if (ratioConfirmsSell) {
@@ -633,9 +649,7 @@ export function PortfolioPage() {
           }
       }
       else if (goldState === 'Floor' || stockState === 'Floor') {
-          scenario = "شکار فرصت";
           sid = "one-floor";
-          description = "یک دارایی ارزان شده.\nپیشنهاد: تبدیل بخشی از سرمایه به دارایی ارزان تر";
           const cheapAsset = goldState === 'Floor' ? 'gold' : 'index';
           if (isHighCorrRisk) {
               alloc = cheapAsset === 'gold'
@@ -653,9 +667,7 @@ export function PortfolioPage() {
           }
       }
       else {
-          scenario = "بازار متعادل (رونددار)";
           sid = "peace";
-          description = "بازار آرام است. هیجان خاصی در قیمت‌ها نیست.\nپیشنهاد: با روند همراه شوید و وزن دارایی قوی‌تر را بیشتر کنید.";
           if (isHighCorrRisk) {
               alloc = [ { name: goldSymbol, value: 25, fill: '#fbbf24', type: 'gold' }, { name: stockSymbol, value: 25, fill: '#10b981', type: 'stock' }, { name: fixedName, value: 50, fill: '#3b82f6', type: 'fixed' } ];
           } else if (isSafeCorr) {
@@ -669,7 +681,17 @@ export function PortfolioPage() {
           }
       }
 
-      return { metrics, baseStrategy: { allocation: alloc, scenario, id: sid, description } };
+      const content = STRATEGIES[sid] || STRATEGIES['peace'];
+
+      return { 
+          metrics, 
+          baseStrategy: { 
+              allocation: alloc, 
+              scenario: content.title, 
+              id: sid, 
+              description: content.description 
+          } 
+      };
   }
 
   const handleRunSuggested = async () => {
