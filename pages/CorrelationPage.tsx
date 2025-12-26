@@ -438,9 +438,15 @@ export function CorrelationPage() {
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8 animate-fade-in">
-        <header className="mb-6">
-            <h2 className="text-3xl font-bold text-white mb-2">محاسبه همبستگی نمادها</h2>
-            <p className="text-slate-400">تحلیل همبستگی تاریخی و ابزارهای تکنیکال مقایسه‌ای</p>
+        <header className="mb-8 space-y-6">
+            <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 inline-block mb-2">
+            محاسبه همبستگی نمادها
+            </h2>
+            <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50 backdrop-blur-sm shadow-xl transition-all duration-300">
+                <p className="text-slate-300 leading-8 text-justify font-medium">
+                در این بخش می‌توانید ضریب همبستگی تاریخی بین دو نماد را بررسی کنید. همبستگی مثبت (نزدیک به ۱) یعنی دو نماد هم‌جهت حرکت می‌کنند و همبستگی منفی (نزدیک به ۱-) یعنی خلاف جهت یکدیگرند. همچنین ابزارهای تکنیکال مقایسه‌ای برای تحلیل دقیق‌تر در دسترس هستند.
+                </p>
+            </div>
         </header>
         
         {/* Input Method Toggle */}

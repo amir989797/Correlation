@@ -945,7 +945,7 @@ export function PortfolioPage() {
                     <div>
                       <h5 className="text-yellow-500 font-bold text-sm mb-1">نکته طلایی: بازار زنده است!</h5>
                       <p className="text-yellow-200/80 text-xs leading-6 text-justify">
-                        اقتصاد همیشه در حال تغییر است. پرتفویی که امروز عالی است، شاید ماه آینده نیاز به تغییر داشته باشد. پیشنهاد می‌کنیم ماهی یکی‌دوبار به اینجا سر بزنید و دکمه «محاسبه» را بزنید تا اگر وضعیت بازار عوض شده بود، درصد دارایی‌هایتان را با خیال راحت بروزرسانی کنید.
+                        اقتصاد همیشه در حال تغییر است. سبدی که امروز عالی است، شاید ماه آینده نیاز به تغییر داشته باشد. پیشنهاد می‌کنیم ماهی یکی‌دوبار به اینجا سر بزنید و دکمه «محاسبه» را بزنید تا اگر وضعیت بازار عوض شده بود، درصد دارایی‌هایتان را با خیال راحت بروزرسانی کنید.
                       </p>
                     </div>
                 </div>
@@ -1009,7 +1009,7 @@ export function PortfolioPage() {
                                    <div className="flex flex-col gap-1">
                                        <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeStock ? 'text-white' : 'text-slate-500'}`}>بازار سهام</span>
                                        <p className="text-xs text-slate-400 leading-relaxed">
-                                           صندوق‌های سهامی که ضریب آلفای بالای ۱۵ و ارزش دارایی بیشتر از ۱۰۰ میلیارد تومان دارند.
+                                           صندوق‌های سهامی که ضریب آلفای بالای ۱۵ و ارزش دارایی بیشتر از ۱۰۰ میلیارد تومان دارند و حداقل دو سال از فعالیت صندوق گذشته است.
                                        </p>
                                    </div>
                                </div>
@@ -1082,7 +1082,7 @@ export function PortfolioPage() {
                                    <div className="flex flex-col gap-1">
                                        <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeGold ? 'text-white' : 'text-slate-500'}`}>صندوق طلا</span>
                                        <p className="text-xs text-slate-400 leading-relaxed">
-                                           صندوق‌های طلایی که ارزش دارایی بالای ۱۰ همت دارند.
+                                           صندوق‌های طلایی که ارزش دارایی بالای ۱۰ همت دارند و حداقل دو سال از فعالیت صندوق گذشته است.
                                        </p>
                                    </div>
                                </div>
@@ -1129,7 +1129,7 @@ export function PortfolioPage() {
                                    <div className="flex flex-col gap-1">
                                        <span className={`font-bold text-lg transition-colors ${suggestedConfig.includeFixed ? 'text-white' : 'text-slate-500'}`}>درآمد ثابت</span>
                                        <p className="text-xs text-slate-400 leading-relaxed">
-                                           صندوق‌های درآمد ثابت بدون ریسک که ارزش دارایی بالای ۱۰ همت دارند.
+                                           صندوق‌های درآمد ثابت بدون ریسک که ارزش دارایی بالای ۱۰ همت دارند و حداقل دو سال از فعالیت صندوق گذشته است.
                                        </p>
                                    </div>
                                </div>
