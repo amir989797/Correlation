@@ -39,6 +39,8 @@ export interface SearchResult {
 export interface AssetGroup {
   symbol: string;
   type: 'equity' | 'leveraged' | 'gold' | 'fixed';
+  url?: string;
+  is_default?: boolean;
 }
 
 export enum FetchStatus {

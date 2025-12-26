@@ -45,12 +45,18 @@ const initAssetDB = async () => {
             CREATE TABLE IF NOT EXISTS asset_groups (
                 symbol VARCHAR(50),
                 type VARCHAR(20),
+                url TEXT,
+                is_default BOOLEAN DEFAULT FALSE,
                 PRIMARY KEY (symbol, type)
             );
         `);
-        console.log("✅ Asset Groups table checked/created.");
+        // Add columns if they don't exist (Migration)
+        await client.query(`ALTER TABLE asset_groups ADD COLUMN IF NOT EXISTS url TEXT;`);
+        await client.query(`ALTER TABLE asset_groups ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE;`);
+        
+        console.log("✅ Asset Groups table checked/updated.");
     } catch (e) {
-        console.error("Error creating asset_groups table:", e);
+        console.error("Error creating/updating asset_groups table:", e);
     } finally {
         client.release();
     }
@@ -204,7 +210,7 @@ app.post('/api/stop', requireAuth, (req, res) => {
 app.get('/api/assets', requireAuth, async (req, res) => {
     const client = await pool.connect();
     try {
-        const result = await client.query('SELECT symbol, type FROM asset_groups ORDER BY symbol');
+        const result = await client.query('SELECT symbol, type, url, is_default FROM asset_groups ORDER BY symbol');
         res.json(result.rows);
     } catch(e) {
         res.status(500).json({ error: e.message });
@@ -214,14 +220,38 @@ app.get('/api/assets', requireAuth, async (req, res) => {
 });
 
 app.post('/api/assets', requireAuth, async (req, res) => {
+    const { symbol, type, url } = req.body;
+    if (!symbol || !type) return res.status(400).json({error: 'Invalid data'});
+    
+    const client = await pool.connect();
+    try {
+        await client.query(
+            'INSERT INTO asset_groups (symbol, type, url) VALUES ($1, $2, $3) ON CONFLICT (symbol, type) DO UPDATE SET url = $3', 
+            [symbol, type, url || null]
+        );
+        res.json({ success: true });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.put('/api/assets/default', requireAuth, async (req, res) => {
     const { symbol, type } = req.body;
     if (!symbol || !type) return res.status(400).json({error: 'Invalid data'});
     
     const client = await pool.connect();
     try {
-        await client.query('INSERT INTO asset_groups (symbol, type) VALUES ($1, $2) ON CONFLICT DO NOTHING', [symbol, type]);
+        await client.query('BEGIN');
+        // Reset all to false for this type
+        await client.query('UPDATE asset_groups SET is_default = FALSE WHERE type = $1', [type]);
+        // Set specific one to true
+        await client.query('UPDATE asset_groups SET is_default = TRUE WHERE symbol = $1 AND type = $2', [symbol, type]);
+        await client.query('COMMIT');
         res.json({ success: true });
     } catch(e) {
+        await client.query('ROLLBACK');
         res.status(500).json({ error: e.message });
     } finally {
         client.release();

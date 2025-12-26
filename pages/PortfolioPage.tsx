@@ -4,10 +4,10 @@ import { fetchStockHistory, searchSymbols, fetchAssetGroups } from '../services/
 import { calculateFullHistorySMA, jalaliToGregorian, getTodayShamsi, alignDataByDate, calculatePearson, toShamsi } from '../utils/mathUtils';
 import { SearchResult, TsetmcDataPoint, FetchStatus, AssetGroup } from '../types';
 import { 
-  Search, Loader2, Info, X, Calendar, Clock, ChevronDown, TrendingUp, 
+  Search, Loader2, Info, X, Calendar, Clock, ChevronDown, ChevronUp, TrendingUp, 
   TrendingDown, AlertTriangle, CheckCircle2, Activity, ShieldAlert, 
   Zap, Target, Swords, Boxes, Sparkles, ShieldCheck, PieChart, Briefcase,
-  Coins, Landmark, GraduationCap, Lightbulb
+  Coins, Landmark, GraduationCap, Lightbulb, Check, ExternalLink
 } from 'lucide-react';
 import {
   PieChart as RechartsPieChart,
@@ -257,6 +257,7 @@ const ShamsiDatePicker = ({ value, onChange }: { value: { jy: number; jm: number
 
 export function PortfolioPage() {
   const [activeTab, setActiveTab] = useState<'suggested' | 'analysis'>('suggested');
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   
   // Asset Lists from API
   const [assetGroups, setAssetGroups] = useState<AssetGroup[]>([]);
@@ -279,16 +280,19 @@ export function PortfolioPage() {
       setLoadingAssets(true);
       fetchAssetGroups().then(data => {
           setAssetGroups(data);
-          // Set initial defaults if available
-          const equity = data.find(d => d.type === 'equity');
-          const gold = data.find(d => d.type === 'gold');
-          const fixed = data.find(d => d.type === 'fixed');
+          
+          // Helper to find default or first
+          const getDefault = (type: string) => {
+              const assets = data.filter(d => d.type === type);
+              const def = assets.find(d => d.is_default);
+              return def ? def.symbol : (assets.length > 0 ? assets[0].symbol : '');
+          };
           
           setSuggestedConfig(prev => ({
               ...prev,
-              selectedStock: equity ? equity.symbol : '',
-              selectedGold: gold ? gold.symbol : '',
-              selectedFixed: fixed ? fixed.symbol : ''
+              selectedStock: getDefault('equity'),
+              selectedGold: getDefault('gold'),
+              selectedFixed: getDefault('fixed')
           }));
       }).finally(() => setLoadingAssets(false));
   }, []);
@@ -647,6 +651,12 @@ export function PortfolioPage() {
       ? getAssetsByType('equity') 
       : getAssetsByType('leveraged');
 
+  // Helper to get active asset link
+  const getActiveAssetLink = (symbol: string, type: string) => {
+    const asset = assetGroups.find(a => a.symbol === symbol && a.type === type);
+    return asset?.url;
+  };
+
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">
        
@@ -656,78 +666,95 @@ export function PortfolioPage() {
             دستیار پرتفوی شما
           </h2>
           
-          <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50 backdrop-blur-sm space-y-8 shadow-xl">
+          <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50 backdrop-blur-sm shadow-xl transition-all duration-300">
              <p className="text-slate-300 leading-8 text-justify font-medium">
-               خوش آمدید! اینجا قرار نیست با اصطلاحات پیچیده گیج شوید. ما به شما کمک می‌کنیم تا بدون نیاز به دانش تخصصی، امن‌ترین و بهترین ترکیب دارایی را برای پول خود بسازید. این دارایی‌ها چه هستند؟ پیشنهادهای ما «صندوق‌های بورسی» هستند که مجوز رسمی دارند و با استفاده از کارگزاری های بورس، خرید و فروش آن‌ها بسیار آسان است:
+               اینجا خبری از اصطلاحات پیچیده نیست. ما کنارتان هستیم تا بدون نیاز به دانش تخصصی، هوشمندانه‌ترین و امن‌ترین ترکیب دارایی را برای سرمایه خود بسازید. تمام پیشنهادهای ما «صندوق‌های رسمی بورس» هستند؛ ابزارهایی قانونی و مطمئن که خرید و فروش آن‌ها از طریق تمام کارگزاری‌ها، بسیار ساده و سریع انجام می‌شود.
              </p>
 
-             {/* Definitions Grid */}
-             <div className="grid md:grid-cols-3 gap-4">
-                {/* Gold Card */}
-                <div className="bg-slate-900/80 p-5 rounded-2xl border border-amber-500/20 shadow-lg flex flex-col gap-3 group hover:border-amber-500/50 transition-colors">
-                   <div className="flex items-center gap-2 text-amber-400 font-bold border-b border-slate-800 pb-2">
-                      <Coins className="w-5 h-5" />
-                      <span>صندوق طلا</span>
-                   </div>
-                   <p className="text-xs text-slate-400 leading-6 text-justify">
-                     این صندوق‌ها دارایی‌های طلا نگهداری می‌کنند و قیمت آن‌ها دقیقاً همگام با قیمت طلا بالا و پایین می‌رود (مناسب برای حفظ ارزش پول).
-                   </p>
-                </div>
+             <button 
+               onClick={() => setIsHeaderExpanded(!isHeaderExpanded)}
+               className="flex items-center gap-2 text-cyan-400 text-sm font-bold mt-4 hover:text-cyan-300 transition-colors"
+             >
+                {isHeaderExpanded ? (
+                  <>
+                    <span>نمایش کمتر</span>
+                    <ChevronUp className="w-4 h-4" />
+                  </>
+                ) : (
+                  <>
+                    <span>نمایش بیشتر و راهنما</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </>
+                )}
+             </button>
 
-                {/* Fixed Income Card */}
-                <div className="bg-slate-900/80 p-5 rounded-2xl border border-blue-500/20 shadow-lg flex flex-col gap-3 group hover:border-blue-500/50 transition-colors">
-                   <div className="flex items-center gap-2 text-blue-400 font-bold border-b border-slate-800 pb-2">
-                      <ShieldCheck className="w-5 h-5" />
-                      <span>درآمد ثابت (بدون ریسک)</span>
-                   </div>
-                   <p className="text-xs text-slate-400 leading-6 text-justify">
-                     این صندوق‌ها جایگزین سپرده بانکی هستند و سودی حدود ۳۰ تا ۳۵ درصد سالانه دارند. امنیت آن‌ها بسیار بالاست و ریسک ندارد.
-                   </p>
-                </div>
-
-                {/* Stock Card */}
-                <div className="bg-slate-900/80 p-5 rounded-2xl border border-emerald-500/20 shadow-lg flex flex-col gap-3 group hover:border-emerald-500/50 transition-colors">
-                   <div className="flex items-center gap-2 text-emerald-400 font-bold border-b border-slate-800 pb-2">
-                      <TrendingUp className="w-5 h-5" />
-                      <span>بازار سهام</span>
-                   </div>
-                   <p className="text-xs text-slate-400 leading-6 text-justify">
-                     شامل دو نوع صندوق است: ۱. صندوق‌های سهامی: با ریسک استاندارد و پتانسیل رشد. ۲. صندوق‌های شتابی (اهرمی): با ریسک بالاتر برای کسانی که دنبال هیجان و سود بیشتر هستند.
-                   </p>
-                </div>
-             </div>
-
-             {/* How To Start */}
-             <div className="space-y-4">
-                <h4 className="text-white font-bold flex items-center gap-2 text-lg">
-                   <GraduationCap className="w-6 h-6 text-purple-400" />
-                   چطور شروع کنم؟ <span className="text-sm font-normal text-slate-400">(فقط ۲ قدم)</span>
-                </h4>
-                <div className="space-y-3 pr-2">
-                   <div className="flex items-start gap-3">
-                      <div className="bg-purple-500/20 text-purple-400 w-6 h-6 rounded-full flex items-center justify-center font-bold text-sm shrink-0 mt-0.5">1</div>
-                      <p className="text-slate-300 text-sm leading-7"><span className="text-white font-bold">انتخاب دارایی‌ها:</span> در کادرهای زیر، تیکِ هر دارایی که مایلید داشته باشید (سهام، طلا یا درآمد ثابت) را بزنید.</p>
-                   </div>
-                   <div className="flex items-start gap-3">
-                      <div className="bg-purple-500/20 text-purple-400 w-6 h-6 rounded-full flex items-center justify-center font-bold text-sm shrink-0 mt-0.5">2</div>
-                      <div className="space-y-2">
-                         <p className="text-slate-300 text-sm leading-7"><span className="text-white font-bold">استفاده از پیشنهادهای آماده:</span> شما تنها نیستید! ما برای هر بخش، بهترین صندوق‌های بازار را در منوی کشویی (لیست بازشو) قرار داده‌ایم.</p>
-                         <p className="text-slate-400 text-xs leading-6 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                            مثلاً اگر «صندوق طلا» را انتخاب کردید، ما صندوق معتبری مثل «تابش» یا برای سهام، صندوق «آتیمس» را پیشنهاد داده‌ایم تا نیاز به جستجو نداشته باشید. البته اگر حرفه‌ای هستید، می‌توانید این گزینه‌ها را تغییر دهید.
-                         </p>
+             {/* Collapsible Content */}
+             <div className={`space-y-8 overflow-hidden transition-all duration-500 ${isHeaderExpanded ? 'max-h-[2000px] opacity-100 mt-8' : 'max-h-0 opacity-0'}`}>
+                {/* Definitions Grid */}
+                <div className="grid md:grid-cols-3 gap-4">
+                    {/* Gold Card */}
+                    <div className="bg-slate-900/80 p-5 rounded-2xl border border-amber-500/20 shadow-lg flex flex-col gap-3 group hover:border-amber-500/50 transition-colors">
+                      <div className="flex items-center gap-2 text-amber-400 font-bold border-b border-slate-800 pb-2">
+                          <Coins className="w-5 h-5" />
+                          <span>صندوق طلا</span>
                       </div>
-                   </div>
-                </div>
-             </div>
+                      <p className="text-xs text-slate-400 leading-6 text-justify">
+                        این صندوق‌ها دارایی‌های طلا نگهداری می‌کنند و قیمت آن‌ها دقیقاً همگام با قیمت طلا بالا و پایین می‌رود (مناسب برای حفظ ارزش پول).
+                      </p>
+                    </div>
 
-             {/* Golden Tip */}
-             <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl flex gap-4 items-start">
-                <Lightbulb className="w-6 h-6 text-yellow-500 shrink-0 mt-1 animate-pulse" />
-                <div>
-                   <h5 className="text-yellow-500 font-bold text-sm mb-1">نکته طلایی: بازار زنده است!</h5>
-                   <p className="text-yellow-200/80 text-xs leading-6 text-justify">
-                     اقتصاد همیشه در حال تغییر است. پرتفویی که امروز عالی است، شاید ماه آینده نیاز به تغییر داشته باشد. پیشنهاد می‌کنیم ماهی یکی‌دوبار به اینجا سر بزنید و دکمه «محاسبه» را بزنید تا اگر وضعیت بازار عوض شده بود، درصد دارایی‌هایتان را با خیال راحت بروزرسانی کنید.
-                   </p>
+                    {/* Fixed Income Card */}
+                    <div className="bg-slate-900/80 p-5 rounded-2xl border border-blue-500/20 shadow-lg flex flex-col gap-3 group hover:border-blue-500/50 transition-colors">
+                      <div className="flex items-center gap-2 text-blue-400 font-bold border-b border-slate-800 pb-2">
+                          <ShieldCheck className="w-5 h-5" />
+                          <span>درآمد ثابت (بدون ریسک)</span>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-6 text-justify">
+                        این صندوق‌ها جایگزین سپرده بانکی هستند و سودی حدود ۳۰ تا ۳۵ درصد سالانه دارند. امنیت آن‌ها بسیار بالاست و ریسک ندارد.
+                      </p>
+                    </div>
+
+                    {/* Stock Card */}
+                    <div className="bg-slate-900/80 p-5 rounded-2xl border border-emerald-500/20 shadow-lg flex flex-col gap-3 group hover:border-emerald-500/50 transition-colors">
+                      <div className="flex items-center gap-2 text-emerald-400 font-bold border-b border-slate-800 pb-2">
+                          <TrendingUp className="w-5 h-5" />
+                          <span>بازار سهام</span>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-6 text-justify">
+                        شامل دو نوع صندوق است: ۱. صندوق‌های سهامی: با ریسک استاندارد و پتانسیل رشد. ۲. صندوق‌های شتابی (اهرمی): با ریسک بالاتر برای کسانی که دنبال هیجان و سود بیشتر هستند.
+                      </p>
+                    </div>
+                </div>
+
+                {/* How To Start */}
+                <div className="space-y-4">
+                    <h4 className="text-white font-bold flex items-center gap-2 text-lg">
+                      <GraduationCap className="w-6 h-6 text-purple-400" />
+                      چطور شروع کنم؟ <span className="text-sm font-normal text-slate-400">(فقط ۲ قدم)</span>
+                    </h4>
+                    <div className="space-y-3 pr-2">
+                      <div className="flex items-start gap-3">
+                          <div className="bg-purple-500/20 text-purple-400 w-6 h-6 rounded-full flex items-center justify-center font-bold text-sm shrink-0 mt-0.5">1</div>
+                          <p className="text-slate-300 text-sm leading-7"><span className="text-white font-bold">انتخاب دارایی‌ها:</span> در کادرهای زیر، تیکِ هر دارایی که مایلید داشته باشید (سهام، طلا یا درآمد ثابت) را بزنید.</p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                          <div className="bg-purple-500/20 text-purple-400 w-6 h-6 rounded-full flex items-center justify-center font-bold text-sm shrink-0 mt-0.5">2</div>
+                          <div className="space-y-2">
+                            <p className="text-slate-300 text-sm leading-7"><span className="text-white font-bold">استفاده از پیشنهادهای آماده:</span> شما تنها نیستید! ما برای هر بخش، بهترین صندوق‌های بازار را در منوی کشویی (لیست بازشو) قرار داده‌ایم.</p>
+                          </div>
+                      </div>
+                    </div>
+                </div>
+
+                {/* Golden Tip */}
+                <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl flex gap-4 items-start">
+                    <Lightbulb className="w-6 h-6 text-yellow-500 shrink-0 mt-1 animate-pulse" />
+                    <div>
+                      <h5 className="text-yellow-500 font-bold text-sm mb-1">نکته طلایی: بازار زنده است!</h5>
+                      <p className="text-yellow-200/80 text-xs leading-6 text-justify">
+                        اقتصاد همیشه در حال تغییر است. پرتفویی که امروز عالی است، شاید ماه آینده نیاز به تغییر داشته باشد. پیشنهاد می‌کنیم ماهی یکی‌دوبار به اینجا سر بزنید و دکمه «محاسبه» را بزنید تا اگر وضعیت بازار عوض شده بود، درصد دارایی‌هایتان را با خیال راحت بروزرسانی کنید.
+                      </p>
+                    </div>
                 </div>
              </div>
           </div>
@@ -757,99 +784,183 @@ export function PortfolioPage() {
               {activeTab === 'suggested' && (
                   <div className="space-y-6 animate-fade-in">
                      <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-                        <h4 className="text-white font-bold mb-4 text-sm flex items-center gap-2"><Briefcase className="w-4 h-4 text-amber-400"/> کلاس‌های دارایی</h4>
+                        <h4 className="text-white font-bold mb-6 text-sm flex items-center gap-2">
+                           <Briefcase className="w-5 h-5 text-amber-400"/> 
+                           کلاس‌های دارایی <span className="text-slate-500 font-normal text-xs">(حداقل دو دارایی انتخاب کنید)</span>
+                        </h4>
                         
                         {loadingAssets && <div className="text-center text-xs text-slate-500 mb-2">در حال بارگذاری لیست صندوق‌ها...</div>}
 
                         <div className="space-y-4">
                            
                            {/* Stocks Row */}
-                           <div className="flex flex-col md:flex-row gap-4 p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px]">
-                                   <input 
-                                     type="checkbox" 
-                                     checked={suggestedConfig.includeStock} 
-                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, includeStock: e.target.checked}))}
-                                     className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-cyan-500 focus:ring-offset-slate-800"
-                                   />
-                                   <span className="text-white font-medium">بازار سهام</span>
+                           <div className="flex flex-col xl:flex-row gap-4 p-4 rounded-xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors items-start xl:items-center">
+                               {/* Checkbox */}
+                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px] group">
+                                   <div className="relative">
+                                      <input 
+                                        type="checkbox" 
+                                        checked={suggestedConfig.includeStock} 
+                                        onChange={(e) => setSuggestedConfig(prev => ({...prev, includeStock: e.target.checked}))}
+                                        className="peer sr-only"
+                                      />
+                                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${suggestedConfig.includeStock ? 'bg-cyan-500 border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'border-slate-600 bg-slate-900 group-hover:border-slate-500'}`}>
+                                         {suggestedConfig.includeStock && <Check size={14} className="text-white" strokeWidth={4} />}
+                                      </div>
+                                   </div>
+                                   <span className={`font-bold transition-colors ${suggestedConfig.includeStock ? 'text-white' : 'text-slate-500'}`}>بازار سهام</span>
                                </label>
-                               <div className="flex-1 flex gap-2">
-                                   <select 
-                                     disabled={!suggestedConfig.includeStock}
-                                     value={suggestedConfig.stockType}
-                                     onChange={(e) => {
-                                         const newType = e.target.value as any;
-                                         // Auto select first of new type
-                                         const first = assetGroups.find(g => g.type === newType);
-                                         setSuggestedConfig(prev => ({
-                                             ...prev, 
-                                             stockType: newType,
-                                             selectedStock: first ? first.symbol : ''
-                                         }));
-                                     }}
-                                     className="bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-cyan-500 disabled:opacity-50 w-32"
-                                   >
-                                       <option value="equity">سهامی</option>
-                                       <option value="leveraged">اهرمی</option>
-                                   </select>
-                                   <select
-                                     disabled={!suggestedConfig.includeStock}
-                                     value={suggestedConfig.selectedStock}
-                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedStock: e.target.value}))}
-                                     className="flex-1 bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-cyan-500 disabled:opacity-50"
-                                   >
-                                       {stockAssets.length === 0 && <option value="">لیست خالی است</option>}
-                                       {stockAssets.map(a => <option key={a.symbol} value={a.symbol}>{a.symbol}</option>)}
-                                   </select>
+                               
+                               <div className={`flex-1 flex flex-col sm:flex-row gap-3 w-full transition-opacity ${suggestedConfig.includeStock ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                   
+                                   {/* Radio Buttons Group (Toggle Switch) */}
+                                   <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-700 shrink-0">
+                                       <button 
+                                         onClick={() => {
+                                            if (!suggestedConfig.includeStock) return;
+                                            const newType = 'equity';
+                                            const assets = assetGroups.filter(g => g.type === newType);
+                                            const def = assets.find(g => g.is_default);
+                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: def ? def.symbol : (assets[0]?.symbol || '') }));
+                                         }}
+                                         className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${suggestedConfig.stockType === 'equity' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                                       >
+                                         سهامی (کم‌ریسک)
+                                       </button>
+                                       <button 
+                                         onClick={() => {
+                                            if (!suggestedConfig.includeStock) return;
+                                            const newType = 'leveraged';
+                                            const assets = assetGroups.filter(g => g.type === newType);
+                                            const def = assets.find(g => g.is_default);
+                                            setSuggestedConfig(prev => ({ ...prev, stockType: newType, selectedStock: def ? def.symbol : (assets[0]?.symbol || '') }));
+                                         }}
+                                         className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${suggestedConfig.stockType === 'leveraged' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                                       >
+                                         اهرمی (پرریسک)
+                                       </button>
+                                   </div>
+
+                                   {/* Select Dropdown */}
+                                   <div className="flex-1 flex gap-2">
+                                       <select
+                                         disabled={!suggestedConfig.includeStock}
+                                         value={suggestedConfig.selectedStock}
+                                         onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedStock: e.target.value}))}
+                                         className="flex-1 bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-cyan-500 disabled:opacity-50 min-h-[42px]"
+                                       >
+                                           {stockAssets.length === 0 && <option value="">لیست خالی است</option>}
+                                           {stockAssets.map(a => (
+                                               <option key={a.symbol} value={a.symbol}>
+                                                   {a.symbol} {a.url ? ` - [${new URL(a.url).hostname.replace('www.','')}]` : ''}
+                                               </option>
+                                           ))}
+                                       </select>
+                                       
+                                       {getActiveAssetLink(suggestedConfig.selectedStock, suggestedConfig.stockType) && (
+                                           <a 
+                                             href={getActiveAssetLink(suggestedConfig.selectedStock, suggestedConfig.stockType)} 
+                                             target="_blank" 
+                                             rel="noreferrer"
+                                             className="bg-slate-700 hover:bg-cyan-600 text-white p-2.5 rounded-lg transition-colors flex items-center justify-center border border-slate-600"
+                                             title="مشاهده سایت"
+                                           >
+                                               <ExternalLink className="w-4 h-4" />
+                                           </a>
+                                       )}
+                                   </div>
                                </div>
                            </div>
 
                            {/* Gold Row */}
-                           <div className="flex flex-col md:flex-row gap-4 p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px]">
-                                   <input 
-                                     type="checkbox" 
-                                     checked={suggestedConfig.includeGold} 
-                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, includeGold: e.target.checked}))}
-                                     className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-amber-500 focus:ring-offset-slate-800"
-                                   />
-                                   <span className="text-white font-medium">صندوق طلا</span>
+                           <div className="flex flex-col xl:flex-row gap-4 p-4 rounded-xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors items-center">
+                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px] group w-full xl:w-auto">
+                                   <div className="relative">
+                                      <input 
+                                        type="checkbox" 
+                                        checked={suggestedConfig.includeGold} 
+                                        onChange={(e) => setSuggestedConfig(prev => ({...prev, includeGold: e.target.checked}))}
+                                        className="peer sr-only"
+                                      />
+                                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${suggestedConfig.includeGold ? 'bg-amber-500 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'border-slate-600 bg-slate-900 group-hover:border-slate-500'}`}>
+                                         {suggestedConfig.includeGold && <Check size={14} className="text-white" strokeWidth={4} />}
+                                      </div>
+                                   </div>
+                                   <span className={`font-bold transition-colors ${suggestedConfig.includeGold ? 'text-white' : 'text-slate-500'}`}>صندوق طلا</span>
                                </label>
-                               <div className="flex-1">
-                                   <select
-                                     disabled={!suggestedConfig.includeGold}
-                                     value={suggestedConfig.selectedGold}
-                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedGold: e.target.value}))}
-                                     className="w-full bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-amber-500 disabled:opacity-50"
-                                   >
-                                       {getAssetsByType('gold').length === 0 && <option value="">لیست خالی است</option>}
-                                       {getAssetsByType('gold').map(a => <option key={a.symbol} value={a.symbol}>{a.symbol}</option>)}
-                                   </select>
+                               <div className={`flex-1 w-full transition-opacity ${suggestedConfig.includeGold ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                   <div className="flex gap-2">
+                                       <select
+                                         disabled={!suggestedConfig.includeGold}
+                                         value={suggestedConfig.selectedGold}
+                                         onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedGold: e.target.value}))}
+                                         className="w-full bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-amber-500 disabled:opacity-50 min-h-[42px]"
+                                       >
+                                           {getAssetsByType('gold').length === 0 && <option value="">لیست خالی است</option>}
+                                           {getAssetsByType('gold').map(a => (
+                                               <option key={a.symbol} value={a.symbol}>
+                                                    {a.symbol} {a.url ? ` - [${new URL(a.url).hostname.replace('www.','')}]` : ''}
+                                               </option>
+                                           ))}
+                                       </select>
+                                       {getActiveAssetLink(suggestedConfig.selectedGold, 'gold') && (
+                                           <a 
+                                             href={getActiveAssetLink(suggestedConfig.selectedGold, 'gold')} 
+                                             target="_blank" 
+                                             rel="noreferrer"
+                                             className="bg-slate-700 hover:bg-amber-600 text-white p-2.5 rounded-lg transition-colors flex items-center justify-center border border-slate-600"
+                                             title="مشاهده سایت"
+                                           >
+                                               <ExternalLink className="w-4 h-4" />
+                                           </a>
+                                       )}
+                                   </div>
                                </div>
                            </div>
 
                            {/* Fixed Income Row */}
-                           <div className="flex flex-col md:flex-row gap-4 p-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors">
-                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px]">
-                                   <input 
-                                     type="checkbox" 
-                                     checked={suggestedConfig.includeFixed} 
-                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, includeFixed: e.target.checked}))}
-                                     className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-blue-500 focus:ring-offset-slate-800"
-                                   />
-                                   <span className="text-white font-medium">درآمد ثابت</span>
+                           <div className="flex flex-col xl:flex-row gap-4 p-4 rounded-xl border border-slate-700 bg-slate-800 hover:border-slate-600 transition-colors items-center">
+                               <label className="flex items-center gap-3 cursor-pointer min-w-[150px] group w-full xl:w-auto">
+                                   <div className="relative">
+                                      <input 
+                                        type="checkbox" 
+                                        checked={suggestedConfig.includeFixed} 
+                                        onChange={(e) => setSuggestedConfig(prev => ({...prev, includeFixed: e.target.checked}))}
+                                        className="peer sr-only"
+                                      />
+                                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${suggestedConfig.includeFixed ? 'bg-blue-500 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-slate-600 bg-slate-900 group-hover:border-slate-500'}`}>
+                                         {suggestedConfig.includeFixed && <Check size={14} className="text-white" strokeWidth={4} />}
+                                      </div>
+                                   </div>
+                                   <span className={`font-bold transition-colors ${suggestedConfig.includeFixed ? 'text-white' : 'text-slate-500'}`}>درآمد ثابت</span>
                                </label>
-                               <div className="flex-1">
-                                   <select
-                                     disabled={!suggestedConfig.includeFixed}
-                                     value={suggestedConfig.selectedFixed}
-                                     onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedFixed: e.target.value}))}
-                                     className="w-full bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-blue-500 disabled:opacity-50"
-                                   >
-                                       {getAssetsByType('fixed').length === 0 && <option value="">لیست خالی است</option>}
-                                       {getAssetsByType('fixed').map(a => <option key={a.symbol} value={a.symbol}>{a.symbol}</option>)}
-                                   </select>
+                               <div className={`flex-1 w-full transition-opacity ${suggestedConfig.includeFixed ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                   <div className="flex gap-2">
+                                       <select
+                                         disabled={!suggestedConfig.includeFixed}
+                                         value={suggestedConfig.selectedFixed}
+                                         onChange={(e) => setSuggestedConfig(prev => ({...prev, selectedFixed: e.target.value}))}
+                                         className="w-full bg-slate-900 border border-slate-600 text-white text-xs rounded-lg p-2.5 outline-none focus:border-blue-500 disabled:opacity-50 min-h-[42px]"
+                                       >
+                                           {getAssetsByType('fixed').length === 0 && <option value="">لیست خالی است</option>}
+                                           {getAssetsByType('fixed').map(a => (
+                                               <option key={a.symbol} value={a.symbol}>
+                                                   {a.symbol} {a.url ? ` - [${new URL(a.url).hostname.replace('www.','')}]` : ''}
+                                               </option>
+                                           ))}
+                                       </select>
+                                       {getActiveAssetLink(suggestedConfig.selectedFixed, 'fixed') && (
+                                           <a 
+                                             href={getActiveAssetLink(suggestedConfig.selectedFixed, 'fixed')} 
+                                             target="_blank" 
+                                             rel="noreferrer"
+                                             className="bg-slate-700 hover:bg-blue-600 text-white p-2.5 rounded-lg transition-colors flex items-center justify-center border border-slate-600"
+                                             title="مشاهده سایت"
+                                           >
+                                               <ExternalLink className="w-4 h-4" />
+                                           </a>
+                                       )}
+                                   </div>
                                </div>
                            </div>
 

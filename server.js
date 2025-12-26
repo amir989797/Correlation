@@ -79,7 +79,7 @@ app.get('/api/assets', async (req, res) => {
     client = await pool.connect();
     // Check if table exists first to avoid crash if migration hasn't run
     const result = await client.query(`
-        SELECT symbol, type FROM asset_groups ORDER BY symbol
+        SELECT symbol, type, url, is_default FROM asset_groups ORDER BY symbol
     `);
     res.json(result.rows);
   } catch (err) {
