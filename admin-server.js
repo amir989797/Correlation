@@ -47,12 +47,14 @@ const initAssetDB = async () => {
                 type VARCHAR(20),
                 url TEXT,
                 is_default BOOLEAN DEFAULT FALSE,
+                one_year_return NUMERIC DEFAULT 0,
                 PRIMARY KEY (symbol, type)
             );
         `);
         // Add columns if they don't exist (Migration)
         await client.query(`ALTER TABLE asset_groups ADD COLUMN IF NOT EXISTS url TEXT;`);
         await client.query(`ALTER TABLE asset_groups ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE;`);
+        await client.query(`ALTER TABLE asset_groups ADD COLUMN IF NOT EXISTS one_year_return NUMERIC DEFAULT 0;`);
         
         console.log("✅ Asset Groups table checked/updated.");
     } catch (e) {
@@ -62,6 +64,19 @@ const initAssetDB = async () => {
     }
 };
 initAssetDB();
+
+// --- SCHEDULER (Nightly Update) ---
+// Checks every minute if it is 00:00 (Midnight)
+setInterval(async () => {
+    const now = new Date();
+    // Check for 00:00 local server time
+    if (now.getHours() === 0 && now.getMinutes() === 0) {
+        if (!isUpdating) {
+            console.log("🕛 Scheduled midnight update triggered.");
+            await startUpdateProcess();
+        }
+    }
+}, 60000);
 
 const requireAuth = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -88,6 +103,78 @@ const syncSymbolsTable = async () => {
     client.release();
   }
 };
+
+const createBackup = async () => {
+    const client = await pool.connect();
+    try {
+        // Create a backup table (Drop old backup if exists to keep only one previous version + current)
+        // User requested "Two versions", this ensures we have the main table + the state before the last update.
+        await client.query(`DROP TABLE IF EXISTS daily_prices_backup`);
+        await client.query(`CREATE TABLE daily_prices_backup AS TABLE daily_prices`);
+        return true;
+    } catch (e) {
+        console.error("Backup failed:", e);
+        return false;
+    } finally {
+        client.release();
+    }
+}
+
+const startUpdateProcess = async () => {
+    if (isUpdating) return false;
+    if (!fs.existsSync(PYTHON_SCRIPT_PATH)) return false;
+
+    isUpdating = true;
+    
+    // Step 1: Backup
+    lastUpdateLog = "📦 در حال ایجاد نسخه پشتیبان (Backup)...\n";
+    const backupSuccess = await createBackup();
+    if (backupSuccess) {
+        lastUpdateLog += "✅ نسخه پشتیبان با موفقیت ایجاد شد.\n";
+    } else {
+        lastUpdateLog += "⚠️ خطا در ایجاد نسخه پشتیبان. ادامه عملیات...\n";
+    }
+
+    lastUpdateLog += "🚀 آپدیت شروع شد (حالت چند رشته‌ای)...\n";
+    
+    currentProcess = spawn('python3', ['-u', PYTHON_SCRIPT_PATH]);
+
+    currentProcess.stdout.on('data', (data) => {
+        const chunk = data.toString();
+        lastUpdateLog = (lastUpdateLog + chunk).slice(-5000); 
+    });
+
+    currentProcess.stderr.on('data', (data) => {
+        const text = data.toString();
+        if (text.includes('%') || text.includes('it/s')) {
+            lastUpdateLog += `\n[PROGRESS]: ${text}`; 
+        } else {
+            lastUpdateLog += `\n[ERROR]: ${text}`;
+        }
+        lastUpdateLog = lastUpdateLog.slice(-5000);
+    });
+
+    currentProcess.on('close', async (code) => {
+        console.log(`Script finished: ${code}`);
+        currentProcess = null;
+        isUpdating = false;
+
+        if (code === 0) {
+            lastUpdateLog += `\n✅ دریافت دیتا تمام شد.`;
+            try {
+                const count = await syncSymbolsTable();
+                lastUpdateLog += `\n✨ لیست جستجو بروز شد (${count} نماد جدید).`;
+                // Optional: Auto calculate returns after update? 
+                // Let's keep it manual or separate for now as requested.
+            } catch (e) {
+                lastUpdateLog += `\n⚠️ خطا در بروزرسانی لیست جستجو: ${e.message}`;
+            }
+        } else {
+            lastUpdateLog += `\n❌ عملیات متوقف شد (Code: ${code}).`;
+        }
+    });
+    return true;
+}
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin-dashboard.html'));
@@ -154,49 +241,16 @@ app.get('/api/stats', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/update', requireAuth, (req, res) => {
+app.post('/api/update', requireAuth, async (req, res) => {
   if (isUpdating) return res.status(400).json({ message: 'عملیات آپدیت هم‌اکنون در حال اجراست.' });
   if (!fs.existsSync(PYTHON_SCRIPT_PATH)) return res.status(500).json({ message: `فایل اسکریپت یافت نشد.` });
 
-  isUpdating = true;
-  lastUpdateLog = "🚀 آپدیت شروع شد (حالت چند رشته‌ای)...\n";
-  
-  currentProcess = spawn('python3', ['-u', PYTHON_SCRIPT_PATH]);
-
-  currentProcess.stdout.on('data', (data) => {
-    const chunk = data.toString();
-    lastUpdateLog = (lastUpdateLog + chunk).slice(-5000); 
-  });
-
-  currentProcess.stderr.on('data', (data) => {
-    const text = data.toString();
-    if (text.includes('%') || text.includes('it/s')) {
-        lastUpdateLog += `\n[PROGRESS]: ${text}`; 
-    } else {
-        lastUpdateLog += `\n[ERROR]: ${text}`;
-    }
-    lastUpdateLog = lastUpdateLog.slice(-5000);
-  });
-
-  currentProcess.on('close', async (code) => {
-    console.log(`Script finished: ${code}`);
-    currentProcess = null;
-    isUpdating = false;
-
-    if (code === 0) {
-        lastUpdateLog += `\n✅ دریافت دیتا تمام شد.`;
-        try {
-            const count = await syncSymbolsTable();
-            lastUpdateLog += `\n✨ لیست جستجو بروز شد (${count} نماد جدید).`;
-        } catch (e) {
-            lastUpdateLog += `\n⚠️ خطا در بروزرسانی لیست جستجو: ${e.message}`;
-        }
-    } else {
-        lastUpdateLog += `\n❌ عملیات متوقف شد (Code: ${code}).`;
-    }
-  });
-
-  res.json({ message: 'دستور آپدیت ارسال شد.', status: 'started' });
+  const started = await startUpdateProcess();
+  if (started) {
+      res.json({ message: 'دستور آپدیت ارسال شد.', status: 'started' });
+  } else {
+      res.status(500).json({ message: 'خطا در شروع آپدیت.' });
+  }
 });
 
 app.post('/api/stop', requireAuth, (req, res) => {
@@ -210,7 +264,7 @@ app.post('/api/stop', requireAuth, (req, res) => {
 app.get('/api/assets', requireAuth, async (req, res) => {
     const client = await pool.connect();
     try {
-        const result = await client.query('SELECT symbol, type, url, is_default FROM asset_groups ORDER BY symbol');
+        const result = await client.query('SELECT symbol, type, url, is_default, one_year_return FROM asset_groups ORDER BY symbol');
         res.json(result.rows);
     } catch(e) {
         res.status(500).json({ error: e.message });
@@ -238,8 +292,6 @@ app.post('/api/assets', requireAuth, async (req, res) => {
     }
 });
 
-// Removed PUT default endpoint as default is now calculated dynamically
-
 app.delete('/api/assets', requireAuth, async (req, res) => {
     const { symbol, type } = req.body;
     const client = await pool.connect();
@@ -247,6 +299,81 @@ app.delete('/api/assets', requireAuth, async (req, res) => {
         await client.query('DELETE FROM asset_groups WHERE symbol = $1 AND type = $2', [symbol, type]);
         res.json({ success: true });
     } catch(e) {
+        res.status(500).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+});
+
+// --- BATCH CALCULATE RETURNS ---
+app.post('/api/calculate-returns', requireAuth, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        // 1. Get all assets
+        const assetsRes = await client.query('SELECT symbol, type FROM asset_groups');
+        const assets = assetsRes.rows;
+        
+        let updatedCount = 0;
+
+        for (const asset of assets) {
+            // 2. Fetch History for calculation
+            // We use the same query logic as fetching history but direct SQL
+            const historyRes = await client.query(
+                `SELECT to_char(date, 'YYYYMMDD') as date, close 
+                 FROM daily_prices 
+                 WHERE symbol = $1 
+                 ORDER BY date ASC`, 
+                [asset.symbol]
+            );
+            
+            const data = historyRes.rows;
+            if (data.length < 2) continue;
+
+            const lastPoint = data[data.length - 1];
+            
+            // Logic duplicated from PortfolioPage.tsx but server-side
+            const parseDate = (d) => {
+                const y = parseInt(d.substring(0, 4));
+                const m = parseInt(d.substring(4, 6)) - 1;
+                const dy = parseInt(d.substring(6, 8));
+                return new Date(y, m, dy);
+            };
+
+            const lastDate = parseDate(lastPoint.date);
+            const targetTime = lastDate.getTime() - (365 * 24 * 60 * 60 * 1000);
+
+            let closestPoint = data[data.length - 1];
+            let minDiff = Infinity;
+
+            for (let i = data.length - 1; i >= 0; i--) {
+                const p = data[i];
+                const pTime = parseDate(p.date).getTime();
+                const diff = Math.abs(pTime - targetTime);
+
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestPoint = p;
+                } else if (diff > minDiff && pTime < targetTime) {
+                    break; 
+                }
+            }
+
+            if (closestPoint.date !== lastPoint.date) {
+                const returnVal = ((lastPoint.close - closestPoint.close) / closestPoint.close) * 100;
+                
+                // Update DB
+                await client.query(
+                    'UPDATE asset_groups SET one_year_return = $1 WHERE symbol = $2 AND type = $3',
+                    [returnVal, asset.symbol, asset.type]
+                );
+                updatedCount++;
+            }
+        }
+
+        res.json({ success: true, message: `Updated returns for ${updatedCount} assets.` });
+
+    } catch (e) {
+        console.error("Calculation Error:", e);
         res.status(500).json({ error: e.message });
     } finally {
         client.release();

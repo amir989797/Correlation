@@ -73,7 +73,7 @@
                 <h3 class="text-slate-400 text-sm font-bold mb-4">عملیات بروزرسانی</h3>
                 
                 <p class="text-xs text-slate-500 mb-6 leading-5">
-                    با کلیک روی دکمه زیر، اسکریپت پایتون اجرا شده و اطلاعات جدید بازار دریافت می‌شود. این عملیات ممکن است زمان‌بر باشد.
+                    با کلیک روی دکمه زیر، اسکریپت پایتون اجرا شده و اطلاعات جدید بازار دریافت می‌شود. (آپدیت خودکار هر شب ساعت ۱۲ تنظیم شده است).
                 </p>
 
                 <div class="flex flex-col gap-3">
@@ -104,15 +104,22 @@
 
         <!-- Asset Management Section -->
         <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
-            <h3 class="text-white font-bold text-lg mb-4 flex items-center gap-2">
-                <span class="w-2 h-6 bg-cyan-500 rounded-full"></span>
-                مدیریت صندوق‌های منتخب
-            </h3>
-            <p class="text-slate-400 text-xs mb-6">
-                این لیست‌ها در بخش پرتفوی پیشنهادی نمایش داده می‌شوند. 
-                <span class="text-blue-400">آدرس سایت</span> برای هر نماد <span class="text-red-400 font-bold">اجباری</span> است.
-                نماد پیش‌فرض به صورت خودکار بر اساس بیشترین بازدهی انتخاب می‌شود.
-            </p>
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h3 class="text-white font-bold text-lg mb-2 flex items-center gap-2">
+                        <span class="w-2 h-6 bg-cyan-500 rounded-full"></span>
+                        مدیریت صندوق‌های منتخب
+                    </h3>
+                    <p class="text-slate-400 text-xs">
+                        این لیست‌ها در بخش پرتفوی پیشنهادی نمایش داده می‌شوند. 
+                        بازدهی یکساله باید محاسبه شود تا نماد پیش‌فرض درست انتخاب شود.
+                    </p>
+                </div>
+                <button id="calc-btn" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold py-2 px-4 rounded-lg shadow flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                    <span>محاسبه و ذخیره بازدهی</span>
+                </button>
+            </div>
             
             <div class="grid md:grid-cols-4 gap-4" id="asset-containers">
                 <!-- Template for Asset Column -->
@@ -133,6 +140,7 @@
         const logTerminal = document.getElementById('log-terminal');
         const stopBtn = document.getElementById('stop-btn');
         const updateBtn = document.getElementById('update-btn');
+        const calcBtn = document.getElementById('calc-btn');
 
         // Initial Check
         if (token) {
@@ -207,6 +215,25 @@
                 document.getElementById('stop-loader').classList.add('hidden');
                 stopBtn.disabled = false;
             }
+        });
+
+        calcBtn.addEventListener('click', async () => {
+             calcBtn.disabled = true;
+             calcBtn.innerText = 'در حال محاسبه...';
+             try {
+                const res = await fetch(`${API_URL}/calculate-returns`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                alert(data.message || 'انجام شد');
+                fetchAssets(); // Refresh list to show new values
+             } catch(e) {
+                alert('خطا در محاسبه');
+             } finally {
+                calcBtn.disabled = false;
+                calcBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg><span>محاسبه و ذخیره بازدهی</span>`;
+             }
         });
 
         function showDashboard() {
@@ -291,7 +318,7 @@
                 const res = await fetch(`${API_URL}/assets`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const data = await res.json(); // Array of {symbol, type, url, is_default}
+                const data = await res.json(); // Array of {symbol, type, url, is_default, one_year_return}
                 
                 const container = document.getElementById('asset-containers');
                 container.innerHTML = '';
@@ -331,9 +358,14 @@
                             ${items.length === 0 ? '<p class="text-xs text-slate-600 text-center mt-4">لیست خالی است</p>' : ''}
                             ${items.map(item => `
                                 <div class="flex justify-between items-center bg-slate-800 p-2 rounded border border-slate-700/50 group hover:border-slate-500 transition">
-                                    <div class="flex items-center gap-2 overflow-hidden">
-                                        <div class="flex flex-col overflow-hidden">
-                                           <span class="text-xs text-slate-200 font-bold">${item.symbol}</span>
+                                    <div class="flex items-center gap-2 overflow-hidden w-full">
+                                        <div class="flex flex-col overflow-hidden w-full">
+                                           <div class="flex justify-between w-full">
+                                                <span class="text-xs text-slate-200 font-bold">${item.symbol}</span>
+                                                <span class="text-[10px] ${item.one_year_return >= 0 ? 'text-green-400' : 'text-red-400'}" dir="ltr">
+                                                    ${item.one_year_return ? item.one_year_return + '%' : '-'}
+                                                </span>
+                                           </div>
                                            ${item.url ? `<a href="${item.url}" target="_blank" class="text-[9px] text-blue-400 hover:text-blue-300 truncate max-w-[80px]" title="${item.url}">${new URL(item.url).hostname.replace('www.','')}</a>` : ''}
                                         </div>
                                     </div>

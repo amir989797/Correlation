@@ -368,7 +368,8 @@ export function PortfolioPage() {
   // Asset Lists from API
   const [assetGroups, setAssetGroups] = useState<AssetGroup[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
-  const [assetReturns, setAssetReturns] = useState<Record<string, number>>({});
+  // We use the one_year_return directly from assetGroups now
+  // const [assetReturns, setAssetReturns] = useState<Record<string, number>>({});
 
   // Suggested Tab State
   const [suggestedConfig, setSuggestedConfig] = useState({
@@ -381,58 +382,7 @@ export function PortfolioPage() {
       selectedFixed: ''
   });
 
-  // Optimized 1 Year Return Calculation
-  const calcReturn = (data: TsetmcDataPoint[]) => {
-      if (data.length < 2) return 0;
-      
-      const lastPoint = data[data.length - 1];
-      const lastDateStr = lastPoint.date;
-      
-      // Parse YYYYMMDD to Date
-      const parseDate = (d: string) => {
-          const y = parseInt(d.substring(0, 4));
-          const m = parseInt(d.substring(4, 6)) - 1;
-          const dy = parseInt(d.substring(6, 8));
-          return new Date(y, m, dy);
-      };
-
-      const lastDate = parseDate(lastDateStr);
-      // Target date is 365 days ago
-      const targetTime = lastDate.getTime() - (365 * 24 * 60 * 60 * 1000);
-
-      // Find closest data point to targetTime by iterating BACKWARDS from end
-      // Since array is sorted, we start from today and go back in time.
-      // This is much faster than iterating from the beginning (oldest) to find recent past.
-      
-      let closestPoint = data[data.length - 1];
-      let minDiff = Infinity;
-
-      // We only need to check back roughly 250-300 trading days (indexes)
-      // But to be safe and accurate for gaps, we loop.
-      // Optimization: break loop when difference starts increasing significantly or date is way past target
-      
-      for (let i = data.length - 1; i >= 0; i--) {
-          const p = data[i];
-          const pTime = parseDate(p.date).getTime();
-          const diff = Math.abs(pTime - targetTime);
-
-          if (diff < minDiff) {
-              minDiff = diff;
-              closestPoint = p;
-          } else if (diff > minDiff && pTime < targetTime) {
-              // If we moved past the target time (to older dates) and difference is getting larger,
-              // we found our local minimum.
-              break; 
-          }
-      }
-
-      // If closest point is the same as last point (e.g. only 1 data point), return 0
-      if (closestPoint.date === lastPoint.date) return 0;
-
-      return ((lastPoint.close - closestPoint.close) / closestPoint.close) * 100;
-  };
-
-  // Load assets and calculate returns on mount
+  // Load assets on mount
   useEffect(() => {
       const load = async () => {
           setLoadingAssets(true);
@@ -440,26 +390,18 @@ export function PortfolioPage() {
               const data = await fetchAssetGroups();
               setAssetGroups(data);
               
-              // Parallel Fetch for returns (Fetch all points to ensure we get the latest data for calc)
-              const returns: Record<string, number> = {};
-              await Promise.all(data.map(async (asset) => {
-                  try {
-                      // Fetch full history (default limit)
-                      const hist = await fetchStockHistory(asset.symbol); 
-                      returns[asset.symbol] = calcReturn(hist.data);
-                  } catch (e) {
-                      console.warn(`Could not calc return for ${asset.symbol}`);
-                      returns[asset.symbol] = 0;
-                  }
-              }));
-              setAssetReturns(returns);
-
-              // Helper to find asset with MAX return
+              // Helper to find asset with MAX return (using server-side pre-calculated return)
               const getBestAsset = (type: string) => {
                   const subset = data.filter(d => d.type === type);
                   if (subset.length === 0) return '';
-                  // Sort by return descending
-                  subset.sort((a, b) => (returns[b.symbol] || 0) - (returns[a.symbol] || 0));
+                  
+                  // Sort by return descending using the one_year_return field
+                  // Note: DB returns numeric strings often, handle safety
+                  subset.sort((a, b) => {
+                      const rA = Number(a.one_year_return || 0);
+                      const rB = Number(b.one_year_return || 0);
+                      return rB - rA;
+                  });
                   return subset[0].symbol;
               };
               
@@ -839,16 +781,21 @@ export function PortfolioPage() {
     return asset?.url;
   };
 
-  const getReturnVal = (symbol: string) => assetReturns[symbol];
+  // Helper function to safely get return value
+  const getReturnVal = (symbol: string) => {
+    // With server-side logic, we read from assetGroups directly
+    const asset = assetGroups.find(a => a.symbol === symbol);
+    return asset ? Number(asset.one_year_return || 0) : 0;
+  };
 
   // Sorting Helper
   const sortAssets = (assets: AssetGroup[]) => {
-      return [...assets].sort((a, b) => (getReturnVal(b.symbol) || 0) - (getReturnVal(a.symbol) || 0));
+      return [...assets].sort((a, b) => getReturnVal(b.symbol) - getReturnVal(a.symbol));
   };
 
-  const sortedStockAssets = useMemo(() => sortAssets(stockAssets), [stockAssets, assetReturns]);
-  const sortedGoldAssets = useMemo(() => sortAssets(getAssetsByType('gold')), [assetGroups, assetReturns]);
-  const sortedFixedAssets = useMemo(() => sortAssets(getAssetsByType('fixed')), [assetGroups, assetReturns]);
+  const sortedStockAssets = useMemo(() => sortAssets(stockAssets), [stockAssets, assetGroups]);
+  const sortedGoldAssets = useMemo(() => sortAssets(getAssetsByType('gold')), [assetGroups]);
+  const sortedFixedAssets = useMemo(() => sortAssets(getAssetsByType('fixed')), [assetGroups]);
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">

@@ -41,6 +41,7 @@ export interface AssetGroup {
   type: 'equity' | 'leveraged' | 'gold' | 'fixed';
   url?: string;
   is_default?: boolean;
+  one_year_return?: number | string;
 }
 
 export enum FetchStatus {
