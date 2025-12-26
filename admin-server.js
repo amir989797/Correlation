@@ -412,7 +412,8 @@ app.post('/api/stop', requireAuth, (req, res) => {
 app.get('/api/assets', requireAuth, async (req, res) => {
     const client = await pool.connect();
     try {
-        const result = await client.query('SELECT symbol, type, url, is_default FROM asset_groups ORDER BY symbol');
+        // Updated query to include last_return
+        const result = await client.query('SELECT symbol, type, url, is_default, last_return FROM asset_groups ORDER BY symbol');
         res.json(result.rows);
     } catch(e) {
         res.status(500).json({ error: e.message });
