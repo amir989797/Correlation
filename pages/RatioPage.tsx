@@ -6,7 +6,7 @@ import { CorrelationChart } from '../components/CorrelationChart';
 import { PriceChart } from '../components/PriceChart';
 import { DistanceChart } from '../components/DistanceChart';
 import { ChartDataPoint, FetchStatus, TsetmcDataPoint, SearchResult } from '../types';
-import { FileText, X, Search, Loader2, Settings2, BarChart3, TrendingUp, Activity } from 'lucide-react';
+import { FileText, X, Search, Loader2, BarChart3, TrendingUp, Activity } from 'lucide-react';
 import { SeoHelmet } from '../components/SeoHelmet';
 
 const WINDOW_OPTIONS = [
@@ -140,9 +140,9 @@ export function RatioPage() {
   const [showRatioMa100, setShowRatioMa100] = useState(false);
   const [showRatioMa200, setShowRatioMa200] = useState(false);
 
-  // Calculated visibility state
-  const showDistMa100 = showPriceMa100 || showRatioMa100;
-  const showDistMa200 = showPriceMa200 || showRatioMa200;
+  // Calculated visibility state: Distance charts only show if parent chart is active AND indicator is checked
+  const showDistMa100 = (showPriceChart && showPriceMa100) || (showRatioChart && showRatioMa100);
+  const showDistMa200 = (showPriceChart && showPriceMa200) || (showRatioChart && showRatioMa200);
 
   const [status, setStatus] = useState<FetchStatus>(FetchStatus.IDLE);
   const [error, setError] = useState<string | null>(null);
@@ -227,21 +227,21 @@ export function RatioPage() {
             <div className="mb-6 grid md:grid-cols-3 gap-6">
                  
                  {/* Column 1: Price Chart Settings */}
-                 <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-4 flex flex-col gap-3">
-                    <div className="flex items-center gap-2 border-b border-slate-700/50 pb-2 mb-1">
-                        <TrendingUp className="w-4 h-4 text-emerald-500" />
-                        <span className="text-sm font-bold text-slate-200">نمودار قیمت</span>
-                    </div>
-                    
-                    <label className="flex items-center justify-between cursor-pointer group p-2 rounded hover:bg-slate-800/50 transition">
-                        <span className="text-sm text-slate-400 group-hover:text-emerald-400 transition">نمایش نمودار</span>
-                        <div className={`w-10 h-5 rounded-full relative transition-colors ${showPriceChart ? 'bg-emerald-500' : 'bg-slate-700'}`}>
-                            <input type="checkbox" checked={showPriceChart} onChange={(e) => setShowPriceChart(e.target.checked)} className="sr-only"/>
+                 <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-4 flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-slate-700/50 pb-3">
+                        <div className="flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-emerald-500" />
+                            <span className="text-sm font-bold text-slate-200">نمودار قیمت</span>
+                        </div>
+                        <div 
+                            onClick={() => setShowPriceChart(!showPriceChart)} 
+                            className={`w-10 h-5 rounded-full relative transition-colors cursor-pointer ${showPriceChart ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                        >
                             <div className={`absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform ${showPriceChart ? 'translate-x-5' : 'translate-x-0'}`}></div>
                         </div>
-                    </label>
+                    </div>
                     
-                    <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div className={`grid grid-cols-2 gap-2 transition-opacity duration-300 ${showPriceChart ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                         <label className={`flex items-center gap-2 cursor-pointer p-2 rounded border border-slate-800 transition ${showPriceMa100 ? 'bg-purple-500/10 border-purple-500/30' : 'hover:bg-slate-800'}`}>
                             <input type="checkbox" checked={showPriceMa100} onChange={(e) => setShowPriceMa100(e.target.checked)} className="h-3 w-3 rounded bg-slate-800 border-slate-600 text-purple-600"/>
                             <span className={`text-xs ${showPriceMa100 ? 'text-purple-400 font-bold' : 'text-slate-500'}`}>MA100</span>
@@ -254,21 +254,21 @@ export function RatioPage() {
                  </div>
 
                  {/* Column 2: Ratio Chart Settings */}
-                 <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-4 flex flex-col gap-3">
-                    <div className="flex items-center gap-2 border-b border-slate-700/50 pb-2 mb-1">
-                        <BarChart3 className="w-4 h-4 text-amber-500" />
-                        <span className="text-sm font-bold text-slate-200">نمودار نسبت (Ratio)</span>
-                    </div>
-                    
-                    <label className="flex items-center justify-between cursor-pointer group p-2 rounded hover:bg-slate-800/50 transition">
-                        <span className="text-sm text-slate-400 group-hover:text-amber-400 transition">نمایش نمودار</span>
-                        <div className={`w-10 h-5 rounded-full relative transition-colors ${showRatioChart ? 'bg-amber-500' : 'bg-slate-700'}`}>
-                            <input type="checkbox" checked={showRatioChart} onChange={(e) => setShowRatioChart(e.target.checked)} className="sr-only"/>
+                 <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-4 flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-slate-700/50 pb-3">
+                        <div className="flex items-center gap-2">
+                            <BarChart3 className="w-4 h-4 text-amber-500" />
+                            <span className="text-sm font-bold text-slate-200">نمودار نسبت</span>
+                        </div>
+                         <div 
+                            onClick={() => setShowRatioChart(!showRatioChart)} 
+                            className={`w-10 h-5 rounded-full relative transition-colors cursor-pointer ${showRatioChart ? 'bg-amber-500' : 'bg-slate-700'}`}
+                        >
                             <div className={`absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform ${showRatioChart ? 'translate-x-5' : 'translate-x-0'}`}></div>
                         </div>
-                    </label>
+                    </div>
                     
-                    <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div className={`grid grid-cols-2 gap-2 transition-opacity duration-300 ${showRatioChart ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                         <label className={`flex items-center gap-2 cursor-pointer p-2 rounded border border-slate-800 transition ${showRatioMa100 ? 'bg-purple-500/10 border-purple-500/30' : 'hover:bg-slate-800'}`}>
                             <input type="checkbox" checked={showRatioMa100} onChange={(e) => setShowRatioMa100(e.target.checked)} className="h-3 w-3 rounded bg-slate-800 border-slate-600 text-purple-600"/>
                             <span className={`text-xs ${showRatioMa100 ? 'text-purple-400 font-bold' : 'text-slate-500'}`}>MA100</span>
@@ -280,20 +280,23 @@ export function RatioPage() {
                     </div>
                  </div>
 
-                 {/* Column 3: Helpers */}
-                 <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-4 flex flex-col gap-3">
-                    <div className="flex items-center gap-2 border-b border-slate-700/50 pb-2 mb-1">
-                        <Activity className="w-4 h-4 text-cyan-500" />
-                        <span className="text-sm font-bold text-slate-200">ابزارهای کمکی</span>
+                 {/* Column 3: Correlation (Formerly Helpers) */}
+                 <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-4 flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-slate-700/50 pb-3">
+                        <div className="flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-cyan-500" />
+                            <span className="text-sm font-bold text-slate-200">همبستگی</span>
+                        </div>
+                        <div 
+                            onClick={() => setShowCorrelation(!showCorrelation)} 
+                            className={`w-10 h-5 rounded-full relative transition-colors cursor-pointer ${showCorrelation ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                        >
+                            <div className={`absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform ${showCorrelation ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                        </div>
                     </div>
 
-                    <label className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-slate-800/50 transition">
-                        <input type="checkbox" checked={showCorrelation} onChange={(e) => setShowCorrelation(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-cyan-500"/>
-                        <span className={`text-sm ${showCorrelation ? 'text-cyan-400' : 'text-slate-500'}`}>همبستگی</span>
-                    </label>
-
                     <div className={`transition-all duration-300 overflow-hidden ${showCorrelation ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
-                        <div className="p-2 bg-slate-800 rounded border border-slate-700 flex flex-col gap-1">
+                        <div className="p-2 bg-slate-800 rounded border border-slate-700 flex flex-col gap-2">
                             <span className="text-[10px] text-slate-400">بازه‌های زمانی:</span>
                             <div className="flex gap-2 flex-wrap">
                                 {WINDOW_OPTIONS.map(opt => (
@@ -438,6 +441,7 @@ export function RatioPage() {
                                             dataKey1="dist1"
                                             dataKey2="dist2"
                                             showBrush={showDist100Brush}
+                                            title="MA100"
                                         />
                                     </div>
                                 </div>
@@ -466,6 +470,7 @@ export function RatioPage() {
                                             dataKey1="dist1"
                                             dataKey2="dist2"
                                             showBrush={showDist200Brush}
+                                            title="MA200"
                                         />
                                     </div>
                                 </div>

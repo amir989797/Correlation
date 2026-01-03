@@ -23,13 +23,17 @@ interface DistanceChartProps {
   dataKey1: string; // Dynamic key for Symbol 1 (e.g., dist_ma100_1 or dist_ma200_1)
   dataKey2: string; // Dynamic key for Symbol 2 (e.g., dist_ma100_ratio or dist_ma200_ratio)
   showBrush?: boolean;
+  title?: string; // e.g. "MA100" or "MA200"
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, title }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-slate-800 border border-slate-700 p-3 rounded shadow-lg text-sm text-right" dir="rtl">
-        <p className="text-slate-400 mb-2 border-b border-slate-700 pb-1">{label}</p>
+        <div className="text-slate-400 mb-2 border-b border-slate-700 pb-1 flex justify-between items-center gap-4">
+           <span>{label}</span>
+           {title && <span className="text-[10px] font-bold text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded">{title}</span>}
+        </div>
         {payload.map((p: any, index: number) => {
             if (p.value === null || p.value === undefined) return null;
             return (
@@ -56,7 +60,8 @@ export const DistanceChart = React.memo<DistanceChartProps>(({
   name2,
   dataKey1,
   dataKey2,
-  showBrush = true 
+  showBrush = true,
+  title
 }) => {
   if (!data || data.length === 0) return null;
 
@@ -92,7 +97,7 @@ export const DistanceChart = React.memo<DistanceChartProps>(({
             unit="%"
           />
           
-          <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
+          <Tooltip content={<CustomTooltip title={title} />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
           
           <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
           
