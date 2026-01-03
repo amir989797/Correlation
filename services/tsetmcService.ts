@@ -1,8 +1,8 @@
 
 import { TsetmcDataPoint, SearchResult, AssetGroup } from '../types';
 
-// Updated API URL to point to the server IP
-const API_BASE_URL = 'http://109.94.164.70:8000/api';
+// Updated API URL to use relative path for Nginx/Proxy routing
+const API_BASE_URL = '/api';
 
 /**
  * Searches for symbols via the backend API.

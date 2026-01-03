@@ -1,3 +1,4 @@
+
 {
   "apps": [
     {
@@ -21,7 +22,7 @@
       "script": "npm",
       "args": "run preview",
       "env": {
-        "PORT": 80
+        "PORT": 3000
       }
     }
   ]

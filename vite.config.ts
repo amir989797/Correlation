@@ -7,11 +7,21 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true, // Listen on 0.0.0.0
-    port: 80
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      }
+    }
   },
   preview: {
     host: true, // Listen on 0.0.0.0
-    port: 80
+    port: 3000,
+    allowedHosts: [
+        'arkarise.ir', 
+        'www.arkarise.ir', 
+    ]
   },
   build: {
     chunkSizeWarningLimit: 1000,
