@@ -134,8 +134,12 @@ export function RatioPage() {
   const [showCorrelation, setShowCorrelation] = useState(false);
   const [selectedWindows, setSelectedWindows] = useState<number[]>([30, 60, 90]);
   const [showDistance, setShowDistance] = useState(false);
-  const [showMa100, setShowMa100] = useState(false);
-  const [showMa200, setShowMa200] = useState(false);
+  
+  // Indicators State - Split for Price and Ratio
+  const [showPriceMa100, setShowPriceMa100] = useState(false);
+  const [showPriceMa200, setShowPriceMa200] = useState(false);
+  const [showRatioMa100, setShowRatioMa100] = useState(false);
+  const [showRatioMa200, setShowRatioMa200] = useState(false);
 
   const [status, setStatus] = useState<FetchStatus>(FetchStatus.IDLE);
   const [error, setError] = useState<string | null>(null);
@@ -144,12 +148,12 @@ export function RatioPage() {
 
   // Automatically show Distance Chart if Indicators are selected
   useEffect(() => {
-    if (showMa100 || showMa200) {
+    if (showPriceMa100 || showPriceMa200 || showRatioMa100 || showRatioMa200) {
         setShowDistance(true);
     } else {
         setShowDistance(false);
     }
-  }, [showMa100, showMa200]);
+  }, [showPriceMa100, showPriceMa200, showRatioMa100, showRatioMa200]);
 
   // Calculate all windows regardless of selection so toggling is fast
   const processData = (d1: TsetmcDataPoint[], d2: TsetmcDataPoint[]) => {
@@ -245,15 +249,36 @@ export function RatioPage() {
                  {/* Indicators */}
                  <div>
                     <label className="block text-sm font-medium text-slate-400 mb-2">اندیکاتورها</label>
-                    <div className="flex gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" checked={showMa100} onChange={(e) => setShowMa100(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-purple-600"/>
-                            <span className={`text-sm ${showMa100 ? 'text-purple-400' : 'text-slate-500'}`}>MA100</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" checked={showMa200} onChange={(e) => setShowMa200(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-orange-600"/>
-                            <span className={`text-sm ${showMa200 ? 'text-orange-400' : 'text-slate-500'}`}>MA200</span>
-                        </label>
+                    <div className="flex flex-col gap-3">
+                        {/* Row 1: Price Indicators */}
+                        <div className="flex flex-col gap-1">
+                             <span className="text-[10px] text-emerald-500 font-bold border-b border-slate-700 pb-1 mb-1 w-fit">نمودار قیمت</span>
+                             <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={showPriceMa100} onChange={(e) => setShowPriceMa100(e.target.checked)} className="h-3 w-3 rounded bg-slate-800 border-slate-600 text-purple-600"/>
+                                    <span className={`text-xs ${showPriceMa100 ? 'text-purple-400' : 'text-slate-500'}`}>MA100</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={showPriceMa200} onChange={(e) => setShowPriceMa200(e.target.checked)} className="h-3 w-3 rounded bg-slate-800 border-slate-600 text-orange-600"/>
+                                    <span className={`text-xs ${showPriceMa200 ? 'text-orange-400' : 'text-slate-500'}`}>MA200</span>
+                                </label>
+                             </div>
+                        </div>
+
+                        {/* Row 2: Ratio Indicators */}
+                        <div className="flex flex-col gap-1">
+                             <span className="text-[10px] text-amber-500 font-bold border-b border-slate-700 pb-1 mb-1 w-fit">نمودار نسبت</span>
+                             <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={showRatioMa100} onChange={(e) => setShowRatioMa100(e.target.checked)} className="h-3 w-3 rounded bg-slate-800 border-slate-600 text-purple-600"/>
+                                    <span className={`text-xs ${showRatioMa100 ? 'text-purple-400' : 'text-slate-500'}`}>MA100</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={showRatioMa200} onChange={(e) => setShowRatioMa200(e.target.checked)} className="h-3 w-3 rounded bg-slate-800 border-slate-600 text-orange-600"/>
+                                    <span className={`text-xs ${showRatioMa200 ? 'text-orange-400' : 'text-slate-500'}`}>MA200</span>
+                                </label>
+                             </div>
+                        </div>
                     </div>
                  </div>
 
@@ -342,8 +367,8 @@ export function RatioPage() {
                                             dataKey={priceDisplaySide} 
                                             syncId="ratio-view"
                                             color="#10b981" // Emerald
-                                            showMa100={showMa100}
-                                            showMa200={showMa200}
+                                            showMa100={showPriceMa100}
+                                            showMa200={showPriceMa200}
                                             label={priceDisplaySide === 'price1' ? names.s1 : names.s2}
                                             showBrush={showPriceBrush}
                                             showXAxis={showPriceAxis}
@@ -363,8 +388,8 @@ export function RatioPage() {
                                             data={chartData}
                                             dataKey="ratio"
                                             color="#fbbf24" // Amber/Gold for Ratio
-                                            showMa100={showMa100}
-                                            showMa200={showMa200}
+                                            showMa100={showRatioMa100}
+                                            showMa200={showRatioMa200}
                                             label="نسبت"
                                             syncId="ratio-view"
                                             showBrush={showRatioBrush}
@@ -404,15 +429,15 @@ export function RatioPage() {
                                                 ...d, 
                                                 // Dynamic mapping based on which charts are visible
                                                 // If Price Chart is ON, dist_ma100_1 maps to the visible Price Symbol's distance
-                                                dist_ma100_1: showPriceChart 
+                                                dist_ma100_1: (showPriceChart && showPriceMa100) 
                                                     ? (priceDisplaySide === 'price1' ? d.dist_ma100_1 : d.dist_ma100_2) 
                                                     : null,
                                                 // If Ratio Chart is ON, dist_ma100_2 maps to Ratio's distance
-                                                dist_ma100_2: showRatioChart ? d.dist_ma100_ratio : null
+                                                dist_ma100_2: (showRatioChart && showRatioMa100) ? d.dist_ma100_ratio : null
                                             }))}
                                             syncId="ratio-view"
-                                            showSymbol1={showPriceChart}
-                                            showSymbol2={showRatioChart}
+                                            showSymbol1={showPriceChart && showPriceMa100}
+                                            showSymbol2={showRatioChart && showRatioMa100}
                                             name1={priceDisplaySide === 'price1' ? names.s1 : names.s2}
                                             name2="نسبت"
                                             showBrush={showDistBrush}
