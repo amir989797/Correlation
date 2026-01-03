@@ -21,12 +21,15 @@ export interface ChartDataPoint {
   ma200_price2: number | null;
   dist_ma100_1?: number | null; // % Distance from MA100 for symbol 1
   dist_ma100_2?: number | null; // % Distance from MA100 for symbol 2
+  dist_ma200_1?: number | null; // % Distance from MA200 for symbol 1
+  dist_ma200_2?: number | null; // % Distance from MA200 for symbol 2
   
   // Ratio specific fields
   ratio?: number;
   ma100_ratio?: number | null;
   ma200_ratio?: number | null;
   dist_ma100_ratio?: number | null;
+  dist_ma200_ratio?: number | null;
 
   [key: string]: any; // Dynamic keys for correlations e.g. 'corr_7', 'corr_30'
 }

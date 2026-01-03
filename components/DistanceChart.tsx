@@ -20,6 +20,8 @@ interface DistanceChartProps {
   showSymbol2: boolean;
   name1: string;
   name2: string;
+  dataKey1: string; // Dynamic key for Symbol 1 (e.g., dist_ma100_1 or dist_ma200_1)
+  dataKey2: string; // Dynamic key for Symbol 2 (e.g., dist_ma100_ratio or dist_ma200_ratio)
   showBrush?: boolean;
 }
 
@@ -52,6 +54,8 @@ export const DistanceChart = React.memo<DistanceChartProps>(({
   showSymbol2,
   name1, 
   name2,
+  dataKey1,
+  dataKey2,
   showBrush = true 
 }) => {
   if (!data || data.length === 0) return null;
@@ -95,7 +99,7 @@ export const DistanceChart = React.memo<DistanceChartProps>(({
           {showSymbol1 && (
             <Line 
               type="monotone" 
-              dataKey="dist_ma100_1" 
+              dataKey={dataKey1} 
               name={`فاصله ${name1}`}
               stroke={color1} 
               strokeWidth={2} 
@@ -108,7 +112,7 @@ export const DistanceChart = React.memo<DistanceChartProps>(({
           {showSymbol2 && (
             <Line 
               type="monotone" 
-              dataKey="dist_ma100_2" 
+              dataKey={dataKey2} 
               name={`فاصله ${name2}`}
               stroke={color2} 
               strokeWidth={2} 

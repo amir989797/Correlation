@@ -168,9 +168,12 @@ export const generateAnalysisData = (
     const m2_200 = ma200_2.get(rawDate) ?? null;
 
     // Calculate Distance %: ((Price - MA) / MA) * 100
-    // This will be negative if Price < MA, positive if Price > MA.
     const dist_ma100_1 = m1_100 ? ((currentDay.price1 - m1_100) / m1_100) * 100 : null;
     const dist_ma100_2 = m2_100 ? ((currentDay.price2 - m2_100) / m2_100) * 100 : null;
+    
+    // Added MA200 distances
+    const dist_ma200_1 = m1_200 ? ((currentDay.price1 - m1_200) / m1_200) * 100 : null;
+    const dist_ma200_2 = m2_200 ? ((currentDay.price2 - m2_200) / m2_200) * 100 : null;
 
     const point: ChartDataPoint = {
         date: toShamsi(rawDate),
@@ -183,6 +186,8 @@ export const generateAnalysisData = (
         ma200_price2: m2_200,
         dist_ma100_1: dist_ma100_1 !== null ? parseFloat(dist_ma100_1.toFixed(2)) : null,
         dist_ma100_2: dist_ma100_2 !== null ? parseFloat(dist_ma100_2.toFixed(2)) : null,
+        dist_ma200_1: dist_ma200_1 !== null ? parseFloat(dist_ma200_1.toFixed(2)) : null,
+        dist_ma200_2: dist_ma200_2 !== null ? parseFloat(dist_ma200_2.toFixed(2)) : null,
     };
 
     // Calculate Correlations
@@ -217,7 +222,6 @@ export const generateRatioAnalysisData = (
     if (merged.length === 0) return [];
   
     // 2. Create Ratio Series for MA calculation
-    // We treat the "ratio" as a "close price" to reuse calculateFullHistorySMA
     const ratioSeries: TsetmcDataPoint[] = merged.map(m => ({
       date: m.date,
       close: m.price2 !== 0 ? m.price1 / m.price2 : 0
@@ -227,13 +231,13 @@ export const generateRatioAnalysisData = (
     const ma100_ratio = calculateFullHistorySMA(ratioSeries, 100);
     const ma200_ratio = calculateFullHistorySMA(ratioSeries, 200);
 
-    // 4. Calculate MAs on individual Prices (for the Price Chart display)
+    // 4. Calculate MAs on individual Prices
     const ma100_1 = calculateFullHistorySMA(d1, 100);
     const ma200_1 = calculateFullHistorySMA(d1, 200);
     const ma100_2 = calculateFullHistorySMA(d2, 100);
     const ma200_2 = calculateFullHistorySMA(d2, 200);
   
-    // 5. Prepare for Correlation (on raw prices)
+    // 5. Prepare for Correlation
     const mergedPrices1 = merged.map(d => d.price1);
     const mergedPrices2 = merged.map(d => d.price2);
   
@@ -258,12 +262,16 @@ export const generateRatioAnalysisData = (
       const m100_p2 = ma100_2.get(rawDate) ?? null;
       const m200_p2 = ma200_2.get(rawDate) ?? null;
   
-      // Distance of Ratio from its MA100
+      // Distance of Ratio from its MAs
       const dist_ma100_ratio = m100_r ? ((ratio - m100_r) / m100_r) * 100 : null;
+      const dist_ma200_ratio = m200_r ? ((ratio - m200_r) / m200_r) * 100 : null;
 
-      // Distance of Prices from their MA100
+      // Distance of Prices from their MAs
       const dist_ma100_1 = m100_p1 ? ((m.price1 - m100_p1) / m100_p1) * 100 : null;
       const dist_ma100_2 = m100_p2 ? ((m.price2 - m100_p2) / m100_p2) * 100 : null;
+      
+      const dist_ma200_1 = m200_p1 ? ((m.price1 - m200_p1) / m200_p1) * 100 : null;
+      const dist_ma200_2 = m200_p2 ? ((m.price2 - m200_p2) / m200_p2) * 100 : null;
   
       const point: ChartDataPoint = {
           date: toShamsi(rawDate),
@@ -274,6 +282,7 @@ export const generateRatioAnalysisData = (
           ma100_ratio: m100_r,
           ma200_ratio: m200_r,
           dist_ma100_ratio: dist_ma100_ratio !== null ? parseFloat(dist_ma100_ratio.toFixed(2)) : null,
+          dist_ma200_ratio: dist_ma200_ratio !== null ? parseFloat(dist_ma200_ratio.toFixed(2)) : null,
           
           ma100_price1: m100_p1,
           ma200_price1: m200_p1,
@@ -281,9 +290,11 @@ export const generateRatioAnalysisData = (
           ma200_price2: m200_p2,
           dist_ma100_1: dist_ma100_1 !== null ? parseFloat(dist_ma100_1.toFixed(2)) : null,
           dist_ma100_2: dist_ma100_2 !== null ? parseFloat(dist_ma100_2.toFixed(2)) : null,
+          dist_ma200_1: dist_ma200_1 !== null ? parseFloat(dist_ma200_1.toFixed(2)) : null,
+          dist_ma200_2: dist_ma200_2 !== null ? parseFloat(dist_ma200_2.toFixed(2)) : null,
       };
   
-      // Calculate Correlations between the two symbols
+      // Calculate Correlations
       windowSizes.forEach(w => {
           if (i >= w - 1) {
               const slice1 = mergedPrices1.slice(i - w + 1, i + 1);
@@ -303,10 +314,7 @@ export const generateRatioAnalysisData = (
 
 /**
  * Converts Jalali date (Year, Month, Day) to Gregorian Date object parameters { gy, gm, gd }
- * Using a lightweight algorithm.
- * j_y: Jalali Year (e.g. 1402)
- * j_m: Jalali Month (1-12)
- * j_d: Jalali Day (1-31)
+ * ... (Rest of file unchanged)
  */
 export const jalaliToGregorian = (j_y: number, j_m: number, j_d: number): { gy: number, gm: number, gd: number } => {
   j_y = parseInt(String(j_y));
