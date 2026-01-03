@@ -400,12 +400,21 @@ export function RatioPage() {
                                     <ChartBackgroundLabel text="فاصله از میانگین" />
                                     <div className="relative z-10 w-full h-full">
                                         <DistanceChart 
-                                            data={chartData.map(d => ({ ...d, dist_ma100_1: d.dist_ma100_ratio }))}
+                                            data={chartData.map(d => ({ 
+                                                ...d, 
+                                                // Dynamic mapping based on which charts are visible
+                                                // If Price Chart is ON, dist_ma100_1 maps to the visible Price Symbol's distance
+                                                dist_ma100_1: showPriceChart 
+                                                    ? (priceDisplaySide === 'price1' ? d.dist_ma100_1 : d.dist_ma100_2) 
+                                                    : null,
+                                                // If Ratio Chart is ON, dist_ma100_2 maps to Ratio's distance
+                                                dist_ma100_2: showRatioChart ? d.dist_ma100_ratio : null
+                                            }))}
                                             syncId="ratio-view"
-                                            showSymbol1={true}
-                                            showSymbol2={false}
-                                            name1="نسبت"
-                                            name2=""
+                                            showSymbol1={showPriceChart}
+                                            showSymbol2={showRatioChart}
+                                            name1={priceDisplaySide === 'price1' ? names.s1 : names.s2}
+                                            name2="نسبت"
                                             showBrush={showDistBrush}
                                         />
                                     </div>

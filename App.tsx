@@ -11,7 +11,7 @@ import { Router, Routes, Route, useLocation, useRouter } from './router';
 const MENU_ITEMS = [
   { path: '/', label: 'خانه', icon: Home, isExternal: false },
   { path: '/correlation', label: 'همبستگی', icon: LineChart, isExternal: false },
-  { path: '/ratio', label: 'نسبت', icon: Scale, isExternal: false },
+  { path: '/technical', label: 'تکنیکال', icon: Scale, isExternal: false },
   { path: '/portfolio', label: 'سبد دارایی', icon: Briefcase, isExternal: false },
   { path: 'https://learn.arkarise.ir', label: 'آموزش', icon: GraduationCap, isExternal: true },
 ];
@@ -161,7 +161,7 @@ export function App() {
              <Routes>
                <Route path="/" element={<HomePage />} />
                <Route path="/correlation" element={<CorrelationPage />} />
-               <Route path="/ratio" element={<RatioPage />} />
+               <Route path="/technical" element={<RatioPage />} />
                <Route path="/portfolio" element={<PortfolioPage />} />
              </Routes>
           </div>

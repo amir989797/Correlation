@@ -33,14 +33,14 @@ export function HomePage() {
           </div>
         </Link>
 
-        {/* 2. Ratio Card */}
-        <Link to="/ratio" className="group relative bg-slate-800 p-8 rounded-2xl border border-slate-700 hover:border-amber-500 transition-all hover:shadow-2xl hover:shadow-amber-500/20 text-right overflow-hidden">
+        {/* 2. Technical Card */}
+        <Link to="/technical" className="group relative bg-slate-800 p-8 rounded-2xl border border-slate-700 hover:border-amber-500 transition-all hover:shadow-2xl hover:shadow-amber-500/20 text-right overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-amber-500/20 transition-all"></div>
           <div className="relative z-10 flex flex-col items-start">
              <div className="bg-amber-500/20 p-3 rounded-lg mb-4 text-amber-400">
                 <Scale className="w-8 h-8" />
              </div>
-             <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-amber-400 transition-colors">تحلیل نسبت (Ratio)</h3>
+             <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-amber-400 transition-colors">تحلیل تکنیکال</h3>
              <p className="text-slate-400 text-sm leading-relaxed">
                مقایسه قدرت نسبی دو دارایی، شناسایی حباب و نقاط ورود بهینه با نمودار تقسیمی.
              </p>
