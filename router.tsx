@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 
 const RouterContext = createContext<{ path: string; navigate: (path: string) => void }>({
@@ -14,36 +15,30 @@ export function useLocation() {
   return { pathname: path };
 }
 
-export function Link({ to, children, className }: { to: string; children?: ReactNode; className?: string }) {
+export function Link({ to, children, className, target }: { to: string; children?: ReactNode; className?: string; target?: string }) {
   const { navigate } = useRouter();
   
   const handleClick = (e: React.MouseEvent) => {
+    // If it's an external link or has a target, let the browser handle it
+    if (to.startsWith('http') || target) {
+        return;
+    }
     e.preventDefault();
     navigate(to);
   };
 
   return (
-    <a href={to} onClick={handleClick} className={className}>
+    <a href={to} onClick={handleClick} className={className} target={target}>
       {children}
     </a>
   );
 }
 
 export function Router({ children }: { children?: ReactNode }) {
-  // Always initialize to Home Page ('/') regardless of current URL
-  const [path, setPath] = useState('/');
+  // Initialize with current browser path instead of forcing '/'
+  const [path, setPath] = useState(window.location.pathname);
 
   useEffect(() => {
-    // Sync browser URL bar with the forced Home state on mount
-    // Wrapped in try-catch to prevent SecurityError in sandboxed environments (e.g. iframe)
-    try {
-      if (window.location.pathname !== '/') {
-        window.history.replaceState({}, '', '/');
-      }
-    } catch (e) {
-      console.warn("History API restricted, could not reset URL:", e);
-    }
-
     const onPopState = () => {
       try {
         setPath(window.location.pathname);

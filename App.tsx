@@ -1,20 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
-import { LineChart, Zap, Home, Scale, Briefcase } from 'lucide-react';
+import { LineChart, Home, Scale, Briefcase, GraduationCap } from 'lucide-react';
 import { HomePage } from './pages/HomePage';
 import { CorrelationPage } from './pages/CorrelationPage';
-import { SignalPage } from './pages/SignalPage';
 import { RatioPage } from './pages/RatioPage';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { Router, Routes, Route, useLocation, useRouter } from './router';
 
 // Shared Menu Items Configuration
 const MENU_ITEMS = [
-  { path: '/', label: 'خانه', icon: Home },
-  { path: '/correlation', label: 'همبستگی', icon: LineChart },
-  { path: '/ratio', label: 'نسبت', icon: Scale },
-  { path: '/portfolio', label: 'سبد دارایی', icon: Briefcase },
-  { path: '/signal', label: 'سیگنال', icon: Zap },
+  { path: '/', label: 'خانه', icon: Home, isExternal: false },
+  { path: '/correlation', label: 'همبستگی', icon: LineChart, isExternal: false },
+  { path: '/ratio', label: 'نسبت', icon: Scale, isExternal: false },
+  { path: '/portfolio', label: 'سبد دارایی', icon: Briefcase, isExternal: false },
+  { path: 'https://learn.arkarise.ir', label: 'آموزش', icon: GraduationCap, isExternal: true },
 ];
 
 function Sidebar() {
@@ -33,12 +32,19 @@ function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-2 space-y-4 flex flex-col items-center">
         {MENU_ITEMS.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive = !item.isExternal && location.pathname === item.path;
+          
           return (
             <a
-              key={item.path}
+              key={item.label}
               href={item.path}
-              onClick={(e) => { e.preventDefault(); navigate(item.path); }}
+              target={item.isExternal ? "_blank" : undefined}
+              onClick={(e) => { 
+                  if (!item.isExternal) {
+                      e.preventDefault(); 
+                      navigate(item.path); 
+                  }
+              }}
               className={`relative flex flex-col items-center justify-center w-24 h-24 rounded-2xl transition-all duration-300 group ${
                 isActive 
                   ? 'bg-slate-800 text-cyan-400 border border-slate-700 shadow-inner' 
@@ -65,7 +71,7 @@ function Sidebar() {
 
       {/* Footer Version */}
       <div className="p-4 border-t border-slate-800 flex justify-center">
-         <span className="text-xs text-slate-600">v1.3</span>
+         <span className="text-xs text-slate-600">v1.4</span>
       </div>
     </aside>
   );
@@ -112,12 +118,18 @@ function MobileBottomNav() {
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 z-50 flex items-center justify-around px-2 pb-safe">
       {MENU_ITEMS.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive = !item.isExternal && location.pathname === item.path;
           return (
             <a
-              key={item.path}
+              key={item.label}
               href={item.path}
-              onClick={(e) => { e.preventDefault(); navigate(item.path); }}
+              target={item.isExternal ? "_blank" : undefined}
+              onClick={(e) => { 
+                  if (!item.isExternal) {
+                      e.preventDefault(); 
+                      navigate(item.path); 
+                  }
+              }}
               className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${
                 isActive ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'
               }`}
@@ -151,7 +163,6 @@ export function App() {
                <Route path="/correlation" element={<CorrelationPage />} />
                <Route path="/ratio" element={<RatioPage />} />
                <Route path="/portfolio" element={<PortfolioPage />} />
-               <Route path="/signal" element={<SignalPage />} />
              </Routes>
           </div>
         </main>
