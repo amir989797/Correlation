@@ -1,23 +1,19 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { fetchStockHistory, searchSymbols } from '../services/tsetmcService';
-import { generateRatioAnalysisData, parseTsetmcCsv } from '../utils/mathUtils';
+import { generateRatioAnalysisData } from '../utils/mathUtils';
 import { CorrelationChart } from '../components/CorrelationChart';
 import { PriceChart } from '../components/PriceChart';
 import { DistanceChart } from '../components/DistanceChart';
 import { ChartDataPoint, FetchStatus, TsetmcDataPoint, SearchResult } from '../types';
-import { Upload, FileText, X, Search, Loader2 } from 'lucide-react';
+import { FileText, X, Search, Loader2 } from 'lucide-react';
 import { SeoHelmet } from '../components/SeoHelmet';
-
-type InputMode = 'database' | 'file';
 
 const WINDOW_OPTIONS = [
   { val: 30, label: '۳۰ روزه', color: '#3b82f6' },
   { val: 60, label: '۶۰ روزه', color: '#10b981' },
   { val: 90, label: '۹۰ روزه', color: '#8b5cf6' },
 ];
-
-// --- Duplicated Input Components to be safe and independent ---
 
 const SearchInput = ({ 
   label, 
@@ -118,102 +114,6 @@ const SearchInput = ({
   );
 };
 
-const FileDropzone = ({ 
-    label, 
-    file, 
-    onFileSelect 
-  }: { 
-    label: string; 
-    file: File | null; 
-    onFileSelect: (f: File | null) => void;
-  }) => {
-    const [isDragging, setIsDragging] = useState(false);
-    const inputRef = useRef<HTMLInputElement>(null);
-  
-    const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(true);
-    };
-  
-    const handleDragLeave = (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-    };
-  
-    const handleDrop = (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        onFileSelect(e.dataTransfer.files[0]);
-      }
-    };
-  
-    return (
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-slate-400">{label}</label>
-        
-        <div 
-          onClick={() => inputRef.current?.click()}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={`
-            relative group cursor-pointer
-            border-2 border-dashed rounded-xl p-8
-            flex flex-col items-center justify-center text-center
-            transition-all duration-300 min-h-[160px]
-            ${isDragging 
-                ? 'border-amber-500 bg-amber-500/10 scale-[1.02]' 
-                : file 
-                  ? 'border-emerald-500/50 bg-emerald-500/5' 
-                  : 'border-slate-600 bg-slate-900/50 hover:border-amber-400 hover:bg-slate-800'
-            }
-          `}
-        >
-          <input 
-            ref={inputRef}
-            type="file" 
-            accept=".csv,.txt" 
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                 onFileSelect(e.target.files[0]);
-              }
-            }}
-          />
-  
-          {file ? (
-            <div className="flex flex-col items-center w-full">
-              <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3">
-                 <FileText className="w-6 h-6" />
-              </div>
-              <p className="text-emerald-200 font-medium text-sm truncate max-w-full px-4 mb-1" dir="ltr">
-                {file.name}
-              </p>
-              <button 
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onFileSelect(null);
-                    if (inputRef.current) inputRef.current.value = '';
-                }}
-                className="mt-2 px-3 py-1 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded text-xs transition-colors"
-              >
-                حذف
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center text-slate-400 group-hover:text-amber-400 transition-colors">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3 bg-slate-800 group-hover:bg-amber-500/10">
-                 <Upload className="w-6 h-6" />
-              </div>
-              <p className="font-bold text-sm">آپلود فایل</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
 const ChartBackgroundLabel = ({ text }: { text: string }) => (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
        <h3 className="text-[12vw] sm:text-6xl md:text-8xl font-black text-slate-800/30 select-none whitespace-nowrap">{text}</h3>
@@ -223,12 +123,8 @@ const ChartBackgroundLabel = ({ text }: { text: string }) => (
 // --- Page Component ---
 
 export function RatioPage() {
-  const [mode, setMode] = useState<InputMode>('database');
-  
   const [symbol1, setSymbol1] = useState<SearchResult | null>(null);
   const [symbol2, setSymbol2] = useState<SearchResult | null>(null);
-  const [file1, setFile1] = useState<File | null>(null);
-  const [file2, setFile2] = useState<File | null>(null);
 
   // Settings
   const [showRatioChart, setShowRatioChart] = useState(true);
@@ -245,6 +141,15 @@ export function RatioPage() {
   const [error, setError] = useState<string | null>(null);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [names, setNames] = useState<{s1: string, s2: string}>({ s1: 'صورت', s2: 'مخرج' });
+
+  // Automatically show Distance Chart if Indicators are selected
+  useEffect(() => {
+    if (showMa100 || showMa200) {
+        setShowDistance(true);
+    } else {
+        setShowDistance(false);
+    }
+  }, [showMa100, showMa200]);
 
   // Calculate all windows regardless of selection so toggling is fast
   const processData = (d1: TsetmcDataPoint[], d2: TsetmcDataPoint[]) => {
@@ -282,33 +187,6 @@ export function RatioPage() {
       }
   };
 
-  const handleFileSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!file1 || !file2) { setError('لطفا هر دو فایل را انتخاب کنید'); return; }
-
-      setStatus(FetchStatus.LOADING);
-      setError(null);
-
-      try {
-        const read = (f: File) => new Promise<string>((resolve) => {
-            const r = new FileReader();
-            r.onload = (e) => resolve(e.target?.result as string);
-            r.readAsText(f);
-        });
-
-        const [t1, t2] = await Promise.all([read(file1), read(file2)]);
-        const r1 = parseTsetmcCsv(t1);
-        const r2 = parseTsetmcCsv(t2);
-
-        setNames({ s1: r1.name || 'فایل ۱', s2: r2.name || 'فایل ۲' });
-        processData(r1.data, r2.data);
-
-      } catch (err: any) {
-          setStatus(FetchStatus.ERROR);
-          setError('خطا در پردازش فایل‌ها');
-      }
-  };
-
   const handleWindowChange = (val: number, checked: boolean) => {
       if (checked) {
           setSelectedWindows(prev => [...prev, val].sort((a,b) => a - b));
@@ -337,22 +215,14 @@ export function RatioPage() {
         <SeoHelmet />
         <header className="mb-8 space-y-6">
             <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 inline-block mb-2">
-            تحلیل نسبت (Ratio)
+            تحلیل تکنیکال
             </h2>
             <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50 backdrop-blur-sm shadow-xl transition-all duration-300">
                 <p className="text-slate-300 leading-8 text-justify font-medium">
-                نمودار تقسیم قیمت نماد اول بر نماد دوم (Ratio Chart) ابزاری قدرتمند برای شناسایی دارایی‌های جامانده یا حباب‌دار است. با استفاده از ابزارهای تکنیکال روی این نسبت، می‌توانید نقاط ورود و خروج بهینه بین دو دارایی را پیدا کنید.
+                نمودار تقسیم قیمت نماد اول بر نماد دوم (Ratio Chart) ابزاری قدرتمند برای شناسایی دارایی‌های جامانده یا حباب‌دار است. در این بخش می‌توانید ضریب همبستگی تاریخی بین دو نماد را بررسی کنید. همبستگی مثبت (نزدیک به ۱) یعنی دو نماد هم‌جهت حرکت می‌کنند و همبستگی منفی (نزدیک به ۱-) یعنی خلاف جهت یکدیگرند. با استفاده از ابزارهای تکنیکال روی این نسبت، می‌توانید نقاط ورود و خروج بهینه بین دو دارایی را پیدا کنید.
                 </p>
             </div>
         </header>
-
-        {/* Mode Toggle */}
-        <div className="flex justify-start mb-6">
-          <div className="bg-slate-800 p-1 rounded-xl flex shadow-lg border border-slate-700">
-            <button onClick={() => setMode('database')} className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'database' ? 'bg-amber-500 text-white shadow-lg' : 'text-slate-400'}`}>جستجو</button>
-            <button onClick={() => setMode('file')} className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'file' ? 'bg-amber-500 text-white shadow-lg' : 'text-slate-400'}`}>آپلود</button>
-          </div>
-        </div>
 
         <div className="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
             {/* Settings */}
@@ -396,10 +266,6 @@ export function RatioPage() {
                                 <input type="checkbox" checked={showCorrelation} onChange={(e) => setShowCorrelation(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-cyan-500"/>
                                 <span className={`text-sm ${showCorrelation ? 'text-cyan-400' : 'text-slate-500'}`}>همبستگی</span>
                             </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={showDistance} onChange={(e) => setShowDistance(e.target.checked)} className="h-4 w-4 rounded bg-slate-800 border-slate-600 text-cyan-500"/>
-                                <span className={`text-sm ${showDistance ? 'text-cyan-400' : 'text-slate-500'}`}>فاصله از میانگین</span>
-                            </label>
                         </div>
 
                         <div className={`transition-all duration-300 overflow-hidden ${showCorrelation ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'}`}>
@@ -424,21 +290,13 @@ export function RatioPage() {
                  </div>
             </div>
 
-            {mode === 'database' ? (
-                <form onSubmit={handleDbSubmit} className="grid md:grid-cols-2 gap-6">
-                    <SearchInput label="صورت کسر (نماد اول)" value={symbol1} onSelect={setSymbol1} />
-                    <SearchInput label="مخرج کسر (نماد دوم)" value={symbol2} onSelect={setSymbol2} />
-                    <button type="submit" disabled={status === FetchStatus.LOADING} className="md:col-span-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 rounded-lg shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all border-none">
-                        {status === FetchStatus.LOADING ? 'در حال محاسبه...' : 'ترسیم نمودار نسبت'}
-                    </button>
-                </form>
-            ) : (
-                <form onSubmit={handleFileSubmit} className="grid md:grid-cols-2 gap-6">
-                    <FileDropzone label="فایل صورت کسر" file={file1} onFileSelect={setFile1} />
-                    <FileDropzone label="فایل مخرج کسر" file={file2} onFileSelect={setFile2} />
-                    <button type="submit" disabled={status === FetchStatus.LOADING} className="md:col-span-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 rounded-lg shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all border-none">محاسبه</button>
-                </form>
-            )}
+            <form onSubmit={handleDbSubmit} className="grid md:grid-cols-2 gap-6">
+                <SearchInput label="صورت کسر (نماد اول)" value={symbol1} onSelect={setSymbol1} />
+                <SearchInput label="مخرج کسر (نماد دوم)" value={symbol2} onSelect={setSymbol2} />
+                <button type="submit" disabled={status === FetchStatus.LOADING} className="md:col-span-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 rounded-lg shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all border-none">
+                    {status === FetchStatus.LOADING ? 'در حال محاسبه...' : 'ترسیم نمودار'}
+                </button>
+            </form>
         </div>
 
         {error && (
