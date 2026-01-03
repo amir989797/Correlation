@@ -179,9 +179,20 @@ app.get('/sitemap.xml', async (req, res) => {
     let client;
     try {
         client = await pool.connect();
+        let seoPages = [];
         
-        // Get Static Pages from SEO table
-        const seoPagesRes = await client.query('SELECT route FROM seo_pages');
+        try {
+            const seoPagesRes = await client.query('SELECT route FROM seo_pages');
+            seoPages = seoPagesRes.rows;
+        } catch (dbErr) {
+            // Check if error is "relation does not exist" (table missing)
+            if (dbErr.code === '42P01') {
+                console.warn('⚠️ SEO table missing, returning default sitemap.');
+                seoPages = [{ route: '/' }];
+            } else {
+                throw dbErr;
+            }
+        }
         
         // Start XML
         let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -190,16 +201,13 @@ app.get('/sitemap.xml', async (req, res) => {
         const baseUrl = 'https://arkarise.ir'; 
 
         // Add Static Pages
-        seoPagesRes.rows.forEach(page => {
+        seoPages.forEach(page => {
             xml += '  <url>\n';
             xml += `    <loc>${baseUrl}${page.route}</loc>\n`;
             xml += `    <changefreq>weekly</changefreq>\n`;
             xml += `    <priority>${page.route === '/' ? '1.0' : '0.8'}</priority>\n`;
             xml += '  </url>\n';
         });
-
-        // Optional: Add dynamic pages based on active asset groups (e.g. if we had specific pages for them)
-        // For now, the app is a SPA with query interactions, so we mostly index the main tools.
 
         xml += '</urlset>';
         

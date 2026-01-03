@@ -2,18 +2,24 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const proxyOptions = {
+  '/api': {
+    target: 'http://localhost:8000',
+    changeOrigin: true
+  },
+  '/sitemap.xml': {
+    target: 'http://localhost:8000',
+    changeOrigin: true
+  }
+};
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: {
     host: true, // Listen on 0.0.0.0
     port: 3000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true
-      }
-    }
+    proxy: proxyOptions
   },
   preview: {
     host: true, // Listen on 0.0.0.0
@@ -21,7 +27,8 @@ export default defineConfig({
     allowedHosts: [
         'arkarise.ir', 
         'www.arkarise.ir', 
-    ]
+    ],
+    proxy: proxyOptions
   },
   build: {
     chunkSizeWarningLimit: 1000,
