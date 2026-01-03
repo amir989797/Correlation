@@ -2,10 +2,12 @@
 import React from 'react';
 import { Link } from '../router';
 import { LineChart, Scale, Briefcase, GraduationCap } from 'lucide-react';
+import { SeoHelmet } from '../components/SeoHelmet';
 
 export function HomePage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-6 space-y-12">
+      <SeoHelmet />
       <div className="space-y-4 max-w-2xl">
         <h1 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">
           تحلیلگر بورس

@@ -17,6 +17,7 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
+import { SeoHelmet } from '../components/SeoHelmet';
 
 type MarketState = 'Ceiling' | 'Floor' | 'Normal';
 
@@ -810,7 +811,7 @@ export function PortfolioPage() {
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 animate-fade-in">
-       
+       <SeoHelmet />
        {/* Enhanced Header Section */}
        <header className="mb-8 space-y-6">
           <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 inline-block mb-2">

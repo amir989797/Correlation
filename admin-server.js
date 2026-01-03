@@ -39,7 +39,7 @@ const dbConfig = {
 
 const pool = new Pool(dbConfig);
 
-// Init DB for Assets & Backup Table
+// Init DB for Assets, Backup Table & SEO
 const initDB = async () => {
     const client = await pool.connect();
     try {
@@ -50,20 +50,44 @@ const initDB = async () => {
                 type VARCHAR(20),
                 url TEXT,
                 is_default BOOLEAN DEFAULT FALSE,
+                last_return FLOAT DEFAULT 0,
                 PRIMARY KEY (symbol, type)
             );
         `);
 
-        // Add last_return column if not exists
-        await client.query(`
-            ALTER TABLE asset_groups ADD COLUMN IF NOT EXISTS last_return FLOAT DEFAULT 0;
-        `);
-        
         // Backup Table Structure
         await client.query(`
             CREATE TABLE IF NOT EXISTS daily_prices_backup (LIKE daily_prices INCLUDING ALL);
         `);
         
+        // SEO Table
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS seo_pages (
+                route VARCHAR(50) PRIMARY KEY,
+                title VARCHAR(255),
+                description TEXT,
+                keywords TEXT
+            );
+        `);
+
+        // Seed Default SEO Data if empty
+        const seoCheck = await client.query('SELECT count(*) FROM seo_pages');
+        if (parseInt(seoCheck.rows[0].count) === 0) {
+            const defaults = [
+                { route: '/', title: 'تحلیلگر بورس | خانه', description: 'پلتفرم جامع تحلیل تکنیکال، همبستگی و مدیریت دارایی‌های بازار سرمایه ایران (TSETMC).', keywords: 'بورس, تحلیل تکنیکال, همبستگی, صندوق طلا, صندوق سهامی' },
+                { route: '/correlation', title: 'محاسبه همبستگی نمادها', description: 'ابزار محاسبه ضریب همبستگی تاریخی بین دو نماد بورس و فرابورس، تحلیل واگرایی و نمودارهای مقایسه‌ای.', keywords: 'همبستگی بورس, همبستگی نمادها, تحلیل همبستگی, کورولیشن' },
+                { route: '/ratio', title: 'تحلیل نسبت (Ratio Chart)', description: 'رسم نمودار نسبت قیمت دو دارایی به یکدیگر برای شناسایی حباب‌های قیمتی و فرصت‌های آربیتراژ.', keywords: 'رشیو چارت, نمودار نسبت, تحلیل تکنیکال پیشرفته, حباب سنج' },
+                { route: '/portfolio', title: 'سبد دارایی هوشمند', description: 'پیشنهاد سبد دارایی بهینه شامل طلا، سهام و درآمد ثابت بر اساس تحلیل ریسک و بازدهی بازار.', keywords: 'سبدگردانی, پرتفوی پیشنهادی, صندوق اهرمی, صندوق درآمد ثابت' }
+            ];
+            for (const p of defaults) {
+                await client.query(
+                    'INSERT INTO seo_pages (route, title, description, keywords) VALUES ($1, $2, $3, $4)',
+                    [p.route, p.title, p.description, p.keywords]
+                );
+            }
+            console.log("✅ Default SEO pages seeded.");
+        }
+
         console.log("✅ Database tables checked/initialized.");
     } catch (e) {
         console.error("Error creating/updating tables:", e);
@@ -99,36 +123,25 @@ const syncSymbolsTable = async () => {
   }
 };
 
-// --- RETURN CALCULATION LOGIC (Ported from Frontend) ---
-
+// ... (Existing Return Calculation Logic - calcReturn, calculateAllAssetReturns - kept as is) ...
 const calcReturn = (data) => {
     if (!data || data.length < 2) return 0;
-    
-    // Data is expected to be sorted ASC by date
     const lastPoint = data[data.length - 1];
-    const lastDateStr = lastPoint.date; // YYYYMMDD
-    
-    // Parse YYYYMMDD to Date
+    const lastDateStr = lastPoint.date; 
     const parseDate = (d) => {
         const y = parseInt(d.substring(0, 4));
         const m = parseInt(d.substring(4, 6)) - 1;
         const dy = parseInt(d.substring(6, 8));
         return new Date(y, m, dy);
     };
-
     const lastDate = parseDate(lastDateStr);
-    // Target date is 365 days ago
     const targetTime = lastDate.getTime() - (365 * 24 * 60 * 60 * 1000);
-
     let closestPoint = data[data.length - 1];
     let minDiff = Infinity;
-
-    // Iterate backwards
     for (let i = data.length - 1; i >= 0; i--) {
         const p = data[i];
         const pTime = parseDate(p.date).getTime();
         const diff = Math.abs(pTime - targetTime);
-
         if (diff < minDiff) {
             minDiff = diff;
             closestPoint = p;
@@ -136,32 +149,22 @@ const calcReturn = (data) => {
             break; 
         }
     }
-
     if (closestPoint.date === lastPoint.date) return 0;
-
     return ((lastPoint.close - closestPoint.close) / closestPoint.close) * 100;
 };
 
 const calculateAllAssetReturns = async () => {
-    console.log('🔄 Calculating 1-year returns for all assets...');
     let mainClient;
     try {
         mainClient = await pool.connect();
-        // 1. Get list of assets
         const assetsRes = await mainClient.query('SELECT symbol, type FROM asset_groups');
         const assets = assetsRes.rows;
-        
-        // Release main client early to free up pool connection
         mainClient.release();
         mainClient = null;
 
-        // 2. Parallel Processing Function
-        // Uses individual clients from pool for each parallel request. 
-        // PG Pool handles queuing automatically.
         const processAsset = async (asset) => {
             const client = await pool.connect();
             try {
-                // Fetch only needed history (Limit 600)
                 const historyResOpt = await client.query(`
                     SELECT * FROM (
                         SELECT to_char(date, 'YYYYMMDD') as date, close 
@@ -171,9 +174,7 @@ const calculateAllAssetReturns = async () => {
                         LIMIT 600
                     ) sub ORDER BY date ASC
                 `, [asset.symbol]);
-
                 const history = historyResOpt.rows;
-                
                 if (history.length > 0) {
                     const retVal = calcReturn(history);
                     await client.query(`
@@ -191,32 +192,22 @@ const calculateAllAssetReturns = async () => {
                 client.release();
             }
         };
-
-        // Run all in parallel
         const results = await Promise.all(assets.map(asset => processAsset(asset)));
-        const updatedCount = results.reduce((sum, val) => sum + val, 0);
-
-        console.log(`✅ Returns calculated and saved for ${updatedCount} assets.`);
-        return updatedCount;
+        return results.reduce((sum, val) => sum + val, 0);
     } catch (e) {
-        console.error('Calculation Error:', e);
         if (mainClient) mainClient.release();
         throw e;
     }
 };
 
-// --- DATA BACKUP & RESTORE LOGIC ---
-
+// ... (Existing Backup/Restore Logic - createBackup, restoreBackupData) ...
 const createBackup = async () => {
     const client = await pool.connect();
     try {
-        console.log('📦 Starting backup process...');
         await client.query('TRUNCATE daily_prices_backup');
         await client.query('INSERT INTO daily_prices_backup SELECT * FROM daily_prices');
-        console.log('✅ Backup created successfully.');
         return true;
     } catch (e) {
-        console.error('❌ Backup failed:', e);
         lastUpdateLog += `\n❌ خطای بکاپ گیری: ${e.message}`;
         return false;
     } finally {
@@ -227,51 +218,40 @@ const createBackup = async () => {
 const restoreBackupData = async () => {
     const client = await pool.connect();
     try {
-        console.log('♻️ Starting restore process...');
         await client.query('BEGIN');
         await client.query('TRUNCATE daily_prices');
         await client.query('INSERT INTO daily_prices SELECT * FROM daily_prices_backup');
         await client.query('COMMIT');
-        console.log('✅ Data restored from backup.');
         return true;
     } catch (e) {
         await client.query('ROLLBACK');
-        console.error('❌ Restore failed:', e);
         throw e;
     } finally {
         client.release();
     }
 };
 
-// --- CORE UPDATE LOGIC ---
-
+// ... (Existing Update Logic - runUpdateProcess) ...
 const runUpdateProcess = async () => {
     if (isUpdating) return;
     if (!fs.existsSync(PYTHON_SCRIPT_PATH)) {
         lastUpdateLog += `\n❌ فایل اسکریپت یافت نشد.`;
         return;
     }
-
     isUpdating = true;
     lastUpdateLog = "📦 در حال ایجاد نسخه پشتیبان (Backup)...\n";
-
-    // 1. Backup First
     const backupSuccess = await createBackup();
     if (!backupSuccess) {
         lastUpdateLog += "\n❌ عملیات به دلیل شکست در بکاپ‌گیری متوقف شد.";
         isUpdating = false;
         return;
     }
-
     lastUpdateLog += "✅ بکاپ گرفته شد.\n🚀 آپدیت شروع شد (حالت چند رشته‌ای)...\n";
-    
     currentProcess = spawn('python3', ['-u', PYTHON_SCRIPT_PATH]);
-
     currentProcess.stdout.on('data', (data) => {
         const chunk = data.toString();
         lastUpdateLog = (lastUpdateLog + chunk).slice(-5000); 
     });
-
     currentProcess.stderr.on('data', (data) => {
         const text = data.toString();
         if (text.includes('%') || text.includes('it/s')) {
@@ -281,23 +261,17 @@ const runUpdateProcess = async () => {
         }
         lastUpdateLog = lastUpdateLog.slice(-5000);
     });
-
     currentProcess.on('close', async (code) => {
-        console.log(`Script finished: ${code}`);
         currentProcess = null;
         isUpdating = false;
-
         if (code === 0) {
             lastUpdateLog += `\n✅ دریافت دیتا تمام شد.`;
             try {
                 const count = await syncSymbolsTable();
                 lastUpdateLog += `\n✨ لیست جستجو بروز شد (${count} نماد جدید).`;
-                
-                // Calculate Returns Automatically
                 lastUpdateLog += `\n🔄 در حال محاسبه بازدهی نمادهای منتخب...`;
                 const updated = await calculateAllAssetReturns();
                 lastUpdateLog += `\n✅ بازدهی ${updated} نماد محاسبه و ذخیره شد.`;
-
             } catch (e) {
                 lastUpdateLog += `\n⚠️ خطا در پردازش پس از آپدیت: ${e.message}`;
             }
@@ -307,16 +281,10 @@ const runUpdateProcess = async () => {
     });
 };
 
-// --- SCHEDULER (Every Day at 18:00 Tehran Time) ---
 cron.schedule('0 18 * * *', () => {
     console.log('⏰ Running scheduled daily update...');
     runUpdateProcess();
-}, {
-    scheduled: true,
-    timezone: "Asia/Tehran"
-});
-
-// --- API ENDPOINTS ---
+}, { scheduled: true, timezone: "Asia/Tehran" });
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin-dashboard.html'));
@@ -332,20 +300,14 @@ app.post('/api/login', (req, res) => {
   }
 });
 
-// Search Endpoint
+// ... (Existing endpoints for search, stats, update, restore, assets) ...
 app.get('/api/search', requireAuth, async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 2) return res.json([]);
-
   let client;
   try {
     client = await pool.connect();
-    const query = `
-      SELECT symbol, name 
-      FROM symbols 
-      WHERE symbol LIKE $1 OR name LIKE $1
-      LIMIT 10
-    `;
+    const query = `SELECT symbol, name FROM symbols WHERE symbol LIKE $1 OR name LIKE $1 LIMIT 10`;
     const values = [`%${q}%`];
     const result = await client.query(query, values);
     res.json(result.rows);
@@ -360,13 +322,9 @@ app.get('/api/search', requireAuth, async (req, res) => {
 app.get('/api/stats', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
-    const countQuery = `
-      SELECT (SELECT COUNT(*) FROM symbols) as symbol_count,
-             (SELECT MAX(date) FROM daily_prices) as last_date
-    `;
+    const countQuery = `SELECT (SELECT COUNT(*) FROM symbols) as symbol_count, (SELECT MAX(date) FROM daily_prices) as last_date`;
     const result = await client.query(countQuery);
     const scriptExists = fs.existsSync(PYTHON_SCRIPT_PATH);
-
     res.json({
       symbolCount: result.rows[0].symbol_count || 0,
       lastDate: result.rows[0].last_date,
@@ -377,7 +335,6 @@ app.get('/api/stats', requireAuth, async (req, res) => {
       scriptExists
     });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Database Error' });
   } finally {
     client.release();
@@ -387,7 +344,6 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 app.post('/api/update', requireAuth, (req, res) => {
   if (isUpdating) return res.status(400).json({ message: 'عملیات آپدیت هم‌اکنون در حال اجراست.' });
   if (isRestoring) return res.status(400).json({ message: 'عملیات بازیابی بکاپ در حال اجراست.' });
-  
   runUpdateProcess();
   res.json({ message: 'دستور آپدیت و بکاپ‌گیری ارسال شد.', status: 'started' });
 });
@@ -395,7 +351,6 @@ app.post('/api/update', requireAuth, (req, res) => {
 app.post('/api/restore', requireAuth, async (req, res) => {
     if (isUpdating) return res.status(400).json({ message: 'نمی‌توان هنگام آپدیت، بکاپ را برگرداند.' });
     if (isRestoring) return res.status(400).json({ message: 'عملیات بازیابی هم‌اکنون در حال اجراست.' });
-
     isRestoring = true;
     try {
         await restoreBackupData();
@@ -413,12 +368,9 @@ app.post('/api/stop', requireAuth, (req, res) => {
     res.json({ message: 'دستور توقف ارسال شد.' });
 });
 
-// --- ASSET GROUP MANAGEMENT ---
-
 app.get('/api/assets', requireAuth, async (req, res) => {
     const client = await pool.connect();
     try {
-        // Updated query to include last_return
         const result = await client.query('SELECT symbol, type, url, is_default, last_return FROM asset_groups ORDER BY symbol');
         res.json(result.rows);
     } catch(e) {
@@ -432,7 +384,6 @@ app.post('/api/assets', requireAuth, async (req, res) => {
     const { symbol, type, url } = req.body;
     if (!symbol || !type) return res.status(400).json({error: 'نماد و نوع الزامی است'});
     if (!url) return res.status(400).json({error: 'آدرس سایت الزامی است'});
-    
     const client = await pool.connect();
     try {
         await client.query(
@@ -447,10 +398,8 @@ app.post('/api/assets', requireAuth, async (req, res) => {
     }
 });
 
-// Endpoint to trigger calculation manually
 app.post('/api/assets/recalc', requireAuth, async (req, res) => {
     if (isUpdating) return res.status(400).json({ message: 'سیستم در حال آپدیت است. لطفا صبر کنید.' });
-    
     try {
         const count = await calculateAllAssetReturns();
         res.json({ message: `بازدهی ${count} صندوق با موفقیت محاسبه و ذخیره شد.` });
@@ -464,6 +413,54 @@ app.delete('/api/assets', requireAuth, async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('DELETE FROM asset_groups WHERE symbol = $1 AND type = $2', [symbol, type]);
+        res.json({ success: true });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+});
+
+// --- SEO MANAGEMENT ENDPOINTS ---
+
+app.get('/api/seo', requireAuth, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const result = await client.query('SELECT * FROM seo_pages ORDER BY route');
+        res.json(result.rows);
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/api/seo', requireAuth, async (req, res) => {
+    const { route, title, description, keywords } = req.body;
+    if (!route) return res.status(400).json({ error: 'مسیر (Route) الزامی است.' });
+    
+    const client = await pool.connect();
+    try {
+        await client.query(
+            `INSERT INTO seo_pages (route, title, description, keywords) 
+             VALUES ($1, $2, $3, $4) 
+             ON CONFLICT (route) DO UPDATE 
+             SET title = $2, description = $3, keywords = $4`,
+            [route, title, description, keywords]
+        );
+        res.json({ success: true });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.delete('/api/seo', requireAuth, async (req, res) => {
+    const { route } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('DELETE FROM seo_pages WHERE route = $1', [route]);
         res.json({ success: true });
     } catch(e) {
         res.status(500).json({ error: e.message });

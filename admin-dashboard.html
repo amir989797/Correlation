@@ -112,6 +112,52 @@
             <span class="text-slate-500">Waiting for logs...</span>
         </div>
 
+        <!-- SEO Management Section -->
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+            <h3 class="text-white font-bold text-lg flex items-center gap-2 mb-4">
+                <span class="w-2 h-6 bg-purple-500 rounded-full"></span>
+                تنظیمات سئو (SEO)
+            </h3>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Add/Edit SEO Form -->
+                <div class="bg-slate-900 p-4 rounded-xl border border-slate-600 space-y-3">
+                    <h4 class="text-slate-300 text-sm font-bold border-b border-slate-700 pb-2">ویرایش/افزودن صفحه</h4>
+                    
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">مسیر صفحه (Route) - مثال: / یا /ratio</label>
+                        <input type="text" id="seo-route" dir="ltr" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:border-purple-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">عنوان صفحه (Title)</label>
+                        <input type="text" id="seo-title" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:border-purple-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">توضیحات (Description)</label>
+                        <textarea id="seo-desc" rows="2" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:border-purple-500 outline-none"></textarea>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">کلمات کلیدی (با کاما جدا کنید)</label>
+                        <input type="text" id="seo-keywords" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:border-purple-500 outline-none">
+                    </div>
+                    
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="saveSeo()" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded text-sm transition">ذخیره</button>
+                        <button onclick="clearSeoForm()" class="px-4 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 rounded text-sm transition">پاک کردن</button>
+                    </div>
+                </div>
+
+                <!-- SEO Pages List -->
+                <div class="bg-slate-900 p-4 rounded-xl border border-slate-600 flex flex-col h-full">
+                     <h4 class="text-slate-300 text-sm font-bold border-b border-slate-700 pb-2 mb-2">لیست صفحات</h4>
+                     <div id="seo-list" class="flex-1 overflow-y-auto scrollbar-thin space-y-2 max-h-[300px]">
+                         <!-- Loaded via JS -->
+                         <p class="text-center text-slate-500 text-xs mt-4">در حال بارگذاری...</p>
+                     </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Asset Management Section -->
         <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
             <div class="flex flex-col md:flex-row justify-between items-center mb-6">
@@ -291,6 +337,7 @@
             dashboardSection.classList.add('block');
             fetchStats();
             fetchAssets();
+            fetchSeo();
             refreshInterval = setInterval(fetchStats, 5000);
         }
 
@@ -324,8 +371,8 @@
                 // UI Logic based on state
                 if (data.isUpdating) {
                     updateBtn.disabled = true;
-                    restoreBtn.disabled = true; // Disable restore during update
-                    recalcBtn.disabled = true; // Disable manual recalc during update
+                    restoreBtn.disabled = true; 
+                    recalcBtn.disabled = true; 
                     updateBtn.classList.add('opacity-75');
                     document.getElementById('btn-text').innerText = 'در حال اجرا...';
                     loader.classList.remove('hidden');
@@ -379,42 +426,28 @@
                 const res = await fetch(`${API_URL}/assets`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const data = await res.json(); // Array of {symbol, type, url, is_default, last_return}
+                const data = await res.json(); 
                 
                 const container = document.getElementById('asset-containers');
                 container.innerHTML = '';
 
                 assetCategories.forEach(cat => {
-                    // Filter assets for this category
                     const items = data.filter(d => d.type === cat.key);
-                    
                     const col = document.createElement('div');
                     col.className = 'bg-slate-900 rounded-xl p-4 border border-slate-700 flex flex-col h-[450px]';
-                    
                     col.innerHTML = `
                         <div class="flex items-center gap-2 mb-3">
                             <div class="w-3 h-3 rounded-full ${cat.color}"></div>
                             <h4 class="font-bold text-white text-sm">${cat.label}</h4>
                         </div>
-                        
                         <div class="relative mb-3 group z-20 space-y-2">
                             <div class="flex gap-2">
-                                <input type="text" id="input-${cat.key}" 
-                                       oninput="handleSearch('${cat.key}')" 
-                                       placeholder="نماد..." 
-                                       autocomplete="off"
-                                       class="w-2/3 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none focus:border-cyan-500 transition-colors">
+                                <input type="text" id="input-${cat.key}" oninput="handleSearch('${cat.key}')" placeholder="نماد..." autocomplete="off" class="w-2/3 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none focus:border-cyan-500 transition-colors">
                                 <button onclick="addAsset('${cat.key}')" class="w-1/3 bg-cyan-600 hover:bg-cyan-500 text-white rounded px-2 py-1 text-xs transition">افزودن</button>
                             </div>
-                            <input type="text" id="url-${cat.key}" 
-                                   placeholder="لینک سایت (اجباری)" 
-                                   class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[10px] text-slate-300 outline-none focus:border-cyan-500 transition-colors" dir="ltr">
-                            
-                            <div id="results-${cat.key}" class="absolute top-10 right-0 w-2/3 bg-slate-800 border border-slate-600 rounded-b-lg mt-0.5 hidden max-h-48 overflow-y-auto scrollbar-thin shadow-2xl z-50">
-                                <!-- Results -->
-                            </div>
+                            <input type="text" id="url-${cat.key}" placeholder="لینک سایت (اجباری)" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[10px] text-slate-300 outline-none focus:border-cyan-500 transition-colors" dir="ltr">
+                            <div id="results-${cat.key}" class="absolute top-10 right-0 w-2/3 bg-slate-800 border border-slate-600 rounded-b-lg mt-0.5 hidden max-h-48 overflow-y-auto scrollbar-thin shadow-2xl z-50"></div>
                         </div>
-
                         <div class="flex-1 overflow-y-auto scrollbar-thin space-y-1 pr-1 relative z-0" id="list-${cat.key}">
                             ${items.length === 0 ? '<p class="text-xs text-slate-600 text-center mt-4">لیست خالی است</p>' : ''}
                             ${items.map(item => {
@@ -451,33 +484,25 @@
             const input = document.getElementById(`input-${type}`);
             const resultsContainer = document.getElementById(`results-${type}`);
             const query = input.value.trim();
-
             if (searchDebounce) clearTimeout(searchDebounce);
-            
             if (query.length < 2) {
                 resultsContainer.classList.add('hidden');
                 resultsContainer.innerHTML = '';
                 return;
             }
-
             searchDebounce = setTimeout(async () => {
                 try {
                     const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`, {
                          headers: { 'Authorization': `Bearer ${token}` }
                     });
                     const data = await res.json();
-                    
                     resultsContainer.innerHTML = '';
-                    
                     if (data.length > 0) {
                         resultsContainer.classList.remove('hidden');
                         data.forEach(item => {
                             const el = document.createElement('div');
                             el.className = 'p-2 hover:bg-slate-700 cursor-pointer border-b border-slate-700/50 last:border-0 flex flex-col';
-                            el.innerHTML = `
-                                <span class="text-xs font-bold text-white">${item.symbol}</span>
-                                <span class="text-[10px] text-slate-400 truncate">${item.name}</span>
-                            `;
+                            el.innerHTML = `<span class="text-xs font-bold text-white">${item.symbol}</span><span class="text-[10px] text-slate-400 truncate">${item.name}</span>`;
                             el.onclick = () => {
                                 input.value = item.symbol;
                                 resultsContainer.classList.add('hidden');
@@ -489,14 +514,12 @@
                          resultsContainer.classList.remove('hidden');
                          resultsContainer.innerHTML = '<div class="p-2 text-xs text-slate-500 text-center">موردی یافت نشد</div>';
                     }
-
                 } catch (e) {
                     console.error("Search failed", e);
                 }
             }, 300);
         };
 
-        // Close dropdowns on outside click
         document.addEventListener('click', (e) => {
              if (!e.target.closest('.relative')) {
                  document.querySelectorAll('[id^="results-"]').forEach(el => el.classList.add('hidden'));
@@ -508,10 +531,8 @@
             const urlInput = document.getElementById(`url-${type}`);
             const symbol = input.value.trim();
             const url = urlInput.value.trim();
-
             if (!symbol) { alert('لطفا نماد را وارد کنید'); return; }
             if (!url) { alert('لطفا آدرس سایت را وارد کنید'); return; }
-
             try {
                 const res = await fetch(`${API_URL}/assets`, {
                     method: 'POST',
@@ -541,6 +562,99 @@
                     fetchAssets();
                 }
             } catch (err) { console.error(err); }
+        };
+
+        // --- SEO FUNCTIONS ---
+
+        async function fetchSeo() {
+            try {
+                const res = await fetch(`${API_URL}/seo`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                const list = document.getElementById('seo-list');
+                if (data.length === 0) {
+                    list.innerHTML = '<p class="text-center text-slate-500 text-xs mt-4">هیچ صفحه‌ای یافت نشد.</p>';
+                    return;
+                }
+
+                list.innerHTML = data.map(page => `
+                    <div class="bg-slate-800 p-3 rounded border border-slate-700/50 hover:border-purple-500/50 transition cursor-pointer group" onclick="loadSeoIntoForm('${page.route}', '${escapeHtml(page.title)}', '${escapeHtml(page.description)}', '${escapeHtml(page.keywords)}')">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs font-bold text-white font-mono" dir="ltr">${page.route}</span>
+                            <button onclick="event.stopPropagation(); deleteSeo('${page.route}')" class="text-slate-500 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-400 truncate">${page.title}</p>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error("Fetch SEO Error", e);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+        }
+
+        window.loadSeoIntoForm = (route, title, desc, keywords) => {
+            document.getElementById('seo-route').value = route;
+            document.getElementById('seo-title').value = title;
+            document.getElementById('seo-desc').value = desc;
+            document.getElementById('seo-keywords').value = keywords;
+        };
+
+        window.clearSeoForm = () => {
+            document.getElementById('seo-route').value = '';
+            document.getElementById('seo-title').value = '';
+            document.getElementById('seo-desc').value = '';
+            document.getElementById('seo-keywords').value = '';
+        };
+
+        window.saveSeo = async () => {
+            const route = document.getElementById('seo-route').value.trim();
+            const title = document.getElementById('seo-title').value.trim();
+            const description = document.getElementById('seo-desc').value.trim();
+            const keywords = document.getElementById('seo-keywords').value.trim();
+
+            if (!route) { alert('مسیر صفحه الزامی است.'); return; }
+
+            try {
+                const res = await fetch(`${API_URL}/seo`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ route, title, description, keywords })
+                });
+                
+                if (res.ok) {
+                    fetchSeo();
+                    clearSeoForm();
+                    alert('ذخیره شد.');
+                } else {
+                    const data = await res.json();
+                    alert('خطا: ' + data.error);
+                }
+            } catch (e) {
+                console.error(e);
+                alert('خطا در ارتباط با سرور');
+            }
+        };
+
+        window.deleteSeo = async (route) => {
+            if (!confirm(`آیا از حذف تنظیمات سئو برای مسیر ${route} مطمئن هستید؟`)) return;
+            try {
+                const res = await fetch(`${API_URL}/seo`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ route })
+                });
+                if (res.ok) fetchSeo();
+            } catch (e) {
+                console.error(e);
+            }
         };
 
     </script>

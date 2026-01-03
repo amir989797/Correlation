@@ -38,10 +38,14 @@ pool.connect().then(client => {
   console.error('❌ Failed to connect to database:', err.message);
 });
 
-// In-Memory Cache for Assets
+// In-Memory Cache
 let assetsCache = null;
 let assetsCacheTime = 0;
 const ASSETS_CACHE_TTL = 60 * 1000; // 1 minute
+
+let seoCache = null;
+let seoCacheTime = 0;
+const SEO_CACHE_TTL = 300 * 1000; // 5 minutes
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'TSETMC Node.js API is running' });
@@ -75,12 +79,9 @@ app.get('/api/search', async (req, res) => {
 });
 
 /**
- * Asset Groups Endpoint (Public)
- * Returns the curated lists of funds/assets.
- * Cached for performance.
+ * Asset Groups Endpoint
  */
 app.get('/api/assets', async (req, res) => {
-  // Check Cache
   const now = Date.now();
   if (assetsCache && (now - assetsCacheTime < ASSETS_CACHE_TTL)) {
       return res.json(assetsCache);
@@ -89,18 +90,15 @@ app.get('/api/assets', async (req, res) => {
   let client;
   try {
     client = await pool.connect();
-    // Check if table exists first to avoid crash if migration hasn't run
     const result = await client.query(`
         SELECT symbol, type, url, is_default, last_return FROM asset_groups ORDER BY symbol
     `);
     
-    // Update Cache
     assetsCache = result.rows;
     assetsCacheTime = now;
     
     res.json(result.rows);
   } catch (err) {
-    // If table doesn't exist yet, return empty list gracefully
     if (err.code === '42P01') { 
         res.json([]);
     } else {
@@ -114,7 +112,6 @@ app.get('/api/assets', async (req, res) => {
 
 /**
  * History Endpoint
- * Optimized to return LATEST records when limit is applied
  */
 app.get('/api/history/:symbol', async (req, res) => {
   const { symbol } = req.params;
@@ -124,7 +121,6 @@ app.get('/api/history/:symbol', async (req, res) => {
   try {
     client = await pool.connect();
     
-    // Optimized Query: Get LATEST N records (DESC), then sort them ASC for the chart
     const query = `
       SELECT * FROM (
           SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
@@ -138,8 +134,6 @@ app.get('/api/history/:symbol', async (req, res) => {
     const result = await client.query(query, values);
 
     if (result.rows.length === 0) {
-      // Check if symbol exists but has no data, or doesn't exist at all
-      // For simplicity, we just return 404
       return res.status(404).json({ error: 'Symbol not found or no data' });
     }
 
@@ -150,6 +144,74 @@ app.get('/api/history/:symbol', async (req, res) => {
   } finally {
     if (client) client.release();
   }
+});
+
+/**
+ * SEO Endpoint
+ * Returns all configured pages and their metadata
+ */
+app.get('/api/seo', async (req, res) => {
+    const now = Date.now();
+    if (seoCache && (now - seoCacheTime < SEO_CACHE_TTL)) {
+        return res.json(seoCache);
+    }
+    
+    let client;
+    try {
+        client = await pool.connect();
+        const result = await client.query('SELECT route, title, description, keywords FROM seo_pages');
+        seoCache = result.rows;
+        seoCacheTime = now;
+        res.json(result.rows);
+    } catch (err) {
+        if (err.code === '42P01') return res.json([]);
+        console.error('❌ SEO Fetch Error:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (client) client.release();
+    }
+});
+
+/**
+ * Sitemap Endpoint
+ */
+app.get('/sitemap.xml', async (req, res) => {
+    let client;
+    try {
+        client = await pool.connect();
+        
+        // Get Static Pages from SEO table
+        const seoPagesRes = await client.query('SELECT route FROM seo_pages');
+        
+        // Start XML
+        let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+        xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+        
+        const baseUrl = 'https://arkarise.ir'; 
+
+        // Add Static Pages
+        seoPagesRes.rows.forEach(page => {
+            xml += '  <url>\n';
+            xml += `    <loc>${baseUrl}${page.route}</loc>\n`;
+            xml += `    <changefreq>weekly</changefreq>\n`;
+            xml += `    <priority>${page.route === '/' ? '1.0' : '0.8'}</priority>\n`;
+            xml += '  </url>\n';
+        });
+
+        // Optional: Add dynamic pages based on active asset groups (e.g. if we had specific pages for them)
+        // For now, the app is a SPA with query interactions, so we mostly index the main tools.
+
+        xml += '</urlset>';
+        
+        res.header('Content-Type', 'application/xml');
+        res.send(xml);
+
+    } catch (err) {
+        console.error('❌ Sitemap Error:', err);
+        res.status(500).send('Error generating sitemap');
+    } finally {
+        if (client) client.release();
+    }
 });
 
 app.listen(PORT, '0.0.0.0', () => {

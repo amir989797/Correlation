@@ -7,6 +7,7 @@ import { PriceChart } from '../components/PriceChart';
 import { DistanceChart } from '../components/DistanceChart';
 import { ChartDataPoint, FetchStatus, TsetmcDataPoint, SearchResult } from '../types';
 import { Upload, FileText, X, Search, Loader2 } from 'lucide-react';
+import { SeoHelmet } from '../components/SeoHelmet';
 
 type InputMode = 'database' | 'file';
 
@@ -326,6 +327,7 @@ export function RatioPage() {
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8 animate-fade-in pb-12">
+        <SeoHelmet />
         <header className="mb-8 space-y-6">
             <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 inline-block mb-2">
             تحلیل نسبت (Ratio)
