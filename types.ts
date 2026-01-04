@@ -47,6 +47,13 @@ export interface AssetGroup {
   last_return?: number;
 }
 
+export interface MarketSymbol {
+  symbol: string;
+  industry: string;
+  close: number;
+  change_percent: number;
+}
+
 export enum FetchStatus {
   IDLE,
   LOADING,

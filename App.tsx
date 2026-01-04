@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { LineChart, Home, Scale, Briefcase, GraduationCap } from 'lucide-react';
+import { LineChart, Home, Briefcase, GraduationCap, Search } from 'lucide-react';
 import { HomePage } from './pages/HomePage';
-import { CorrelationPage } from './pages/CorrelationPage';
+import { SearchPage } from './pages/CorrelationPage';
 import { RatioPage } from './pages/RatioPage';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { Router, Routes, Route, useLocation, useRouter } from './router';
@@ -10,8 +10,8 @@ import { Router, Routes, Route, useLocation, useRouter } from './router';
 // Shared Menu Items Configuration
 const MENU_ITEMS = [
   { path: '/', label: 'خانه', icon: Home, isExternal: false },
-  { path: '/correlation', label: 'همبستگی', icon: LineChart, isExternal: false },
-  { path: '/technical', label: 'تکنیکال', icon: Scale, isExternal: false },
+  { path: '/search', label: 'شناسایی', icon: Search, isExternal: false },
+  { path: '/technical', label: 'تکنیکال', icon: LineChart, isExternal: false },
   { path: '/portfolio', label: 'سبد دارایی', icon: Briefcase, isExternal: false },
   { path: 'https://learn.arkarise.ir', label: 'آموزش', icon: GraduationCap, isExternal: true },
 ];
@@ -71,7 +71,7 @@ function Sidebar() {
 
       {/* Footer Version */}
       <div className="p-4 border-t border-slate-800 flex justify-center">
-         <span className="text-xs text-slate-600">v1.4</span>
+         <span className="text-xs text-slate-600">v1.5</span>
       </div>
     </aside>
   );
@@ -160,7 +160,7 @@ export function App() {
           <div className="p-4 md:p-8 max-w-7xl mx-auto">
              <Routes>
                <Route path="/" element={<HomePage />} />
-               <Route path="/correlation" element={<CorrelationPage />} />
+               <Route path="/search" element={<SearchPage />} />
                <Route path="/technical" element={<RatioPage />} />
                <Route path="/portfolio" element={<PortfolioPage />} />
              </Routes>
