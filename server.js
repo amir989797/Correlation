@@ -47,11 +47,6 @@ let seoCache = null;
 let seoCacheTime = 0;
 const SEO_CACHE_TTL = 300 * 1000; // 5 minutes
 
-// Market Overview Cache (Short TTL since it's live-ish data)
-let marketCache = null;
-let marketCacheTime = 0;
-const MARKET_CACHE_TTL = 30 * 1000; // 30 seconds
-
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'TSETMC Node.js API is running' });
 });
@@ -78,64 +73,6 @@ app.get('/api/search', async (req, res) => {
   } catch (err) {
     console.error('❌ Search Error:', err);
     res.status(500).json([]); 
-  } finally {
-    if (client) client.release();
-  }
-});
-
-/**
- * Market Overview Endpoint (For Identification Page)
- * Returns all symbols grouped by industry with calculated daily change.
- */
-app.get('/api/market/overview', async (req, res) => {
-  const now = Date.now();
-  if (marketCache && (now - marketCacheTime < MARKET_CACHE_TTL)) {
-      return res.json(marketCache);
-  }
-
-  let client;
-  try {
-    client = await pool.connect();
-    
-    // Logic: 
-    // 1. Find the latest 2 distinct dates.
-    // 2. Get Today's price and Industry.
-    // 3. Get Yesterday's price to calculate change %.
-    const query = `
-        WITH LastTwoDates AS (
-            SELECT DISTINCT date FROM daily_prices ORDER BY date DESC LIMIT 2
-        ),
-        TodayData AS (
-            SELECT dp.symbol, dp.close, dp.industry
-            FROM daily_prices dp
-            WHERE dp.date = (SELECT MAX(date) FROM LastTwoDates)
-        ),
-        YesterdayData AS (
-            SELECT dp.symbol, dp.close
-            FROM daily_prices dp
-            WHERE dp.date = (SELECT MIN(date) FROM LastTwoDates)
-        )
-        SELECT
-            t.symbol,
-            t.industry,
-            t.close,
-            CASE 
-              WHEN y.close > 0 THEN ROUND(((CAST(t.close AS NUMERIC) - CAST(y.close AS NUMERIC)) / CAST(y.close AS NUMERIC) * 100), 2)
-              ELSE 0 
-            END as change_percent
-        FROM TodayData t
-        LEFT JOIN YesterdayData y ON t.symbol = y.symbol
-        ORDER BY t.industry, t.symbol
-    `;
-    
-    const result = await client.query(query);
-    marketCache = result.rows;
-    marketCacheTime = now;
-    
-    res.json(result.rows);
-  } catch (err) {
-    console.error('❌ Market Overview Error:', err);
-    res.status(500).json({ error: 'Database error' });
   } finally {
     if (client) client.release();
   }

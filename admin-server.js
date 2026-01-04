@@ -70,28 +70,25 @@ const initDB = async () => {
             );
         `);
 
-        // Seed/Update Default SEO Data
-        const defaults = [
-            { route: '/', title: 'تحلیلگر بورس | خانه', description: 'پلتفرم جامع تحلیل تکنیکال، همبستگی و مدیریت دارایی‌های بازار سرمایه ایران (TSETMC).', keywords: 'بورس, تحلیل تکنیکال, همبستگی, صندوق طلا, صندوق سهامی' },
-            { route: '/search', title: 'شناسایی و نمای بازار', description: 'نمای کلی بازار، وضعیت شاخص‌ها و رصد عملکرد صنایع مختلف بورس.', keywords: 'نقشه بازار, شاخص کل, صنایع بورس, ورود و خروج پول, بازدهی صنایع' },
-            { route: '/technical', title: 'تحلیل تکنیکال (Technical Analysis)', description: 'رسم نمودار نسبت قیمت دو دارایی به یکدیگر و تحلیل تکنیکال نمادها برای شناسایی حباب‌های قیمتی.', keywords: 'تحلیل تکنیکال, نمودار نسبت, تحلیل تکنیکال پیشرفته, حباب سنج, اندیکاتور بورس' },
-            { route: '/portfolio', title: 'سبد دارایی هوشمند', description: 'پیشنهاد سبد دارایی بهینه شامل طلا، سهام و درآمد ثابت بر اساس تحلیل ریسک و بازدهی بازار.', keywords: 'سبدگردانی, پرتفوی پیشنهادی, صندوق اهرمی, صندوق درآمد ثابت' }
-        ];
-
-        for (const p of defaults) {
-            await client.query(
-                `INSERT INTO seo_pages (route, title, description, keywords) 
-                 VALUES ($1, $2, $3, $4) 
-                 ON CONFLICT (route) DO UPDATE 
-                 SET title = $2, description = $3, keywords = $4`,
-                [p.route, p.title, p.description, p.keywords]
-            );
+        // Seed Default SEO Data if empty
+        const seoCheck = await client.query('SELECT count(*) FROM seo_pages');
+        if (parseInt(seoCheck.rows[0].count) === 0) {
+            const defaults = [
+                { route: '/', title: 'تحلیلگر بورس | خانه', description: 'پلتفرم جامع تحلیل تکنیکال، همبستگی و مدیریت دارایی‌های بازار سرمایه ایران (TSETMC).', keywords: 'بورس, تحلیل تکنیکال, همبستگی, صندوق طلا, صندوق سهامی' },
+                { route: '/correlation', title: 'محاسبه همبستگی نمادها', description: 'ابزار محاسبه ضریب همبستگی تاریخی بین دو نماد بورس و فرابورس، تحلیل واگرایی و نمودارهای مقایسه‌ای.', keywords: 'همبستگی بورس, همبستگی نمادها, تحلیل همبستگی, کورولیشن' },
+                { route: '/technical', title: 'تحلیل تکنیکال (Technical Analysis)', description: 'رسم نمودار نسبت قیمت دو دارایی به یکدیگر و تحلیل تکنیکال نمادها برای شناسایی حباب‌های قیمتی.', keywords: 'تحلیل تکنیکال, نمودار نسبت, تحلیل تکنیکال پیشرفته, حباب سنج, اندیکاتور بورس' },
+                { route: '/portfolio', title: 'سبد دارایی هوشمند', description: 'پیشنهاد سبد دارایی بهینه شامل طلا، سهام و درآمد ثابت بر اساس تحلیل ریسک و بازدهی بازار.', keywords: 'سبدگردانی, پرتفوی پیشنهادی, صندوق اهرمی, صندوق درآمد ثابت' }
+            ];
+            for (const p of defaults) {
+                await client.query(
+                    'INSERT INTO seo_pages (route, title, description, keywords) VALUES ($1, $2, $3, $4)',
+                    [p.route, p.title, p.description, p.keywords]
+                );
+            }
+            console.log("✅ Default SEO pages seeded.");
         }
-        
-        // Cleanup old route if it exists
-        await client.query("DELETE FROM seo_pages WHERE route = '/correlation'");
 
-        console.log("✅ Database tables checked & SEO updated.");
+        console.log("✅ Database tables checked/initialized.");
     } catch (e) {
         console.error("Error creating/updating tables:", e);
     } finally {
