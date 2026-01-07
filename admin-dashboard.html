@@ -15,6 +15,10 @@
         .scrollbar-thin::-webkit-scrollbar { width: 6px; }
         .scrollbar-thin::-webkit-scrollbar-track { background: #1e293b; }
         .scrollbar-thin::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        /* Tab Transitions */
+        .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
@@ -72,37 +76,82 @@
             </div>
 
             <!-- Action Card -->
-            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg relative overflow-hidden">
+            <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-lg relative overflow-hidden flex flex-col">
                 <div class="absolute top-0 left-0 w-24 h-24 bg-orange-500/10 rounded-full blur-2xl -ml-12 -mt-12"></div>
-                <h3 class="text-slate-400 text-sm font-bold mb-4">عملیات بروزرسانی</h3>
                 
-                <p class="text-xs text-slate-500 mb-6 leading-5">
-                    با کلیک روی دکمه زیر، ابتدا از دیتای فعلی <strong>بکاپ</strong> گرفته می‌شود و سپس اطلاعات جدید بازار دریافت می‌شود.
-                </p>
+                <!-- Tabs Header -->
+                <div class="flex border-b border-slate-700/50">
+                    <button onclick="switchTab('global')" id="tab-btn-global" class="flex-1 py-3 text-sm font-bold text-slate-300 hover:bg-slate-700/30 transition-colors border-b-2 border-transparent">بروزرسانی کلی</button>
+                    <button onclick="switchTab('manual')" id="tab-btn-manual" class="flex-1 py-3 text-sm font-bold text-slate-300 hover:bg-slate-700/30 transition-colors border-b-2 border-transparent">اجرای دستی اسکریپت‌ها</button>
+                </div>
 
-                <div class="flex flex-col gap-3">
-                    <div class="flex gap-2">
-                        <button id="update-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
-                            <span id="btn-text">شروع آپدیت بازار</span>
-                            <div id="btn-loader" class="loader hidden"></div>
-                        </button>
-                        
-                        <button id="stop-btn" class="hidden px-6 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
-                            <span>توقف</span>
-                            <div id="stop-loader" class="loader hidden border-white border-t-red-500"></div>
-                        </button>
+                <div class="p-6 flex-1">
+                    
+                    <!-- TAB 1: Global Update -->
+                    <div id="tab-global" class="tab-content active h-full flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-slate-400 text-sm font-bold mb-2">زنجیره بروزرسانی کامل</h3>
+                            <p class="text-xs text-slate-500 mb-6 leading-5">
+                                با این دکمه، عملیات زیر به ترتیب انجام می‌شوند:<br>
+                                ۱. بکاپ‌گیری ۲. دریافت دیتای بازار ۳. دریافت اطلاعات صنایع ۴. دریافت اطلاعات شاخص ۵. محاسبه بازدهی
+                            </p>
+                        </div>
+                        <div class="flex flex-col gap-3">
+                            <div class="flex gap-2">
+                                <button id="update-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
+                                    <span id="btn-text">شروع آپدیت بازار</span>
+                                    <div id="btn-loader" class="loader hidden"></div>
+                                </button>
+                                
+                                <button id="stop-btn" class="hidden px-6 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
+                                    <span>توقف</span>
+                                    <div id="stop-loader" class="loader hidden border-white border-t-red-500"></div>
+                                </button>
+                            </div>
+
+                            <button id="restore-btn" class="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 hover:text-white font-bold py-2 rounded-lg transition flex items-center justify-center gap-2 text-sm">
+                                <span>بازگردانی بکاپ (دیتای روز قبل)</span>
+                                <div id="restore-loader" class="loader hidden w-4 h-4 border-2"></div>
+                            </button>
+                        </div>
                     </div>
 
-                    <!-- Restore Button -->
-                    <button id="restore-btn" class="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 hover:text-white font-bold py-2 rounded-lg transition flex items-center justify-center gap-2 text-sm">
-                        <span>بازگردانی بکاپ (دیتای روز قبل)</span>
-                        <div id="restore-loader" class="loader hidden w-4 h-4 border-2"></div>
-                    </button>
-                    
-                    <div class="flex items-center gap-2 text-xs text-slate-400 justify-center mt-2">
+                    <!-- TAB 2: Manual Scripts -->
+                    <div id="tab-manual" class="tab-content space-y-3">
+                        <h3 class="text-slate-400 text-sm font-bold mb-4">اجرای تکی اسکریپت‌ها</h3>
+                        
+                        <div class="grid grid-cols-1 gap-3">
+                            <button onclick="runSpecificScript('main')" class="script-btn bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg flex items-center justify-between group transition">
+                                <div class="flex flex-col items-start">
+                                    <span class="text-sm font-bold">1. دریافت دیتای بازار</span>
+                                    <span class="text-[10px] text-slate-400 font-mono">full_market_download.py</span>
+                                </div>
+                                <span class="status-badge bg-slate-800 text-slate-400 text-[10px] px-2 py-1 rounded hidden" data-script="main">در حال اجرا...</span>
+                            </button>
+
+                            <button onclick="runSpecificScript('industry')" class="script-btn bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg flex items-center justify-between group transition">
+                                <div class="flex flex-col items-start">
+                                    <span class="text-sm font-bold">2. دریافت اطلاعات صنایع</span>
+                                    <span class="text-[10px] text-slate-400 font-mono">industry.py</span>
+                                </div>
+                                <span class="status-badge bg-slate-800 text-slate-400 text-[10px] px-2 py-1 rounded hidden" data-script="industry">در حال اجرا...</span>
+                            </button>
+
+                            <button onclick="runSpecificScript('shakhes')" class="script-btn bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg flex items-center justify-between group transition">
+                                <div class="flex flex-col items-start">
+                                    <span class="text-sm font-bold">3. دریافت اطلاعات شاخص</span>
+                                    <span class="text-[10px] text-slate-400 font-mono">shakhes.py</span>
+                                </div>
+                                <span class="status-badge bg-slate-800 text-slate-400 text-[10px] px-2 py-1 rounded hidden" data-script="shakhes">در حال اجرا...</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 text-xs text-slate-400 justify-center mt-4 pt-2 border-t border-slate-700/50">
                         <span id="status-indicator" class="w-2 h-2 rounded-full bg-slate-500"></span>
                         <span id="status-text">آماده به کار</span>
                     </div>
+
                 </div>
             </div>
         </div>
@@ -112,6 +161,7 @@
             <span class="text-slate-500">Waiting for logs...</span>
         </div>
 
+        <!-- SEO & Asset Sections (Existing code) -->
         <!-- SEO Management Section -->
         <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
             <h3 class="text-white font-bold text-lg flex items-center gap-2 mb-4">
@@ -188,6 +238,7 @@
         let token = localStorage.getItem('admin_token');
         let refreshInterval;
         let searchDebounce;
+        let currentTab = 'global';
 
         const loginSection = document.getElementById('login-section');
         const dashboardSection = document.getElementById('dashboard-section');
@@ -236,12 +287,40 @@
             dashboardSection.classList.add('hidden');
         });
 
+        // --- Tabs Logic ---
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Buttons
+            document.getElementById('tab-btn-global').className = `flex-1 py-3 text-sm font-bold transition-colors border-b-2 ${tab === 'global' ? 'text-cyan-400 border-cyan-400 bg-slate-700/50' : 'text-slate-300 border-transparent hover:bg-slate-700/30'}`;
+            document.getElementById('tab-btn-manual').className = `flex-1 py-3 text-sm font-bold transition-colors border-b-2 ${tab === 'manual' ? 'text-cyan-400 border-cyan-400 bg-slate-700/50' : 'text-slate-300 border-transparent hover:bg-slate-700/30'}`;
+            
+            // Content
+            document.getElementById('tab-global').classList.remove('active');
+            document.getElementById('tab-manual').classList.remove('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+        }
+        // Initialize Tab
+        switchTab('global');
+
+        // --- Action Handlers ---
+
         updateBtn.addEventListener('click', async () => {
-            if (!confirm('آیا مطمئن هستید؟ ابتدا از دیتای فعلی بکاپ گرفته می‌شود.')) return;
-            try {
+            if (!confirm('آیا مطمئن هستید؟ این عملیات تمام اسکریپت‌ها را به ترتیب اجرا می‌کند.')) return;
+            startUpdate('all');
+        });
+
+        window.runSpecificScript = async (scriptName) => {
+            if (!confirm(`آیا مایل به اجرای اسکریپت ${scriptName} هستید؟`)) return;
+            startUpdate(scriptName);
+        }
+
+        async function startUpdate(type) {
+             try {
                 const res = await fetch(`${API_URL}/update`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ type })
                 });
                 if (!res.ok) {
                     const data = await res.json();
@@ -251,7 +330,7 @@
             } catch (err) {
                 console.error(err);
             }
-        });
+        }
 
         restoreBtn.addEventListener('click', async () => {
             if (!confirm('هشدار: دیتای فعلی حذف شده و با دیتای بکاپ (روز قبل) جایگزین می‌شود. آیا مطمئن هستید؟')) return;
@@ -297,7 +376,7 @@
                 
                 if (res.ok) {
                     alert(data.message);
-                    fetchAssets(); // Refresh asset list to see new returns
+                    fetchAssets(); 
                 } else {
                     alert('خطا: ' + data.message);
                 }
@@ -362,40 +441,60 @@
 
                 document.getElementById('stat-count').innerText = new Intl.NumberFormat('fa-IR').format(data.symbolCount);
                 document.getElementById('stat-date').innerText = formattedDate;
-                document.getElementById('path-info').innerText = `مسیر اسکریپت: ${data.scriptPath} (${data.scriptExists ? 'یافت شد' : 'یافت نشد!'})`;
+                document.getElementById('path-info').innerText = `مسیر: ${data.scriptPath}`;
                 
                 const loader = document.getElementById('btn-loader');
                 const statusDot = document.getElementById('status-indicator');
                 const statusText = document.getElementById('status-text');
 
-                // UI Logic based on state
-                if (data.isUpdating) {
-                    updateBtn.disabled = true;
-                    restoreBtn.disabled = true; 
-                    recalcBtn.disabled = true; 
+                const isRunning = !!data.currentScript;
+
+                // Update Button States
+                updateBtn.disabled = isRunning || data.isRestoring;
+                restoreBtn.disabled = isRunning || data.isRestoring;
+                recalcBtn.disabled = isRunning || data.isRestoring;
+                
+                // Manual Tab Buttons Disabling
+                document.querySelectorAll('.script-btn').forEach(btn => {
+                    btn.disabled = isRunning || data.isRestoring;
+                    if (isRunning || data.isRestoring) btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    else btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                });
+                
+                // Badges in Manual Tab
+                document.querySelectorAll('.status-badge').forEach(badge => {
+                     const script = badge.getAttribute('data-script');
+                     if (data.currentScript === script) {
+                         badge.classList.remove('hidden');
+                         badge.classList.add('bg-green-500/20', 'text-green-400');
+                     } else {
+                         badge.classList.add('hidden');
+                     }
+                });
+
+                if (isRunning) {
                     updateBtn.classList.add('opacity-75');
                     document.getElementById('btn-text').innerText = 'در حال اجرا...';
                     loader.classList.remove('hidden');
                     stopBtn.classList.remove('hidden');
-                    statusDot.classList.remove('bg-slate-500', 'bg-red-500');
+                    
+                    statusDot.classList.remove('bg-slate-500', 'bg-red-500', 'bg-yellow-500');
                     statusDot.classList.add('bg-green-500', 'animate-pulse');
-                    statusText.innerText = 'اسکریپت آپدیت در حال اجراست';
+                    statusText.innerText = `اسکریپت ${data.currentScript} در حال اجراست...`;
                     statusText.classList.add('text-green-400');
+                    statusText.classList.remove('text-yellow-400');
+
                 } else if (data.isRestoring) {
-                    updateBtn.disabled = true;
-                    restoreBtn.disabled = true;
                     stopBtn.classList.add('hidden');
                     statusDot.classList.add('bg-yellow-500', 'animate-pulse');
                     statusText.innerText = 'در حال بازیابی بکاپ...';
                     statusText.classList.add('text-yellow-400');
                 } else {
-                    updateBtn.disabled = false;
-                    restoreBtn.disabled = false;
-                    recalcBtn.disabled = false;
                     updateBtn.classList.remove('opacity-75');
                     document.getElementById('btn-text').innerText = 'شروع آپدیت بازار';
                     loader.classList.add('hidden');
                     stopBtn.classList.add('hidden');
+                    
                     statusDot.classList.remove('bg-green-500', 'animate-pulse', 'bg-red-500', 'bg-yellow-500');
                     statusDot.classList.add('bg-slate-500');
                     statusText.innerText = 'آماده به کار';

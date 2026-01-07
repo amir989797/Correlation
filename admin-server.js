@@ -17,11 +17,16 @@ const app = express();
 const PORT = parseInt(process.env.ADMIN_PORT || '8080');
 
 // Configuration
-const PYTHON_SCRIPT_PATH = path.resolve(process.env.HOME || '/root', 'tse_downloader/full_market_download.py');
+const SCRIPT_DIR = process.env.HOME || '/root';
+const MAIN_SCRIPT_PATH = path.resolve(SCRIPT_DIR, 'tse_downloader/full_market_download.py');
+const INDUSTRY_SCRIPT_PATH = path.resolve(SCRIPT_DIR, 'tse_downloader/industry.py');
+const SHAKHES_SCRIPT_PATH = path.resolve(SCRIPT_DIR, 'tse_downloader/shakhes.py');
+
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123';
 
-let isUpdating = false;
+// State Management
+let currentScript = null; // 'main', 'industry', 'shakhes', 'backup', 'restore' or null
 let isRestoring = false;
 let lastUpdateLog = "هنوز آپدیتی انجام نشده است.";
 let currentProcess = null;
@@ -43,7 +48,6 @@ const pool = new Pool(dbConfig);
 const initDB = async () => {
     const client = await pool.connect();
     try {
-        // Asset Groups
         await client.query(`
             CREATE TABLE IF NOT EXISTS asset_groups (
                 symbol VARCHAR(50),
@@ -55,12 +59,10 @@ const initDB = async () => {
             );
         `);
 
-        // Backup Table Structure
         await client.query(`
             CREATE TABLE IF NOT EXISTS daily_prices_backup (LIKE daily_prices INCLUDING ALL);
         `);
         
-        // SEO Table
         await client.query(`
             CREATE TABLE IF NOT EXISTS seo_pages (
                 route VARCHAR(50) PRIMARY KEY,
@@ -70,7 +72,6 @@ const initDB = async () => {
             );
         `);
 
-        // Seed Default SEO Data if empty
         const seoCheck = await client.query('SELECT count(*) FROM seo_pages');
         if (parseInt(seoCheck.rows[0].count) === 0) {
             const defaults = [
@@ -87,7 +88,6 @@ const initDB = async () => {
             }
             console.log("✅ Default SEO pages seeded.");
         }
-
         console.log("✅ Database tables checked/initialized.");
     } catch (e) {
         console.error("Error creating/updating tables:", e);
@@ -123,7 +123,6 @@ const syncSymbolsTable = async () => {
   }
 };
 
-// ... (Existing Return Calculation Logic - calcReturn, calculateAllAssetReturns - kept as is) ...
 const calcReturn = (data) => {
     if (!data || data.length < 2) return 0;
     const lastPoint = data[data.length - 1];
@@ -200,7 +199,6 @@ const calculateAllAssetReturns = async () => {
     }
 };
 
-// ... (Existing Backup/Restore Logic - createBackup, restoreBackupData) ...
 const createBackup = async () => {
     const client = await pool.connect();
     try {
@@ -231,59 +229,123 @@ const restoreBackupData = async () => {
     }
 };
 
-// ... (Existing Update Logic - runUpdateProcess) ...
-const runUpdateProcess = async () => {
-    if (isUpdating) return;
-    if (!fs.existsSync(PYTHON_SCRIPT_PATH)) {
-        lastUpdateLog += `\n❌ فایل اسکریپت یافت نشد.`;
-        return;
-    }
-    isUpdating = true;
-    lastUpdateLog = "📦 در حال ایجاد نسخه پشتیبان (Backup)...\n";
-    const backupSuccess = await createBackup();
-    if (!backupSuccess) {
-        lastUpdateLog += "\n❌ عملیات به دلیل شکست در بکاپ‌گیری متوقف شد.";
-        isUpdating = false;
-        return;
-    }
-    lastUpdateLog += "✅ بکاپ گرفته شد.\n🚀 آپدیت شروع شد (حالت چند رشته‌ای)...\n";
-    currentProcess = spawn('python3', ['-u', PYTHON_SCRIPT_PATH]);
-    currentProcess.stdout.on('data', (data) => {
-        const chunk = data.toString();
-        lastUpdateLog = (lastUpdateLog + chunk).slice(-5000); 
-    });
-    currentProcess.stderr.on('data', (data) => {
-        const text = data.toString();
-        if (text.includes('%') || text.includes('it/s')) {
-            lastUpdateLog += `\n[PROGRESS]: ${text}`; 
-        } else {
-            lastUpdateLog += `\n[ERROR]: ${text}`;
+// Helper to run a single python script
+const runPythonScript = (scriptPath, scriptName) => {
+    return new Promise((resolve, reject) => {
+        if (!fs.existsSync(scriptPath)) {
+            lastUpdateLog += `\n❌ فایل اسکریپت ${scriptName} یافت نشد.`;
+            return reject('Script not found');
         }
-        lastUpdateLog = lastUpdateLog.slice(-5000);
-    });
-    currentProcess.on('close', async (code) => {
-        currentProcess = null;
-        isUpdating = false;
-        if (code === 0) {
-            lastUpdateLog += `\n✅ دریافت دیتا تمام شد.`;
-            try {
-                const count = await syncSymbolsTable();
-                lastUpdateLog += `\n✨ لیست جستجو بروز شد (${count} نماد جدید).`;
-                lastUpdateLog += `\n🔄 در حال محاسبه بازدهی نمادهای منتخب...`;
-                const updated = await calculateAllAssetReturns();
-                lastUpdateLog += `\n✅ بازدهی ${updated} نماد محاسبه و ذخیره شد.`;
-            } catch (e) {
-                lastUpdateLog += `\n⚠️ خطا در پردازش پس از آپدیت: ${e.message}`;
+
+        currentScript = scriptName;
+        lastUpdateLog += `\n🚀 اجرای اسکریپت ${scriptName}...\n`;
+        
+        currentProcess = spawn('python3', ['-u', scriptPath]);
+        
+        currentProcess.stdout.on('data', (data) => {
+            const chunk = data.toString();
+            lastUpdateLog = (lastUpdateLog + chunk).slice(-10000); 
+        });
+
+        currentProcess.stderr.on('data', (data) => {
+            const text = data.toString();
+            if (text.includes('%') || text.includes('it/s')) {
+                // Keep progress lines but don't spam
+                if (!lastUpdateLog.endsWith(text)) {
+                     lastUpdateLog += `\n[${scriptName}]: ${text}`; 
+                }
+            } else {
+                lastUpdateLog += `\n[${scriptName} ERROR]: ${text}`;
             }
-        } else {
-            lastUpdateLog += `\n❌ عملیات متوقف شد (Code: ${code}).`;
-        }
+            lastUpdateLog = lastUpdateLog.slice(-10000);
+        });
+
+        currentProcess.on('close', (code) => {
+            currentProcess = null;
+            if (code === 0) {
+                lastUpdateLog += `\n✅ ${scriptName} با موفقیت پایان یافت.`;
+                resolve(true);
+            } else {
+                lastUpdateLog += `\n❌ ${scriptName} متوقف شد (Code: ${code}).`;
+                // If it was killed manually, we reject
+                resolve(false); 
+            }
+        });
     });
+};
+
+const runFullUpdateChain = async () => {
+    if (currentScript) return;
+    
+    try {
+        // 1. Backup
+        currentScript = 'backup';
+        lastUpdateLog = "📦 در حال ایجاد نسخه پشتیبان (Backup)...\n";
+        const backupSuccess = await createBackup();
+        if (!backupSuccess) {
+             currentScript = null;
+             return;
+        }
+
+        // 2. Main Script
+        const mainSuccess = await runPythonScript(MAIN_SCRIPT_PATH, 'main');
+        if (!mainSuccess) { currentScript = null; return; }
+
+        // 3. Sync Symbols & Post-process Main
+        try {
+            const count = await syncSymbolsTable();
+            lastUpdateLog += `\n✨ لیست نمادها بروز شد (${count} مورد).`;
+        } catch (e) {
+            lastUpdateLog += `\n⚠️ خطا در بروزرسانی لیست نمادها: ${e.message}`;
+        }
+
+        // 4. Industry Script
+        const industrySuccess = await runPythonScript(INDUSTRY_SCRIPT_PATH, 'industry');
+        if (!industrySuccess && currentProcess) { currentScript = null; return; } // if failed but not killed, continue? let's stop.
+
+        // 5. Shakhes Script
+        const shakhesSuccess = await runPythonScript(SHAKHES_SCRIPT_PATH, 'shakhes');
+        if (!shakhesSuccess && currentProcess) { currentScript = null; return; }
+
+        // 6. Calculate Returns
+        currentScript = 'calc';
+        lastUpdateLog += `\n🔄 در حال محاسبه بازدهی نمادهای منتخب...`;
+        const updated = await calculateAllAssetReturns();
+        lastUpdateLog += `\n✅ بازدهی ${updated} نماد محاسبه و ذخیره شد.`;
+        
+        lastUpdateLog += `\n🎉 تمام مراحل بروزرسانی با موفقیت انجام شد.`;
+
+    } catch (e) {
+        lastUpdateLog += `\n💥 خطای غیرمنتظره در زنجیره آپدیت: ${e.message}`;
+    } finally {
+        currentScript = null;
+    }
+};
+
+const runSingleScript = async (type) => {
+    if (currentScript) return;
+
+    try {
+        if (type === 'main') {
+            await runPythonScript(MAIN_SCRIPT_PATH, 'main');
+            // Sync symbols after main run usually
+            const count = await syncSymbolsTable();
+            lastUpdateLog += `\n✨ لیست نمادها بروز شد (${count} مورد).`;
+        } else if (type === 'industry') {
+            await runPythonScript(INDUSTRY_SCRIPT_PATH, 'industry');
+        } else if (type === 'shakhes') {
+            await runPythonScript(SHAKHES_SCRIPT_PATH, 'shakhes');
+        }
+    } catch(e) {
+        lastUpdateLog += `\n💥 خطا: ${e.message}`;
+    } finally {
+        currentScript = null;
+    }
 };
 
 cron.schedule('0 18 * * *', () => {
     console.log('⏰ Running scheduled daily update...');
-    runUpdateProcess();
+    runFullUpdateChain();
 }, { scheduled: true, timezone: "Asia/Tehran" });
 
 app.get('/', (req, res) => {
@@ -300,7 +362,7 @@ app.post('/api/login', (req, res) => {
   }
 });
 
-// ... (Existing endpoints for search, stats, update, restore, assets) ...
+// APIs
 app.get('/api/search', requireAuth, async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 2) return res.json([]);
@@ -324,15 +386,14 @@ app.get('/api/stats', requireAuth, async (req, res) => {
   try {
     const countQuery = `SELECT (SELECT COUNT(*) FROM symbols) as symbol_count, (SELECT MAX(date) FROM daily_prices) as last_date`;
     const result = await client.query(countQuery);
-    const scriptExists = fs.existsSync(PYTHON_SCRIPT_PATH);
+    
     res.json({
       symbolCount: result.rows[0].symbol_count || 0,
       lastDate: result.rows[0].last_date,
-      isUpdating,
+      currentScript, // 'main', 'industry', 'shakhes', 'backup' etc.
       isRestoring,
       lastLog: lastUpdateLog,
-      scriptPath: PYTHON_SCRIPT_PATH,
-      scriptExists
+      scriptPath: MAIN_SCRIPT_PATH,
     });
   } catch (err) {
     res.status(500).json({ error: 'Database Error' });
@@ -342,14 +403,22 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 });
 
 app.post('/api/update', requireAuth, (req, res) => {
-  if (isUpdating) return res.status(400).json({ message: 'عملیات آپدیت هم‌اکنون در حال اجراست.' });
+  if (currentScript) return res.status(400).json({ message: 'یک اسکریپت هم‌اکنون در حال اجراست.' });
   if (isRestoring) return res.status(400).json({ message: 'عملیات بازیابی بکاپ در حال اجراست.' });
-  runUpdateProcess();
-  res.json({ message: 'دستور آپدیت و بکاپ‌گیری ارسال شد.', status: 'started' });
+  
+  const { type } = req.body; // 'all', 'main', 'industry', 'shakhes'
+  
+  if (type === 'all' || !type) {
+      runFullUpdateChain();
+      res.json({ message: 'فرآیند بروزرسانی کامل شروع شد.', status: 'started' });
+  } else {
+      runSingleScript(type);
+      res.json({ message: `اجرای اسکریپت ${type} شروع شد.`, status: 'started' });
+  }
 });
 
 app.post('/api/restore', requireAuth, async (req, res) => {
-    if (isUpdating) return res.status(400).json({ message: 'نمی‌توان هنگام آپدیت، بکاپ را برگرداند.' });
+    if (currentScript) return res.status(400).json({ message: 'نمی‌توان هنگام آپدیت، بکاپ را برگرداند.' });
     if (isRestoring) return res.status(400).json({ message: 'عملیات بازیابی هم‌اکنون در حال اجراست.' });
     isRestoring = true;
     try {
@@ -363,8 +432,9 @@ app.post('/api/restore', requireAuth, async (req, res) => {
 });
 
 app.post('/api/stop', requireAuth, (req, res) => {
-    if (!isUpdating || !currentProcess) return res.status(400).json({ message: 'چیزی در حال اجرا نیست.' });
+    if (!currentScript || !currentProcess) return res.status(400).json({ message: 'چیزی در حال اجرا نیست.' });
     currentProcess.kill('SIGINT');
+    // We let the 'close' event handler clear the state
     res.json({ message: 'دستور توقف ارسال شد.' });
 });
 
@@ -399,7 +469,7 @@ app.post('/api/assets', requireAuth, async (req, res) => {
 });
 
 app.post('/api/assets/recalc', requireAuth, async (req, res) => {
-    if (isUpdating) return res.status(400).json({ message: 'سیستم در حال آپدیت است. لطفا صبر کنید.' });
+    if (currentScript) return res.status(400).json({ message: 'سیستم در حال آپدیت است. لطفا صبر کنید.' });
     try {
         const count = await calculateAllAssetReturns();
         res.json({ message: `بازدهی ${count} صندوق با موفقیت محاسبه و ذخیره شد.` });
