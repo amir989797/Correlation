@@ -30,21 +30,16 @@ export default defineConfig({
     ],
     proxy: proxyOptions
   },
-  optimizeDeps: {
-    exclude: ['react-router-dom', 'react-router']
-  },
   build: {
-    // Disabling minification fixes the build hang on low-memory servers
-    // especially when processing heavy libraries like lodash/recharts.
-    minify: false, 
-    sourcemap: false,
+    // EXTREME MEMORY OPTIMIZATIONS FOR 1GB RAM SERVER
+    minify: false,              // Disables code minification (High RAM usage)
+    cssMinify: false,           // Disables CSS minification
+    sourcemap: false,           // Disables source maps
+    reportCompressedSize: false,// Disables GZIP size calculation (Critically reduces RAM usage)
     chunkSizeWarningLimit: 2000,
-    commonjsOptions: {
-      transformMixedEsModules: true,
-    },
     rollupOptions: {
       output: {
-        manualChunks: undefined
+        manualChunks: undefined // Let Rollup handle chunking naturally
       }
     }
   }

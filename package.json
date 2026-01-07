@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "NODE_OPTIONS='--max-old-space-size=4096' vite build",
+    "build": "NODE_OPTIONS='--max-old-space-size=768' vite build",
     "preview": "vite preview",
     "start-api": "node server.js",
     "start-admin": "node admin-server.js",
