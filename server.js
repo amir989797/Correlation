@@ -30,10 +30,31 @@ const dbConfig = {
 
 const pool = new Pool(dbConfig);
 
-// Test Connection
-pool.connect().then(client => {
+// Helper to sync indices on startup
+const syncIndicesToSymbols = async () => {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      INSERT INTO symbols (symbol, name)
+      SELECT symbol, MAX(name) as name
+      FROM index_prices
+      GROUP BY symbol
+      ON CONFLICT (symbol) DO NOTHING;
+    `);
+    console.log('✅ Synced indices to symbols table.');
+  } catch (err) {
+    // Table might not exist yet if python script hasn't run
+    // console.warn('Sync indices skipped (table missing?):', err.message);
+  } finally {
+    client.release();
+  }
+};
+
+// Test Connection & Sync
+pool.connect().then(async client => {
   console.log(`✅ Connected to PostgreSQL database at ${dbConfig.host}:${dbConfig.port}`);
   client.release();
+  await syncIndicesToSymbols();
 }).catch(err => {
   console.error('❌ Failed to connect to database:', err.message);
 });
@@ -121,7 +142,8 @@ app.get('/api/history/:symbol', async (req, res) => {
   try {
     client = await pool.connect();
     
-    const query = `
+    // 1. Try daily_prices (Stocks)
+    const stockQuery = `
       SELECT * FROM (
           SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
           FROM daily_prices 
@@ -131,7 +153,26 @@ app.get('/api/history/:symbol', async (req, res) => {
       ) sub ORDER BY date ASC
     `;
     const values = [symbol, limit];
-    const result = await client.query(query, values);
+    let result = await client.query(stockQuery, values);
+
+    // 2. If not found, Try index_prices (Indices)
+    if (result.rows.length === 0) {
+         try {
+             const indexQuery = `
+              SELECT * FROM (
+                  SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
+                  FROM index_prices 
+                  WHERE symbol = $1 
+                  ORDER BY date DESC 
+                  LIMIT $2
+              ) sub ORDER BY date ASC
+            `;
+            result = await client.query(indexQuery, values);
+         } catch (e) {
+             // Ignore if table doesn't exist
+             if (e.code !== '42P01') throw e; 
+         }
+    }
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Symbol not found or no data' });

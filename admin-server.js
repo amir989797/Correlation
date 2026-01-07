@@ -91,16 +91,33 @@ const requireAuth = (req, res, next) => {
 
 const syncSymbolsTable = async () => {
   const client = await pool.connect();
+  let totalInserted = 0;
   try {
-    const insertQuery = `
+    // Sync Stocks
+    const res1 = await client.query(`
       INSERT INTO symbols (symbol, name)
       SELECT symbol, MAX(name) as name
       FROM daily_prices
       GROUP BY symbol
       ON CONFLICT (symbol) DO NOTHING;
-    `;
-    const res = await client.query(insertQuery);
-    return res.rowCount;
+    `);
+    totalInserted += res1.rowCount;
+
+    // Sync Indices
+    try {
+        const res2 = await client.query(`
+          INSERT INTO symbols (symbol, name)
+          SELECT symbol, MAX(name) as name
+          FROM index_prices
+          GROUP BY symbol
+          ON CONFLICT (symbol) DO NOTHING;
+        `);
+        totalInserted += res2.rowCount;
+    } catch (e) {
+        // Ignore if index_prices table doesn't exist
+    }
+
+    return totalInserted;
   } finally {
     client.release();
   }
@@ -147,7 +164,8 @@ const calculateAllAssetReturns = async () => {
         const processAsset = async (asset) => {
             const client = await pool.connect();
             try {
-                const historyResOpt = await client.query(`
+                // Try stocks first
+                let historyResOpt = await client.query(`
                     SELECT * FROM (
                         SELECT to_char(date, 'YYYYMMDD') as date, close 
                         FROM daily_prices 
@@ -156,6 +174,22 @@ const calculateAllAssetReturns = async () => {
                         LIMIT 600
                     ) sub ORDER BY date ASC
                 `, [asset.symbol]);
+                
+                // If not found, try indices
+                if (historyResOpt.rows.length === 0) {
+                     try {
+                        historyResOpt = await client.query(`
+                            SELECT * FROM (
+                                SELECT to_char(date, 'YYYYMMDD') as date, close 
+                                FROM index_prices 
+                                WHERE symbol = $1 
+                                ORDER BY date DESC
+                                LIMIT 600
+                            ) sub ORDER BY date ASC
+                        `, [asset.symbol]);
+                     } catch(e) {}
+                }
+
                 const history = historyResOpt.rows;
                 if (history.length > 0) {
                     const retVal = calcReturn(history);
@@ -277,7 +311,7 @@ const runFullUpdateChain = async () => {
         // 3. Sync Symbols
         try {
             const count = await syncSymbolsTable();
-            lastUpdateLog += `\n✨ لیست نمادها بروز شد (${count} مورد).`;
+            lastUpdateLog += `\n✨ لیست نمادها بروز شد (${count} مورد جدید).`;
         } catch (e) {
             lastUpdateLog += `\n⚠️ خطا در بروزرسانی لیست نمادها: ${e.message}`;
         }
@@ -312,11 +346,14 @@ const runSingleScript = async (type) => {
         if (type === 'main') {
             await runPythonScript(MAIN_SCRIPT_PATH, 'main');
             const count = await syncSymbolsTable();
-            lastUpdateLog += `\n✨ لیست نمادها بروز شد (${count} مورد).`;
+            lastUpdateLog += `\n✨ لیست نمادها بروز شد (${count} مورد جدید).`;
         } else if (type === 'industry') {
             await runPythonScript(INDUSTRY_SCRIPT_PATH, 'industry');
         } else if (type === 'shakhes') {
             await runPythonScript(SHAKHES_SCRIPT_PATH, 'shakhes');
+            // We should also sync symbols after shakhes script as it adds new indices
+            const count = await syncSymbolsTable();
+            lastUpdateLog += `\n✨ لیست شاخص‌ها بروز شد (${count} مورد جدید).`;
         }
     } catch(e) {
         lastUpdateLog += `\n💥 خطا: ${e.message}`;
