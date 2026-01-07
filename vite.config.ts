@@ -30,6 +30,9 @@ export default defineConfig({
     ],
     proxy: proxyOptions
   },
+  optimizeDeps: {
+    exclude: ['react-router-dom', 'react-router']
+  },
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
