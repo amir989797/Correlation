@@ -30,18 +30,12 @@ export default defineConfig({
     ],
     proxy: proxyOptions
   },
-  optimizeDeps: {
-    exclude: ['react-router-dom', 'react-router']
-  },
   build: {
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 1500, // Increased limit to reduce warnings
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          recharts: ['recharts'],
-          icons: ['lucide-react']
-        }
+        // Removed manualChunks to let Vite/Rollup handle chunking automatically.
+        // This prevents infinite loops and high memory usage during build.
       }
     }
   }
