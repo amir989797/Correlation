@@ -11,6 +11,7 @@
         body { font-family: 'Vazirmatn', sans-serif; background-color: #0f172a; color: #e2e8f0; }
         .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Custom Scrollbar for lists */
         .scrollbar-thin::-webkit-scrollbar { width: 6px; }
         .scrollbar-thin::-webkit-scrollbar-track { background: #1e293b; }
         .scrollbar-thin::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
@@ -38,111 +39,146 @@
     </div>
 
     <!-- DASHBOARD SECTION -->
-    <div id="dashboard-section" class="w-full max-w-6xl hidden space-y-6 animate-fade-in">
+    <div id="dashboard-section" class="w-full max-w-6xl hidden space-y-6">
         <header class="flex justify-between items-center bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
             <div>
                 <h1 class="text-2xl font-bold text-white">داشبورد مدیریت داده‌ها</h1>
-                <p class="text-slate-400 text-xs mt-1">مدیریت و بروزرسانی دیتای بازار سرمایه</p>
+                <p class="text-slate-400 text-sm mt-1" id="path-info">...</p>
             </div>
             <button id="logout-btn" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-slate-300 transition">خروج</button>
         </header>
 
-        <div class="grid lg:grid-cols-3 gap-6">
-            
-            <!-- Stats Column -->
-            <div class="space-y-6">
-                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg relative overflow-hidden h-full">
-                    <div class="absolute top-0 left-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -ml-12 -mt-12"></div>
-                    <h3 class="text-slate-400 text-sm font-bold mb-4">وضعیت دیتابیس</h3>
-                    <div class="space-y-6">
-                        <div class="flex justify-between items-end border-b border-slate-700 pb-2">
-                            <span class="text-slate-300">تعداد نمادها</span>
-                            <span id="stat-count" class="text-3xl font-black text-cyan-400">...</span>
-                        </div>
-                        <div class="flex justify-between items-end border-b border-slate-700 pb-2">
-                            <span class="text-slate-300">آخرین تاریخ دیتا</span>
-                            <span id="stat-date" class="text-xl font-bold text-emerald-400" dir="ltr">...</span>
-                        </div>
-                        <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                            <span class="text-[10px] text-slate-500 block mb-1">زمان‌بندی خودکار (Cron):</span>
-                            <span class="text-xs text-white font-bold">هر روز ساعت ۱۸:۰۰ (زنجیره‌ای)</span>
-                        </div>
+        <!-- Stats & Update Row -->
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- Stats Card -->
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -ml-12 -mt-12"></div>
+                <h3 class="text-slate-400 text-sm font-bold mb-4">وضعیت دیتابیس</h3>
+                
+                <div class="space-y-6">
+                    <div class="flex justify-between items-end border-b border-slate-700 pb-2">
+                        <span class="text-slate-300">تعداد نمادها</span>
+                        <span id="stat-count" class="text-3xl font-black text-cyan-400">...</span>
+                    </div>
+                    <div class="flex justify-between items-end border-b border-slate-700 pb-2">
+                        <span class="text-slate-300">آخرین تاریخ دیتا</span>
+                        <span id="stat-date" class="text-xl font-bold text-emerald-400" dir="ltr">...</span>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        <span class="text-xs text-slate-400">زمان‌بندی خودکار فعال است: <strong class="text-white">هر روز ساعت ۱۸:۰۰</strong></span>
                     </div>
                 </div>
             </div>
 
-            <!-- Main Control Column -->
-            <div class="lg:col-span-2 space-y-6">
-                <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-lg overflow-hidden">
-                    <!-- TABS -->
-                    <div class="flex bg-slate-900 border-b border-slate-700 overflow-x-auto scrollbar-thin">
-                        <button onclick="switchTab('market')" id="tab-market" class="tab-btn px-6 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap">بروزرسانی بازار</button>
-                        <button onclick="switchTab('industry')" id="tab-industry" class="tab-btn px-6 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap">صنایع</button>
-                        <button onclick="switchTab('shakhes')" id="tab-shakhes" class="tab-btn px-6 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap">شاخص‌ها</button>
+            <!-- Action Card -->
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-24 h-24 bg-orange-500/10 rounded-full blur-2xl -ml-12 -mt-12"></div>
+                <h3 class="text-slate-400 text-sm font-bold mb-4">عملیات بروزرسانی</h3>
+                
+                <p class="text-xs text-slate-500 mb-6 leading-5">
+                    با کلیک روی دکمه زیر، ابتدا از دیتای فعلی <strong>بکاپ</strong> گرفته می‌شود و سپس اطلاعات جدید بازار دریافت می‌شود.
+                </p>
+
+                <div class="flex flex-col gap-3">
+                    <div class="flex gap-2">
+                        <button id="update-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
+                            <span id="btn-text">شروع آپدیت بازار</span>
+                            <div id="btn-loader" class="loader hidden"></div>
+                        </button>
+                        
+                        <button id="stop-btn" class="hidden px-6 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
+                            <span>توقف</span>
+                            <div id="stop-loader" class="loader hidden border-white border-t-red-500"></div>
+                        </button>
                     </div>
 
-                    <div class="p-6 space-y-4">
-                        <div id="script-info" class="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 space-y-2">
-                            <h4 id="script-name" class="text-white font-bold text-lg">...</h4>
-                            <p id="script-desc" class="text-slate-400 text-xs leading-relaxed">...</p>
-                            <div class="flex items-center gap-2 mt-2">
-                                <span class="text-[10px] text-slate-500">مسیر اسکریپت:</span>
-                                <code id="script-path" class="text-[9px] text-cyan-500 font-mono bg-slate-800 px-2 py-0.5 rounded">...</code>
-                            </div>
-                        </div>
+                    <!-- Restore Button -->
+                    <button id="restore-btn" class="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 hover:text-white font-bold py-2 rounded-lg transition flex items-center justify-center gap-2 text-sm">
+                        <span>بازگردانی بکاپ (دیتای روز قبل)</span>
+                        <div id="restore-loader" class="loader hidden w-4 h-4 border-2"></div>
+                    </button>
+                    
+                    <div class="flex items-center gap-2 text-xs text-slate-400 justify-center mt-2">
+                        <span id="status-indicator" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                        <span id="status-text">آماده به کار</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Log Terminal -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 shadow-inner p-4 font-mono text-xs md:text-sm h-48 overflow-y-auto custom-scrollbar" dir="ltr" id="log-terminal">
+            <span class="text-slate-500">Waiting for logs...</span>
+        </div>
 
-                        <div class="flex flex-col sm:flex-row gap-3">
-                            <button id="update-btn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
-                                <span id="btn-text">شروع بروزرسانی</span>
-                                <div id="btn-loader" class="loader hidden"></div>
-                            </button>
-                            
-                            <button id="chain-btn" class="sm:w-1/3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold py-3 rounded-lg transition border border-slate-600 text-sm">اجرای کل زنجیره</button>
-                            
-                            <button id="stop-btn" class="hidden px-6 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">توقف</button>
-                        </div>
-
-                        <div class="flex items-center justify-between pt-2">
-                             <button id="restore-btn" class="text-xs text-slate-500 hover:text-orange-400 transition flex items-center gap-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
-                                بازگردانی بکاپ (دیتای روز قبل)
-                             </button>
-                             <div class="flex items-center gap-2 text-[10px]">
-                                <span id="status-indicator" class="w-2 h-2 rounded-full bg-slate-500"></span>
-                                <span id="status-text" class="text-slate-400">آماده به کار</span>
-                             </div>
-                        </div>
+        <!-- SEO Management Section -->
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+            <h3 class="text-white font-bold text-lg flex items-center gap-2 mb-4">
+                <span class="w-2 h-6 bg-purple-500 rounded-full"></span>
+                تنظیمات سئو (SEO)
+            </h3>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Add/Edit SEO Form -->
+                <div class="bg-slate-900 p-4 rounded-xl border border-slate-600 space-y-3">
+                    <h4 class="text-slate-300 text-sm font-bold border-b border-slate-700 pb-2">ویرایش/افزودن صفحه</h4>
+                    
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">مسیر صفحه (Route) - مثال: / یا /ratio</label>
+                        <input type="text" id="seo-route" dir="ltr" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:border-purple-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">عنوان صفحه (Title)</label>
+                        <input type="text" id="seo-title" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:border-purple-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">توضیحات (Description)</label>
+                        <textarea id="seo-desc" rows="2" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:border-purple-500 outline-none"></textarea>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">کلمات کلیدی (با کاما جدا کنید)</label>
+                        <input type="text" id="seo-keywords" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white text-sm focus:border-purple-500 outline-none">
+                    </div>
+                    
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="saveSeo()" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded text-sm transition">ذخیره</button>
+                        <button onclick="clearSeoForm()" class="px-4 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 rounded text-sm transition">پاک کردن</button>
                     </div>
                 </div>
 
-                <!-- Log Terminal -->
-                <div class="bg-slate-900 rounded-2xl border border-slate-800 shadow-inner p-4 font-mono text-xs md:text-sm h-64 overflow-y-auto custom-scrollbar flex flex-col-reverse" dir="ltr" id="log-terminal">
-                    <!-- Logs appear here, reversed for easier scroll-to-bottom feel if desired, but we handle via scroll -->
+                <!-- SEO Pages List -->
+                <div class="bg-slate-900 p-4 rounded-xl border border-slate-600 flex flex-col h-full">
+                     <h4 class="text-slate-300 text-sm font-bold border-b border-slate-700 pb-2 mb-2">لیست صفحات</h4>
+                     <div id="seo-list" class="flex-1 overflow-y-auto scrollbar-thin space-y-2 max-h-[300px]">
+                         <!-- Loaded via JS -->
+                         <p class="text-center text-slate-500 text-xs mt-4">در حال بارگذاری...</p>
+                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- SEO & Asset Sections (Existing but simplified for space) -->
-        <div class="grid md:grid-cols-2 gap-6">
-            <!-- Asset Management -->
-            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
-                <h3 class="text-white font-bold mb-4 flex items-center gap-2">
-                    <span class="w-1.5 h-4 bg-cyan-500 rounded-full"></span>
-                    مدیریت صندوق‌ها
-                </h3>
-                <div id="asset-containers" class="grid grid-cols-2 gap-3 h-48 overflow-y-auto scrollbar-thin">
-                    <!-- Content via JS -->
+        <!-- Asset Management Section -->
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-white font-bold text-lg flex items-center gap-2">
+                        <span class="w-2 h-6 bg-cyan-500 rounded-full"></span>
+                        مدیریت صندوق‌های منتخب
+                    </h3>
+                    <p class="text-slate-400 text-xs mt-1">
+                        این لیست‌ها در بخش پرتفوی پیشنهادی نمایش داده می‌شوند. 
+                    </p>
                 </div>
+                <button id="recalc-btn" class="mt-4 md:mt-0 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg transition text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20">
+                    <span id="recalc-text">محاسبه و ذخیره بازدهی نمادها</span>
+                    <div id="recalc-loader" class="loader hidden w-4 h-4 border-2"></div>
+                </button>
             </div>
-            <!-- SEO Management -->
-            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
-                <h3 class="text-white font-bold mb-4 flex items-center gap-2">
-                    <span class="w-1.5 h-4 bg-purple-500 rounded-full"></span>
-                    تنظیمات سئو (SEO)
-                </h3>
-                <div id="seo-list" class="space-y-2 h-48 overflow-y-auto scrollbar-thin">
-                    <!-- Content via JS -->
-                </div>
+            
+            <div class="grid md:grid-cols-4 gap-4" id="asset-containers">
+                <!-- Template for Asset Column -->
+                <!-- Filled by JS -->
             </div>
         </div>
     </div>
@@ -150,164 +186,477 @@
     <script>
         const API_URL = '/api';
         let token = localStorage.getItem('admin_token');
-        let currentTab = 'market';
-        let scriptsData = {};
         let refreshInterval;
+        let searchDebounce;
 
         const loginSection = document.getElementById('login-section');
         const dashboardSection = document.getElementById('dashboard-section');
-        const updateBtn = document.getElementById('update-btn');
-        const stopBtn = document.getElementById('stop-btn');
-        const chainBtn = document.getElementById('chain-btn');
-        const restoreBtn = document.getElementById('restore-btn');
+        const loginForm = document.getElementById('login-form');
         const logTerminal = document.getElementById('log-terminal');
+        const stopBtn = document.getElementById('stop-btn');
+        const updateBtn = document.getElementById('update-btn');
+        const restoreBtn = document.getElementById('restore-btn');
+        const recalcBtn = document.getElementById('recalc-btn');
 
-        if (token) showDashboard();
+        // Initial Check
+        if (token) {
+            showDashboard();
+        }
 
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
+
             try {
                 const res = await fetch(`${API_URL}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: u, password: p })
                 });
+                
                 if (res.ok) {
                     const data = await res.json();
                     token = data.token;
                     localStorage.setItem('admin_token', token);
                     showDashboard();
-                } else alert('نام کاربری یا رمز عبور اشتباه است');
-            } catch (err) { alert('خطا در ارتباط با سرور'); }
+                } else {
+                    alert('نام کاربری یا رمز عبور اشتباه است');
+                }
+            } catch (err) {
+                alert('خطا در ارتباط با سرور');
+            }
         });
 
         document.getElementById('logout-btn').addEventListener('click', () => {
             localStorage.removeItem('admin_token');
             token = null;
             clearInterval(refreshInterval);
-            location.reload();
+            loginSection.classList.remove('hidden');
+            dashboardSection.classList.add('hidden');
         });
 
-        async function showDashboard() {
+        updateBtn.addEventListener('click', async () => {
+            if (!confirm('آیا مطمئن هستید؟ ابتدا از دیتای فعلی بکاپ گرفته می‌شود.')) return;
+            try {
+                const res = await fetch(`${API_URL}/update`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.message);
+                }
+                fetchStats();
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        restoreBtn.addEventListener('click', async () => {
+            if (!confirm('هشدار: دیتای فعلی حذف شده و با دیتای بکاپ (روز قبل) جایگزین می‌شود. آیا مطمئن هستید؟')) return;
+            
+            document.getElementById('restore-loader').classList.remove('hidden');
+            restoreBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_URL}/restore`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    alert(data.message);
+                } else {
+                    alert('خطا: ' + data.message);
+                }
+                fetchStats();
+            } catch (err) {
+                console.error(err);
+                alert('خطا در ارتباط با سرور');
+            } finally {
+                document.getElementById('restore-loader').classList.add('hidden');
+                restoreBtn.disabled = false;
+            }
+        });
+
+        recalcBtn.addEventListener('click', async () => {
+            if (!confirm('آیا مایل به محاسبه مجدد بازدهی یکساله تمام نمادهای لیست هستید؟ این عملیات ممکن است چند لحظه طول بکشد.')) return;
+            
+            document.getElementById('recalc-loader').classList.remove('hidden');
+            recalcBtn.disabled = true;
+            document.getElementById('recalc-text').innerText = 'در حال محاسبه...';
+
+            try {
+                const res = await fetch(`${API_URL}/assets/recalc`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    alert(data.message);
+                    fetchAssets(); // Refresh asset list to see new returns
+                } else {
+                    alert('خطا: ' + data.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('خطا در ارتباط با سرور');
+            } finally {
+                document.getElementById('recalc-loader').classList.add('hidden');
+                recalcBtn.disabled = false;
+                document.getElementById('recalc-text').innerText = 'محاسبه و ذخیره بازدهی نمادها';
+            }
+        });
+
+        stopBtn.addEventListener('click', async () => {
+            if (!confirm('آیا مایل به متوقف کردن اسکریپت هستید؟')) return;
+            document.getElementById('stop-loader').classList.remove('hidden');
+            stopBtn.disabled = true;
+            try {
+                const res = await fetch(`${API_URL}/stop`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) alert(data.message);
+                fetchStats();
+            } catch (err) {
+                console.error(err);
+            } finally {
+                document.getElementById('stop-loader').classList.add('hidden');
+                stopBtn.disabled = false;
+            }
+        });
+
+        function showDashboard() {
             loginSection.classList.add('hidden');
             dashboardSection.classList.remove('hidden');
+            dashboardSection.classList.add('block');
             fetchStats();
             fetchAssets();
             fetchSeo();
-            refreshInterval = setInterval(fetchStats, 3000);
+            refreshInterval = setInterval(fetchStats, 5000);
         }
 
         async function fetchStats() {
             try {
-                const res = await fetch(`${API_URL}/stats`, { headers: { 'Authorization': `Bearer ${token}` } });
-                if (!res.ok) return;
-                const data = await res.json();
+                const res = await fetch(`${API_URL}/stats`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
 
-                scriptsData = data.scripts;
-                updateTabUI();
-
-                document.getElementById('stat-count').innerText = new Intl.NumberFormat('fa-IR').format(data.symbolCount);
-                if (data.lastDate) {
-                    const d = new Date(data.lastDate);
-                    document.getElementById('stat-date').innerText = new Intl.NumberFormat('fa-IR').format(d.getDate()) + ' ' + new Intl.DateTimeFormat('fa-IR', {month: 'long'}).format(d) + ' ' + d.getFullYear();
+                if (res.status === 401 || res.status === 403) {
+                    document.getElementById('logout-btn').click();
+                    return;
                 }
 
+                const data = await res.json();
+
+                let formattedDate = '-';
+                if (data.lastDate) {
+                    const d = new Date(data.lastDate);
+                    formattedDate = new Intl.DateTimeFormat('fa-IR').format(d) + ` (${data.lastDate.substring(0,10)})`;
+                }
+
+                document.getElementById('stat-count').innerText = new Intl.NumberFormat('fa-IR').format(data.symbolCount);
+                document.getElementById('stat-date').innerText = formattedDate;
+                document.getElementById('path-info').innerText = `مسیر اسکریپت: ${data.scriptPath} (${data.scriptExists ? 'یافت شد' : 'یافت نشد!'})`;
+                
+                const loader = document.getElementById('btn-loader');
                 const statusDot = document.getElementById('status-indicator');
                 const statusText = document.getElementById('status-text');
-                const btnLoader = document.getElementById('btn-loader');
 
+                // UI Logic based on state
                 if (data.isUpdating) {
                     updateBtn.disabled = true;
-                    chainBtn.disabled = true;
+                    restoreBtn.disabled = true; 
+                    recalcBtn.disabled = true; 
+                    updateBtn.classList.add('opacity-75');
+                    document.getElementById('btn-text').innerText = 'در حال اجرا...';
+                    loader.classList.remove('hidden');
                     stopBtn.classList.remove('hidden');
-                    btnLoader.classList.remove('hidden');
+                    statusDot.classList.remove('bg-slate-500', 'bg-red-500');
                     statusDot.classList.add('bg-green-500', 'animate-pulse');
-                    statusText.innerText = `در حال اجرای ${scriptsData[data.runningScriptId]?.name || 'اسکریپت'}...`;
+                    statusText.innerText = 'اسکریپت آپدیت در حال اجراست';
+                    statusText.classList.add('text-green-400');
                 } else if (data.isRestoring) {
                     updateBtn.disabled = true;
-                    chainBtn.disabled = true;
+                    restoreBtn.disabled = true;
+                    stopBtn.classList.add('hidden');
                     statusDot.classList.add('bg-yellow-500', 'animate-pulse');
                     statusText.innerText = 'در حال بازیابی بکاپ...';
+                    statusText.classList.add('text-yellow-400');
                 } else {
                     updateBtn.disabled = false;
-                    chainBtn.disabled = false;
+                    restoreBtn.disabled = false;
+                    recalcBtn.disabled = false;
+                    updateBtn.classList.remove('opacity-75');
+                    document.getElementById('btn-text').innerText = 'شروع آپدیت بازار';
+                    loader.classList.add('hidden');
                     stopBtn.classList.add('hidden');
-                    btnLoader.classList.add('hidden');
-                    statusDot.classList.remove('bg-green-500', 'animate-pulse', 'bg-yellow-500');
+                    statusDot.classList.remove('bg-green-500', 'animate-pulse', 'bg-red-500', 'bg-yellow-500');
                     statusDot.classList.add('bg-slate-500');
                     statusText.innerText = 'آماده به کار';
+                    statusText.classList.remove('text-green-400', 'text-yellow-400');
                 }
 
                 if (data.lastLog) {
                     logTerminal.innerText = data.lastLog;
                     logTerminal.scrollTop = logTerminal.scrollHeight;
                 }
-            } catch (e) { console.error(e); }
-        }
 
-        function switchTab(tabId) {
-            currentTab = tabId;
-            updateTabUI();
-        }
-
-        function updateTabUI() {
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                const isActive = btn.id === `tab-${currentTab}`;
-                btn.className = `tab-btn px-6 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${isActive ? 'bg-slate-800 text-cyan-400 border-cyan-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`;
-            });
-
-            const script = scriptsData[currentTab];
-            if (script) {
-                document.getElementById('script-name').innerText = script.name;
-                document.getElementById('script-desc').innerText = script.description;
-                document.getElementById('script-path').innerText = script.path;
-                updateBtn.disabled = !script.exists;
-                if (!script.exists) document.getElementById('btn-text').innerText = 'اسکریپت یافت نشد';
-                else document.getElementById('btn-text').innerText = 'شروع ' + script.name;
+            } catch (err) {
+                console.error("Stats fetch error", err);
             }
         }
 
-        updateBtn.addEventListener('click', () => runUpdate(currentTab));
-        chainBtn.addEventListener('click', () => runUpdate(null));
+        // --- ASSET MANAGEMENT LOGIC ---
 
-        async function runUpdate(scriptId) {
-            const msg = scriptId ? `آیا از اجرای اسکریپت ${scriptsData[scriptId].name} مطمئن هستید؟` : 'آیا از اجرای کل زنجیره (بازار -> صنایع -> شاخص) مطمئن هستید؟';
-            if (!confirm(msg)) return;
+        const assetCategories = [
+            { key: 'equity', label: 'صندوق سهامی', color: 'bg-emerald-500' },
+            { key: 'leveraged', label: 'صندوق اهرمی', color: 'bg-orange-500' },
+            { key: 'gold', label: 'صندوق طلا', color: 'bg-amber-400' },
+            { key: 'fixed', label: 'صندوق درآمد ثابت', color: 'bg-blue-500' },
+        ];
+
+        async function fetchAssets() {
             try {
-                await fetch(`${API_URL}/update`, {
+                const res = await fetch(`${API_URL}/assets`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json(); 
+                
+                const container = document.getElementById('asset-containers');
+                container.innerHTML = '';
+
+                assetCategories.forEach(cat => {
+                    const items = data.filter(d => d.type === cat.key);
+                    const col = document.createElement('div');
+                    col.className = 'bg-slate-900 rounded-xl p-4 border border-slate-700 flex flex-col h-[450px]';
+                    col.innerHTML = `
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="w-3 h-3 rounded-full ${cat.color}"></div>
+                            <h4 class="font-bold text-white text-sm">${cat.label}</h4>
+                        </div>
+                        <div class="relative mb-3 group z-20 space-y-2">
+                            <div class="flex gap-2">
+                                <input type="text" id="input-${cat.key}" oninput="handleSearch('${cat.key}')" placeholder="نماد..." autocomplete="off" class="w-2/3 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none focus:border-cyan-500 transition-colors">
+                                <button onclick="addAsset('${cat.key}')" class="w-1/3 bg-cyan-600 hover:bg-cyan-500 text-white rounded px-2 py-1 text-xs transition">افزودن</button>
+                            </div>
+                            <input type="text" id="url-${cat.key}" placeholder="لینک سایت (اجباری)" class="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[10px] text-slate-300 outline-none focus:border-cyan-500 transition-colors" dir="ltr">
+                            <div id="results-${cat.key}" class="absolute top-10 right-0 w-2/3 bg-slate-800 border border-slate-600 rounded-b-lg mt-0.5 hidden max-h-48 overflow-y-auto scrollbar-thin shadow-2xl z-50"></div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto scrollbar-thin space-y-1 pr-1 relative z-0" id="list-${cat.key}">
+                            ${items.length === 0 ? '<p class="text-xs text-slate-600 text-center mt-4">لیست خالی است</p>' : ''}
+                            ${items.map(item => {
+                                const ret = item.last_return;
+                                const hasReturn = ret !== undefined && ret !== null;
+                                const retColor = hasReturn ? (ret >= 0 ? 'text-emerald-400' : 'text-red-400') : '';
+                                const retBg = hasReturn ? (ret >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10') : '';
+                                const retText = hasReturn ? (ret > 0 ? '+' + ret.toFixed(1) + '%' : ret.toFixed(1) + '%') : '';
+
+                                return `
+                                <div class="flex justify-between items-center bg-slate-800 p-2 rounded border border-slate-700/50 group hover:border-slate-500 transition">
+                                    <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                        <div class="flex flex-col overflow-hidden w-full">
+                                           <div class="flex items-center justify-between pl-2">
+                                               <span class="text-xs text-slate-200 font-bold">${item.symbol}</span>
+                                               ${hasReturn ? `<span class="text-[9px] px-1.5 py-0.5 rounded ${retColor} ${retBg} font-mono" dir="ltr">${retText}</span>` : ''}
+                                           </div>
+                                           ${item.url ? `<a href="${item.url}" target="_blank" class="text-[9px] text-blue-400 hover:text-blue-300 truncate max-w-full block mt-0.5 opacity-70 hover:opacity-100" title="${item.url}">${new URL(item.url).hostname.replace('www.','')}</a>` : ''}
+                                        </div>
+                                    </div>
+                                    <button onclick="removeAsset('${item.symbol}', '${cat.key}')" class="text-slate-500 hover:text-red-400 p-1 shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                                </div>
+                            `}).join('')}
+                        </div>
+                    `;
+                    container.appendChild(col);
+                });
+            } catch (err) {
+                console.error("Failed to fetch assets", err);
+            }
+        }
+
+        window.handleSearch = (type) => {
+            const input = document.getElementById(`input-${type}`);
+            const resultsContainer = document.getElementById(`results-${type}`);
+            const query = input.value.trim();
+            if (searchDebounce) clearTimeout(searchDebounce);
+            if (query.length < 2) {
+                resultsContainer.classList.add('hidden');
+                resultsContainer.innerHTML = '';
+                return;
+            }
+            searchDebounce = setTimeout(async () => {
+                try {
+                    const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`, {
+                         headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    resultsContainer.innerHTML = '';
+                    if (data.length > 0) {
+                        resultsContainer.classList.remove('hidden');
+                        data.forEach(item => {
+                            const el = document.createElement('div');
+                            el.className = 'p-2 hover:bg-slate-700 cursor-pointer border-b border-slate-700/50 last:border-0 flex flex-col';
+                            el.innerHTML = `<span class="text-xs font-bold text-white">${item.symbol}</span><span class="text-[10px] text-slate-400 truncate">${item.name}</span>`;
+                            el.onclick = () => {
+                                input.value = item.symbol;
+                                resultsContainer.classList.add('hidden');
+                                resultsContainer.innerHTML = '';
+                            };
+                            resultsContainer.appendChild(el);
+                        });
+                    } else {
+                         resultsContainer.classList.remove('hidden');
+                         resultsContainer.innerHTML = '<div class="p-2 text-xs text-slate-500 text-center">موردی یافت نشد</div>';
+                    }
+                } catch (e) {
+                    console.error("Search failed", e);
+                }
+            }, 300);
+        };
+
+        document.addEventListener('click', (e) => {
+             if (!e.target.closest('.relative')) {
+                 document.querySelectorAll('[id^="results-"]').forEach(el => el.classList.add('hidden'));
+             }
+        });
+
+        window.addAsset = async (type) => {
+            const input = document.getElementById(`input-${type}`);
+            const urlInput = document.getElementById(`url-${type}`);
+            const symbol = input.value.trim();
+            const url = urlInput.value.trim();
+            if (!symbol) { alert('لطفا نماد را وارد کنید'); return; }
+            if (!url) { alert('لطفا آدرس سایت را وارد کنید'); return; }
+            try {
+                const res = await fetch(`${API_URL}/assets`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ script_id: scriptId })
+                    body: JSON.stringify({ symbol, type, url })
                 });
-                fetchStats();
-            } catch (e) { console.error(e); }
-        }
+                if (res.ok) {
+                    input.value = '';
+                    urlInput.value = '';
+                    fetchAssets();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'خطا در افزودن');
+                }
+            } catch (err) { console.error(err); }
+        };
 
-        stopBtn.addEventListener('click', async () => {
-            if (!confirm('توقف اسکریپت؟')) return;
-            await fetch(`${API_URL}/stop`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
-            fetchStats();
-        });
+        window.removeAsset = async (symbol, type) => {
+            if (!confirm(`حذف نماد ${symbol}؟`)) return;
+            try {
+                const res = await fetch(`${API_URL}/assets`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ symbol, type })
+                });
+                if (res.ok) {
+                    fetchAssets();
+                }
+            } catch (err) { console.error(err); }
+        };
 
-        restoreBtn.addEventListener('click', async () => {
-            if (!confirm('هشدار: بازگردانی بکاپ تمام دیتای امروز را حذف میکند. ادامه؟')) return;
-            await fetch(`${API_URL}/restore`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
-            fetchStats();
-        });
+        // --- SEO FUNCTIONS ---
 
-        // Basic List Fetchers (Static for this view)
-        async function fetchAssets() {
-            const res = await fetch(`${API_URL}/assets`, { headers: { 'Authorization': `Bearer ${token}` } });
-            const data = await res.json();
-            document.getElementById('asset-containers').innerHTML = data.map(a => `<div class="p-2 bg-slate-900 border border-slate-700 rounded text-[10px] flex justify-between"><span>${a.symbol}</span><span class="text-slate-500">${a.type}</span></div>`).join('');
-        }
         async function fetchSeo() {
-            const res = await fetch(`${API_URL}/seo`, { headers: { 'Authorization': `Bearer ${token}` } });
-            const data = await res.json();
-            document.getElementById('seo-list').innerHTML = data.map(p => `<div class="p-2 bg-slate-900 border border-slate-700 rounded text-[10px] flex justify-between"><span>${p.route}</span><span class="text-slate-500 truncate max-w-[100px]">${p.title}</span></div>`).join('');
+            try {
+                const res = await fetch(`${API_URL}/seo`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                const list = document.getElementById('seo-list');
+                if (data.length === 0) {
+                    list.innerHTML = '<p class="text-center text-slate-500 text-xs mt-4">هیچ صفحه‌ای یافت نشد.</p>';
+                    return;
+                }
+
+                list.innerHTML = data.map(page => `
+                    <div class="bg-slate-800 p-3 rounded border border-slate-700/50 hover:border-purple-500/50 transition cursor-pointer group" onclick="loadSeoIntoForm('${page.route}', '${escapeHtml(page.title)}', '${escapeHtml(page.description)}', '${escapeHtml(page.keywords)}')">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs font-bold text-white font-mono" dir="ltr">${page.route}</span>
+                            <button onclick="event.stopPropagation(); deleteSeo('${page.route}')" class="text-slate-500 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-400 truncate">${page.title}</p>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error("Fetch SEO Error", e);
+            }
         }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+        }
+
+        window.loadSeoIntoForm = (route, title, desc, keywords) => {
+            document.getElementById('seo-route').value = route;
+            document.getElementById('seo-title').value = title;
+            document.getElementById('seo-desc').value = desc;
+            document.getElementById('seo-keywords').value = keywords;
+        };
+
+        window.clearSeoForm = () => {
+            document.getElementById('seo-route').value = '';
+            document.getElementById('seo-title').value = '';
+            document.getElementById('seo-desc').value = '';
+            document.getElementById('seo-keywords').value = '';
+        };
+
+        window.saveSeo = async () => {
+            const route = document.getElementById('seo-route').value.trim();
+            const title = document.getElementById('seo-title').value.trim();
+            const description = document.getElementById('seo-desc').value.trim();
+            const keywords = document.getElementById('seo-keywords').value.trim();
+
+            if (!route) { alert('مسیر صفحه الزامی است.'); return; }
+
+            try {
+                const res = await fetch(`${API_URL}/seo`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ route, title, description, keywords })
+                });
+                
+                if (res.ok) {
+                    fetchSeo();
+                    clearSeoForm();
+                    alert('ذخیره شد.');
+                } else {
+                    const data = await res.json();
+                    alert('خطا: ' + data.error);
+                }
+            } catch (e) {
+                console.error(e);
+                alert('خطا در ارتباط با سرور');
+            }
+        };
+
+        window.deleteSeo = async (route) => {
+            if (!confirm(`آیا از حذف تنظیمات سئو برای مسیر ${route} مطمئن هستید؟`)) return;
+            try {
+                const res = await fetch(`${API_URL}/seo`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ route })
+                });
+                if (res.ok) fetchSeo();
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
     </script>
 </body>
 </html>

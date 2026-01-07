@@ -30,40 +30,10 @@ const dbConfig = {
 
 const pool = new Pool(dbConfig);
 
-// Test Connection & Auto-Sync Indices
-pool.connect().then(async client => {
+// Test Connection
+pool.connect().then(client => {
   console.log(`✅ Connected to PostgreSQL database at ${dbConfig.host}:${dbConfig.port}`);
-  
-  // Auto-sync indices to symbols table on startup
-  try {
-      const tableCheck = await client.query(`
-        SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_name = 'index_prices'
-        );
-      `);
-      
-      if (tableCheck.rows[0].exists) {
-          console.log("🔄 Syncing indices to search table...");
-          const res = await client.query(`
-              INSERT INTO symbols (symbol, name)
-              SELECT symbol, symbol as name
-              FROM index_prices
-              GROUP BY symbol
-              ON CONFLICT (symbol) DO NOTHING;
-          `);
-          if (res.rowCount > 0) {
-              console.log(`✅ Added ${res.rowCount} new indices to search.`);
-          } else {
-              console.log(`✅ Indices are up to date.`);
-          }
-      }
-  } catch (e) {
-      console.warn("⚠️ Index sync skipped:", e.message);
-  } finally {
-      client.release();
-  }
-
+  client.release();
 }).catch(err => {
   console.error('❌ Failed to connect to database:', err.message);
 });
@@ -151,8 +121,7 @@ app.get('/api/history/:symbol', async (req, res) => {
   try {
     client = await pool.connect();
     
-    // 1. Try to fetch from daily_prices (Stocks)
-    const queryStock = `
+    const query = `
       SELECT * FROM (
           SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
           FROM daily_prices 
@@ -162,29 +131,7 @@ app.get('/api/history/:symbol', async (req, res) => {
       ) sub ORDER BY date ASC
     `;
     const values = [symbol, limit];
-    let result = await client.query(queryStock, values);
-
-    // 2. If not found, try to fetch from index_prices (Indices)
-    if (result.rows.length === 0) {
-        try {
-            const queryIndex = `
-              SELECT * FROM (
-                  SELECT to_char(date, 'YYYYMMDD') as date, close
-                  FROM index_prices 
-                  WHERE symbol = $1 
-                  ORDER BY date DESC 
-                  LIMIT $2
-              ) sub ORDER BY date ASC
-            `;
-            const resultIndex = await client.query(queryIndex, values);
-            if (resultIndex.rows.length > 0) {
-                result = resultIndex;
-            }
-        } catch (idxErr) {
-            // Ignore if index_prices table doesn't exist or other db error, 
-            // we will return 404 below based on empty result.
-        }
-    }
+    const result = await client.query(query, values);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Symbol not found or no data' });
