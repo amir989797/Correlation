@@ -30,12 +30,21 @@ export default defineConfig({
     ],
     proxy: proxyOptions
   },
+  optimizeDeps: {
+    exclude: ['react-router-dom', 'react-router']
+  },
   build: {
-    chunkSizeWarningLimit: 1500, // Increased limit to reduce warnings
+    // Disabling minification fixes the build hang on low-memory servers
+    // especially when processing heavy libraries like lodash/recharts.
+    minify: false, 
+    sourcemap: false,
+    chunkSizeWarningLimit: 2000,
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
     rollupOptions: {
       output: {
-        // Removed manualChunks to let Vite/Rollup handle chunking automatically.
-        // This prevents infinite loops and high memory usage during build.
+        manualChunks: undefined
       }
     }
   }
