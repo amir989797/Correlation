@@ -30,10 +30,40 @@ const dbConfig = {
 
 const pool = new Pool(dbConfig);
 
-// Test Connection
-pool.connect().then(client => {
+// Test Connection & Auto-Sync Indices
+pool.connect().then(async client => {
   console.log(`✅ Connected to PostgreSQL database at ${dbConfig.host}:${dbConfig.port}`);
-  client.release();
+  
+  // Auto-sync indices to symbols table on startup
+  try {
+      const tableCheck = await client.query(`
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'index_prices'
+        );
+      `);
+      
+      if (tableCheck.rows[0].exists) {
+          console.log("🔄 Syncing indices to search table...");
+          const res = await client.query(`
+              INSERT INTO symbols (symbol, name)
+              SELECT symbol, symbol as name
+              FROM index_prices
+              GROUP BY symbol
+              ON CONFLICT (symbol) DO NOTHING;
+          `);
+          if (res.rowCount > 0) {
+              console.log(`✅ Added ${res.rowCount} new indices to search.`);
+          } else {
+              console.log(`✅ Indices are up to date.`);
+          }
+      }
+  } catch (e) {
+      console.warn("⚠️ Index sync skipped:", e.message);
+  } finally {
+      client.release();
+  }
+
 }).catch(err => {
   console.error('❌ Failed to connect to database:', err.message);
 });
