@@ -121,7 +121,8 @@ app.get('/api/history/:symbol', async (req, res) => {
   try {
     client = await pool.connect();
     
-    const query = `
+    // 1. Try to fetch from daily_prices (Stocks)
+    const queryStock = `
       SELECT * FROM (
           SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
           FROM daily_prices 
@@ -131,7 +132,29 @@ app.get('/api/history/:symbol', async (req, res) => {
       ) sub ORDER BY date ASC
     `;
     const values = [symbol, limit];
-    const result = await client.query(query, values);
+    let result = await client.query(queryStock, values);
+
+    // 2. If not found, try to fetch from index_prices (Indices)
+    if (result.rows.length === 0) {
+        try {
+            const queryIndex = `
+              SELECT * FROM (
+                  SELECT to_char(date, 'YYYYMMDD') as date, close
+                  FROM index_prices 
+                  WHERE symbol = $1 
+                  ORDER BY date DESC 
+                  LIMIT $2
+              ) sub ORDER BY date ASC
+            `;
+            const resultIndex = await client.query(queryIndex, values);
+            if (resultIndex.rows.length > 0) {
+                result = resultIndex;
+            }
+        } catch (idxErr) {
+            // Ignore if index_prices table doesn't exist or other db error, 
+            // we will return 404 below based on empty result.
+        }
+    }
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Symbol not found or no data' });
