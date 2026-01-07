@@ -26,7 +26,7 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123';
 
 // State Management
-let currentScript = null; // 'main', 'industry', 'shakhes', 'backup', 'restore' or null
+let currentScript = null; // 'main', 'industry', 'shakhes', 'backup', 'restore', 'calc' or null
 let isRestoring = false;
 let lastUpdateLog = "هنوز آپدیتی انجام نشده است.";
 let currentProcess = null;
@@ -44,7 +44,7 @@ const dbConfig = {
 
 const pool = new Pool(dbConfig);
 
-// Init DB for Assets, Backup Table & SEO
+// Init DB
 const initDB = async () => {
     const client = await pool.connect();
     try {
@@ -71,24 +71,7 @@ const initDB = async () => {
                 keywords TEXT
             );
         `);
-
-        const seoCheck = await client.query('SELECT count(*) FROM seo_pages');
-        if (parseInt(seoCheck.rows[0].count) === 0) {
-            const defaults = [
-                { route: '/', title: 'تحلیلگر بورس | خانه', description: 'پلتفرم جامع تحلیل تکنیکال، همبستگی و مدیریت دارایی‌های بازار سرمایه ایران (TSETMC).', keywords: 'بورس, تحلیل تکنیکال, همبستگی, صندوق طلا, صندوق سهامی' },
-                { route: '/correlation', title: 'محاسبه همبستگی نمادها', description: 'ابزار محاسبه ضریب همبستگی تاریخی بین دو نماد بورس و فرابورس، تحلیل واگرایی و نمودارهای مقایسه‌ای.', keywords: 'همبستگی بورس, همبستگی نمادها, تحلیل همبستگی, کورولیشن' },
-                { route: '/technical', title: 'تحلیل تکنیکال (Technical Analysis)', description: 'رسم نمودار نسبت قیمت دو دارایی به یکدیگر و تحلیل تکنیکال نمادها برای شناسایی حباب‌های قیمتی.', keywords: 'تحلیل تکنیکال, نمودار نسبت, تحلیل تکنیکال پیشرفته, حباب سنج, اندیکاتور بورس' },
-                { route: '/portfolio', title: 'سبد دارایی هوشمند', description: 'پیشنهاد سبد دارایی بهینه شامل طلا، سهام و درآمد ثابت بر اساس تحلیل ریسک و بازدهی بازار.', keywords: 'سبدگردانی, پرتفوی پیشنهادی, صندوق اهرمی, صندوق درآمد ثابت' }
-            ];
-            for (const p of defaults) {
-                await client.query(
-                    'INSERT INTO seo_pages (route, title, description, keywords) VALUES ($1, $2, $3, $4)',
-                    [p.route, p.title, p.description, p.keywords]
-                );
-            }
-            console.log("✅ Default SEO pages seeded.");
-        }
-        console.log("✅ Database tables checked/initialized.");
+        console.log("✅ Admin Database tables checked/initialized.");
     } catch (e) {
         console.error("Error creating/updating tables:", e);
     } finally {
@@ -233,31 +216,32 @@ const restoreBackupData = async () => {
 const runPythonScript = (scriptPath, scriptName) => {
     return new Promise((resolve, reject) => {
         if (!fs.existsSync(scriptPath)) {
-            lastUpdateLog += `\n❌ فایل اسکریپت ${scriptName} یافت نشد.`;
+            lastUpdateLog += `\n❌ فایل اسکریپت ${scriptName} یافت نشد. مسیر: ${scriptPath}`;
             return reject('Script not found');
         }
 
         currentScript = scriptName;
         lastUpdateLog += `\n🚀 اجرای اسکریپت ${scriptName}...\n`;
         
+        // Use -u for unbuffered stdout to get logs in real-time
         currentProcess = spawn('python3', ['-u', scriptPath]);
         
         currentProcess.stdout.on('data', (data) => {
             const chunk = data.toString();
-            lastUpdateLog = (lastUpdateLog + chunk).slice(-10000); 
+            lastUpdateLog = (lastUpdateLog + chunk).slice(-15000); 
         });
 
         currentProcess.stderr.on('data', (data) => {
             const text = data.toString();
+            // Filter tqdm progress bars or keep them
             if (text.includes('%') || text.includes('it/s')) {
-                // Keep progress lines but don't spam
                 if (!lastUpdateLog.endsWith(text)) {
                      lastUpdateLog += `\n[${scriptName}]: ${text}`; 
                 }
             } else {
-                lastUpdateLog += `\n[${scriptName} ERROR]: ${text}`;
+                lastUpdateLog += `\n[${scriptName} ERR]: ${text}`;
             }
-            lastUpdateLog = lastUpdateLog.slice(-10000);
+            lastUpdateLog = lastUpdateLog.slice(-15000);
         });
 
         currentProcess.on('close', (code) => {
@@ -267,7 +251,6 @@ const runPythonScript = (scriptPath, scriptName) => {
                 resolve(true);
             } else {
                 lastUpdateLog += `\n❌ ${scriptName} متوقف شد (Code: ${code}).`;
-                // If it was killed manually, we reject
                 resolve(false); 
             }
         });
@@ -291,7 +274,7 @@ const runFullUpdateChain = async () => {
         const mainSuccess = await runPythonScript(MAIN_SCRIPT_PATH, 'main');
         if (!mainSuccess) { currentScript = null; return; }
 
-        // 3. Sync Symbols & Post-process Main
+        // 3. Sync Symbols
         try {
             const count = await syncSymbolsTable();
             lastUpdateLog += `\n✨ لیست نمادها بروز شد (${count} مورد).`;
@@ -301,7 +284,7 @@ const runFullUpdateChain = async () => {
 
         // 4. Industry Script
         const industrySuccess = await runPythonScript(INDUSTRY_SCRIPT_PATH, 'industry');
-        if (!industrySuccess && currentProcess) { currentScript = null; return; } // if failed but not killed, continue? let's stop.
+        if (!industrySuccess && currentProcess) { currentScript = null; return; }
 
         // 5. Shakhes Script
         const shakhesSuccess = await runPythonScript(SHAKHES_SCRIPT_PATH, 'shakhes');
@@ -328,7 +311,6 @@ const runSingleScript = async (type) => {
     try {
         if (type === 'main') {
             await runPythonScript(MAIN_SCRIPT_PATH, 'main');
-            // Sync symbols after main run usually
             const count = await syncSymbolsTable();
             lastUpdateLog += `\n✨ لیست نمادها بروز شد (${count} مورد).`;
         } else if (type === 'industry') {
@@ -362,7 +344,6 @@ app.post('/api/login', (req, res) => {
   }
 });
 
-// APIs
 app.get('/api/search', requireAuth, async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 2) return res.json([]);
@@ -374,7 +355,6 @@ app.get('/api/search', requireAuth, async (req, res) => {
     const result = await client.query(query, values);
     res.json(result.rows);
   } catch (err) {
-    console.error('Search Error:', err);
     res.status(500).json([]); 
   } finally {
     if (client) client.release();
@@ -390,7 +370,7 @@ app.get('/api/stats', requireAuth, async (req, res) => {
     res.json({
       symbolCount: result.rows[0].symbol_count || 0,
       lastDate: result.rows[0].last_date,
-      currentScript, // 'main', 'industry', 'shakhes', 'backup' etc.
+      currentScript,
       isRestoring,
       lastLog: lastUpdateLog,
       scriptPath: MAIN_SCRIPT_PATH,
@@ -403,7 +383,7 @@ app.get('/api/stats', requireAuth, async (req, res) => {
 });
 
 app.post('/api/update', requireAuth, (req, res) => {
-  if (currentScript) return res.status(400).json({ message: 'یک اسکریپت هم‌اکنون در حال اجراست.' });
+  if (currentScript) return res.status(400).json({ message: `اسکریپت ${currentScript} هم‌اکنون در حال اجراست.` });
   if (isRestoring) return res.status(400).json({ message: 'عملیات بازیابی بکاپ در حال اجراست.' });
   
   const { type } = req.body; // 'all', 'main', 'industry', 'shakhes'
@@ -412,8 +392,12 @@ app.post('/api/update', requireAuth, (req, res) => {
       runFullUpdateChain();
       res.json({ message: 'فرآیند بروزرسانی کامل شروع شد.', status: 'started' });
   } else {
-      runSingleScript(type);
-      res.json({ message: `اجرای اسکریپت ${type} شروع شد.`, status: 'started' });
+      if (['main', 'industry', 'shakhes'].includes(type)) {
+          runSingleScript(type);
+          res.json({ message: `اجرای اسکریپت ${type} شروع شد.`, status: 'started' });
+      } else {
+          res.status(400).json({ message: 'نوع عملیات نامعتبر است.' });
+      }
   }
 });
 
@@ -434,10 +418,10 @@ app.post('/api/restore', requireAuth, async (req, res) => {
 app.post('/api/stop', requireAuth, (req, res) => {
     if (!currentScript || !currentProcess) return res.status(400).json({ message: 'چیزی در حال اجرا نیست.' });
     currentProcess.kill('SIGINT');
-    // We let the 'close' event handler clear the state
     res.json({ message: 'دستور توقف ارسال شد.' });
 });
 
+// Assets & SEO Endpoints (Same as before)
 app.get('/api/assets', requireAuth, async (req, res) => {
     const client = await pool.connect();
     try {
@@ -452,8 +436,6 @@ app.get('/api/assets', requireAuth, async (req, res) => {
 
 app.post('/api/assets', requireAuth, async (req, res) => {
     const { symbol, type, url } = req.body;
-    if (!symbol || !type) return res.status(400).json({error: 'نماد و نوع الزامی است'});
-    if (!url) return res.status(400).json({error: 'آدرس سایت الزامی است'});
     const client = await pool.connect();
     try {
         await client.query(
@@ -491,8 +473,6 @@ app.delete('/api/assets', requireAuth, async (req, res) => {
     }
 });
 
-// --- SEO MANAGEMENT ENDPOINTS ---
-
 app.get('/api/seo', requireAuth, async (req, res) => {
     const client = await pool.connect();
     try {
@@ -507,8 +487,6 @@ app.get('/api/seo', requireAuth, async (req, res) => {
 
 app.post('/api/seo', requireAuth, async (req, res) => {
     const { route, title, description, keywords } = req.body;
-    if (!route) return res.status(400).json({ error: 'مسیر (Route) الزامی است.' });
-    
     const client = await pool.connect();
     try {
         await client.query(

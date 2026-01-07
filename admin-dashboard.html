@@ -80,12 +80,12 @@
                 <div class="absolute top-0 left-0 w-24 h-24 bg-orange-500/10 rounded-full blur-2xl -ml-12 -mt-12"></div>
                 
                 <!-- Tabs Header -->
-                <div class="flex border-b border-slate-700/50">
+                <div class="flex border-b border-slate-700/50 z-10 relative">
                     <button onclick="switchTab('global')" id="tab-btn-global" class="flex-1 py-3 text-sm font-bold text-slate-300 hover:bg-slate-700/30 transition-colors border-b-2 border-transparent">بروزرسانی کلی</button>
                     <button onclick="switchTab('manual')" id="tab-btn-manual" class="flex-1 py-3 text-sm font-bold text-slate-300 hover:bg-slate-700/30 transition-colors border-b-2 border-transparent">اجرای دستی اسکریپت‌ها</button>
                 </div>
 
-                <div class="p-6 flex-1">
+                <div class="p-6 flex-1 z-10 relative">
                     
                     <!-- TAB 1: Global Update -->
                     <div id="tab-global" class="tab-content active h-full flex flex-col justify-between">
@@ -121,28 +121,40 @@
                         <h3 class="text-slate-400 text-sm font-bold mb-4">اجرای تکی اسکریپت‌ها</h3>
                         
                         <div class="grid grid-cols-1 gap-3">
-                            <button onclick="runSpecificScript('main')" class="script-btn bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg flex items-center justify-between group transition">
+                            <button onclick="runSpecificScript('main')" class="script-btn relative bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white p-3 rounded-lg flex items-center justify-between group transition">
                                 <div class="flex flex-col items-start">
                                     <span class="text-sm font-bold">1. دریافت دیتای بازار</span>
                                     <span class="text-[10px] text-slate-400 font-mono">full_market_download.py</span>
                                 </div>
-                                <span class="status-badge bg-slate-800 text-slate-400 text-[10px] px-2 py-1 rounded hidden" data-script="main">در حال اجرا...</span>
+                                <span class="status-badge bg-green-500/20 text-green-400 text-[10px] px-2 py-1 rounded hidden" data-script="main">
+                                    <span class="w-1.5 h-1.5 bg-green-400 rounded-full inline-block animate-pulse ml-1"></span>در حال اجرا
+                                </span>
                             </button>
 
-                            <button onclick="runSpecificScript('industry')" class="script-btn bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg flex items-center justify-between group transition">
+                            <button onclick="runSpecificScript('industry')" class="script-btn relative bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white p-3 rounded-lg flex items-center justify-between group transition">
                                 <div class="flex flex-col items-start">
                                     <span class="text-sm font-bold">2. دریافت اطلاعات صنایع</span>
                                     <span class="text-[10px] text-slate-400 font-mono">industry.py</span>
                                 </div>
-                                <span class="status-badge bg-slate-800 text-slate-400 text-[10px] px-2 py-1 rounded hidden" data-script="industry">در حال اجرا...</span>
+                                <span class="status-badge bg-green-500/20 text-green-400 text-[10px] px-2 py-1 rounded hidden" data-script="industry">
+                                    <span class="w-1.5 h-1.5 bg-green-400 rounded-full inline-block animate-pulse ml-1"></span>در حال اجرا
+                                </span>
                             </button>
 
-                            <button onclick="runSpecificScript('shakhes')" class="script-btn bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg flex items-center justify-between group transition">
+                            <button onclick="runSpecificScript('shakhes')" class="script-btn relative bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white p-3 rounded-lg flex items-center justify-between group transition">
                                 <div class="flex flex-col items-start">
                                     <span class="text-sm font-bold">3. دریافت اطلاعات شاخص</span>
                                     <span class="text-[10px] text-slate-400 font-mono">shakhes.py</span>
                                 </div>
-                                <span class="status-badge bg-slate-800 text-slate-400 text-[10px] px-2 py-1 rounded hidden" data-script="shakhes">در حال اجرا...</span>
+                                <span class="status-badge bg-green-500/20 text-green-400 text-[10px] px-2 py-1 rounded hidden" data-script="shakhes">
+                                    <span class="w-1.5 h-1.5 bg-green-400 rounded-full inline-block animate-pulse ml-1"></span>در حال اجرا
+                                </span>
+                            </button>
+                        </div>
+                        
+                        <div class="mt-4 pt-4 border-t border-slate-700/50">
+                             <button id="stop-btn-manual" class="w-full hidden bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded-lg transition text-sm flex items-center justify-center gap-2">
+                                <span>توقف اضطراری</span>
                             </button>
                         </div>
                     </div>
@@ -161,7 +173,7 @@
             <span class="text-slate-500">Waiting for logs...</span>
         </div>
 
-        <!-- SEO & Asset Sections (Existing code) -->
+        <!-- SEO & Asset Sections -->
         <!-- SEO Management Section -->
         <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
             <h3 class="text-white font-bold text-lg flex items-center gap-2 mb-4">
@@ -244,8 +256,10 @@
         const dashboardSection = document.getElementById('dashboard-section');
         const loginForm = document.getElementById('login-form');
         const logTerminal = document.getElementById('log-terminal');
-        const stopBtn = document.getElementById('stop-btn');
+        
         const updateBtn = document.getElementById('update-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const stopBtnManual = document.getElementById('stop-btn-manual');
         const restoreBtn = document.getElementById('restore-btn');
         const recalcBtn = document.getElementById('recalc-btn');
 
@@ -288,7 +302,7 @@
         });
 
         // --- Tabs Logic ---
-        function switchTab(tab) {
+        window.switchTab = (tab) => {
             currentTab = tab;
             
             // Buttons
@@ -322,15 +336,48 @@
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({ type })
                 });
+                const data = await res.json();
                 if (!res.ok) {
-                    const data = await res.json();
                     alert(data.message);
+                } else {
+                    // Force refresh stats immediately
+                    fetchStats();
                 }
+            } catch (err) {
+                console.error(err);
+                alert('خطا در ارسال دستور.');
+            }
+        }
+
+        async function stopScript() {
+            if (!confirm('آیا مایل به متوقف کردن اسکریپت هستید؟')) return;
+            // Show loaders
+            document.getElementById('stop-loader').classList.remove('hidden');
+            stopBtn.disabled = true;
+            stopBtnManual.disabled = true;
+            stopBtnManual.innerText = 'در حال توقف...';
+            
+            try {
+                const res = await fetch(`${API_URL}/stop`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) alert(data.message);
                 fetchStats();
             } catch (err) {
                 console.error(err);
+            } finally {
+                // Reset UI will be handled by fetchStats loop
+                document.getElementById('stop-loader').classList.add('hidden');
+                stopBtn.disabled = false;
+                stopBtnManual.disabled = false;
+                stopBtnManual.innerHTML = '<span>توقف اضطراری</span>';
             }
         }
+        
+        stopBtn.addEventListener('click', stopScript);
+        stopBtnManual.addEventListener('click', stopScript);
 
         restoreBtn.addEventListener('click', async () => {
             if (!confirm('هشدار: دیتای فعلی حذف شده و با دیتای بکاپ (روز قبل) جایگزین می‌شود. آیا مطمئن هستید؟')) return;
@@ -390,26 +437,6 @@
             }
         });
 
-        stopBtn.addEventListener('click', async () => {
-            if (!confirm('آیا مایل به متوقف کردن اسکریپت هستید؟')) return;
-            document.getElementById('stop-loader').classList.remove('hidden');
-            stopBtn.disabled = true;
-            try {
-                const res = await fetch(`${API_URL}/stop`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (!res.ok) alert(data.message);
-                fetchStats();
-            } catch (err) {
-                console.error(err);
-            } finally {
-                document.getElementById('stop-loader').classList.add('hidden');
-                stopBtn.disabled = false;
-            }
-        });
-
         function showDashboard() {
             loginSection.classList.add('hidden');
             dashboardSection.classList.remove('hidden');
@@ -417,7 +444,7 @@
             fetchStats();
             fetchAssets();
             fetchSeo();
-            refreshInterval = setInterval(fetchStats, 5000);
+            refreshInterval = setInterval(fetchStats, 3000);
         }
 
         async function fetchStats() {
@@ -449,24 +476,30 @@
 
                 const isRunning = !!data.currentScript;
 
-                // Update Button States
+                // Update Button States (Disable everything if running)
                 updateBtn.disabled = isRunning || data.isRestoring;
                 restoreBtn.disabled = isRunning || data.isRestoring;
                 recalcBtn.disabled = isRunning || data.isRestoring;
                 
-                // Manual Tab Buttons Disabling
+                // Manual Tab Buttons Logic
                 document.querySelectorAll('.script-btn').forEach(btn => {
                     btn.disabled = isRunning || data.isRestoring;
-                    if (isRunning || data.isRestoring) btn.classList.add('opacity-50', 'cursor-not-allowed');
-                    else btn.classList.remove('opacity-50', 'cursor-not-allowed');
                 });
                 
-                // Badges in Manual Tab
+                // Show/Hide Stop Button in Manual Tab
+                if (isRunning) {
+                     stopBtnManual.classList.remove('hidden');
+                } else {
+                     stopBtnManual.classList.add('hidden');
+                }
+                
+                // Badges in Manual Tab - Show spinner only on the running script
                 document.querySelectorAll('.status-badge').forEach(badge => {
                      const script = badge.getAttribute('data-script');
+                     // 'currentScript' from server might be 'main', 'industry', 'shakhes'
+                     // or 'backup', 'calc' etc.
                      if (data.currentScript === script) {
                          badge.classList.remove('hidden');
-                         badge.classList.add('bg-green-500/20', 'text-green-400');
                      } else {
                          badge.classList.add('hidden');
                      }
@@ -486,6 +519,7 @@
 
                 } else if (data.isRestoring) {
                     stopBtn.classList.add('hidden');
+                    stopBtnManual.classList.add('hidden');
                     statusDot.classList.add('bg-yellow-500', 'animate-pulse');
                     statusText.innerText = 'در حال بازیابی بکاپ...';
                     statusText.classList.add('text-yellow-400');
@@ -502,8 +536,15 @@
                 }
 
                 if (data.lastLog) {
+                    // Check if scrolled to bottom
+                    const isScrolledToBottom = logTerminal.scrollHeight - logTerminal.scrollTop === logTerminal.clientHeight;
+                    
                     logTerminal.innerText = data.lastLog;
-                    logTerminal.scrollTop = logTerminal.scrollHeight;
+                    
+                    // Auto scroll if user hasn't scrolled up
+                    if (isScrolledToBottom || logTerminal.scrollTop === 0) {
+                        logTerminal.scrollTop = logTerminal.scrollHeight;
+                    }
                 }
 
             } catch (err) {
