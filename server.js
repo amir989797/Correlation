@@ -47,6 +47,11 @@ let seoCache = null;
 let seoCacheTime = 0;
 const SEO_CACHE_TTL = 300 * 1000; // 5 minutes
 
+// Industry Cache (Heavy query, cache for 1 hour)
+let industriesCache = null;
+let industriesCacheTime = 0;
+const INDUSTRIES_CACHE_TTL = 60 * 60 * 1000; 
+
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'TSETMC Node.js API is running' });
 });
@@ -73,6 +78,67 @@ app.get('/api/search', async (req, res) => {
   } catch (err) {
     console.error('❌ Search Error:', err);
     res.status(500).json([]); 
+  } finally {
+    if (client) client.release();
+  }
+});
+
+/**
+ * Industries Endpoint
+ * Returns industries with > 3 distinct symbols
+ */
+app.get('/api/industries', async (req, res) => {
+  const now = Date.now();
+  if (industriesCache && (now - industriesCacheTime < INDUSTRIES_CACHE_TTL)) {
+      return res.json(industriesCache);
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+    // Use a subquery to get distinct symbol-industry pairs first to optimize
+    const query = `
+      SELECT industry, COUNT(DISTINCT symbol)::int as count 
+      FROM daily_prices 
+      WHERE industry IS NOT NULL AND industry != ''
+      GROUP BY industry 
+      HAVING COUNT(DISTINCT symbol) > 3
+      ORDER BY count DESC
+    `;
+    const result = await client.query(query);
+    industriesCache = result.rows;
+    industriesCacheTime = now;
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Industries Error:', err);
+    res.status(500).json({ error: 'Database error fetching industries' });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+/**
+ * Symbols by Industry Endpoint
+ */
+app.get('/api/industries/:industry/symbols', async (req, res) => {
+  const { industry } = req.params;
+  let client;
+  try {
+    client = await pool.connect();
+    // Get distinct symbols for this industry. 
+    // We also grab the latest name for display.
+    const query = `
+        SELECT symbol, MAX(name) as name
+        FROM daily_prices
+        WHERE industry = $1
+        GROUP BY symbol
+        ORDER BY symbol ASC
+    `;
+    const result = await client.query(query, [industry]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error(`❌ Symbols for Industry ${industry} Error:`, err);
+    res.status(500).json({ error: 'Database error fetching symbols' });
   } finally {
     if (client) client.release();
   }
