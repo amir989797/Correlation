@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "NODE_OPTIONS='--max-old-space-size=768' vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "start-api": "node server.js",
     "start-admin": "node admin-server.js",
@@ -15,6 +15,7 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.3",
     "recharts": "^2.12.2",
     "lucide-react": "^0.358.0",
     "express": "^4.18.2",

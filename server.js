@@ -30,39 +30,10 @@ const dbConfig = {
 
 const pool = new Pool(dbConfig);
 
-// Helper to sync indices on startup (Optional now, as search is dynamic)
-const syncIndicesToSymbols = async () => {
-  const client = await pool.connect();
-  try {
-    // We try to create/sync, but errors won't stop the server
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS symbols (
-        id SERIAL PRIMARY KEY,
-        symbol VARCHAR(100) NOT NULL UNIQUE,
-        name VARCHAR(255)
-      );
-    `);
-    await client.query(`
-      INSERT INTO symbols (symbol, name)
-      SELECT symbol, MAX(name) as name
-      FROM index_prices
-      GROUP BY symbol
-      ON CONFLICT (symbol) DO NOTHING;
-    `);
-    console.log('✅ Synced indices to symbols table (Background).');
-  } catch (err) {
-    // console.warn('Sync indices skipped:', err.message);
-  } finally {
-    client.release();
-  }
-};
-
-// Test Connection & Sync
-pool.connect().then(async client => {
+// Test Connection
+pool.connect().then(client => {
   console.log(`✅ Connected to PostgreSQL database at ${dbConfig.host}:${dbConfig.port}`);
   client.release();
-  // We still run this in background for performance optimization
-  syncIndicesToSymbols();
 }).catch(err => {
   console.error('❌ Failed to connect to database:', err.message);
 });
@@ -82,8 +53,6 @@ app.get('/', (req, res) => {
 
 /**
  * Search Endpoint
- * Updates: Uses UNION to search both 'symbols' (stocks) and 'index_prices' (indices)
- * This allows finding indices even if the sync script hasn't run.
  */
 app.get('/api/search', async (req, res) => {
   const { q } = req.query;
@@ -92,36 +61,12 @@ app.get('/api/search', async (req, res) => {
   let client;
   try {
     client = await pool.connect();
-    
-    // Check if index_prices exists to avoid error if script never ran
-    let hasIndicesTable = false;
-    try {
-        await client.query("SELECT 1 FROM index_prices LIMIT 1");
-        hasIndicesTable = true;
-    } catch(e) { hasIndicesTable = false; }
-
-    let query = '';
-    
-    if (hasIndicesTable) {
-        // Combined search: Stocks (from symbols table) + Indices (direct from index_prices)
-        query = `
-          SELECT symbol, name FROM (
-              (SELECT symbol, name FROM symbols WHERE symbol LIKE $1 OR name LIKE $1 LIMIT 10)
-              UNION
-              (SELECT symbol, MAX(name) as name FROM index_prices WHERE symbol LIKE $1 OR name LIKE $1 GROUP BY symbol LIMIT 10)
-          ) as combined_search
-          LIMIT 20
-        `;
-    } else {
-        // Fallback to just symbols table
-        query = `
-          SELECT symbol, name 
-          FROM symbols 
-          WHERE symbol LIKE $1 OR name LIKE $1
-          LIMIT 20
-        `;
-    }
-
+    const query = `
+      SELECT symbol, name 
+      FROM symbols 
+      WHERE symbol LIKE $1 OR name LIKE $1
+      LIMIT 20
+    `;
     const values = [`%${q}%`];
     const result = await client.query(query, values);
     res.json(result.rows);
@@ -176,8 +121,7 @@ app.get('/api/history/:symbol', async (req, res) => {
   try {
     client = await pool.connect();
     
-    // 1. Try daily_prices (Stocks)
-    const stockQuery = `
+    const query = `
       SELECT * FROM (
           SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
           FROM daily_prices 
@@ -187,26 +131,7 @@ app.get('/api/history/:symbol', async (req, res) => {
       ) sub ORDER BY date ASC
     `;
     const values = [symbol, limit];
-    let result = await client.query(stockQuery, values);
-
-    // 2. If not found, Try index_prices (Indices)
-    if (result.rows.length === 0) {
-         try {
-             const indexQuery = `
-              SELECT * FROM (
-                  SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
-                  FROM index_prices 
-                  WHERE symbol = $1 
-                  ORDER BY date DESC 
-                  LIMIT $2
-              ) sub ORDER BY date ASC
-            `;
-            result = await client.query(indexQuery, values);
-         } catch (e) {
-             // Ignore if table doesn't exist
-             if (e.code !== '42P01') throw e; 
-         }
-    }
+    const result = await client.query(query, values);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Symbol not found or no data' });

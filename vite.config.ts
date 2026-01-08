@@ -31,15 +31,14 @@ export default defineConfig({
     proxy: proxyOptions
   },
   build: {
-    // EXTREME MEMORY OPTIMIZATIONS FOR 1GB RAM SERVER
-    minify: false,              // Disables code minification (High RAM usage)
-    cssMinify: false,           // Disables CSS minification
-    sourcemap: false,           // Disables source maps
-    reportCompressedSize: false,// Disables GZIP size calculation (Critically reduces RAM usage)
-    chunkSizeWarningLimit: 2000,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: undefined // Let Rollup handle chunking naturally
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          recharts: ['recharts'],
+          icons: ['lucide-react']
+        }
       }
     }
   }
