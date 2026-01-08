@@ -4,11 +4,6 @@ import { TsetmcDataPoint, SearchResult, AssetGroup } from '../types';
 // Updated API URL to use relative path for Nginx/Proxy routing
 const API_BASE_URL = '/api';
 
-export interface IndustryData {
-    industry: string;
-    count: number;
-}
-
 /**
  * Searches for symbols via the backend API.
  */
@@ -44,36 +39,6 @@ export const fetchAssetGroups = async (): Promise<AssetGroup[]> => {
         return await response.json();
     } catch (error) {
         console.error('Asset Groups Fetch Failed:', error);
-        return [];
-    }
-};
-
-/**
- * Fetches industries that have more than 3 distinct symbols.
- */
-export const fetchIndustries = async (): Promise<IndustryData[]> => {
-    try {
-        const url = `${API_BASE_URL}/industries`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch industries');
-        return await response.json();
-    } catch (error) {
-        console.error('Industries Fetch Failed:', error);
-        return [];
-    }
-};
-
-/**
- * Fetches all symbols for a specific industry.
- */
-export const fetchSymbolsByIndustry = async (industry: string): Promise<SearchResult[]> => {
-    try {
-        const url = `${API_BASE_URL}/industries/${encodeURIComponent(industry)}/symbols`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch symbols for industry');
-        return await response.json();
-    } catch (error) {
-        console.error('Symbols by Industry Fetch Failed:', error);
         return [];
     }
 };
