@@ -1,11 +1,14 @@
 
-import React, { useState, useEffect } from 'react';
-import { LineChart, Home, Briefcase, GraduationCap, Search } from 'lucide-react';
-import { HomePage } from './pages/HomePage';
-import { SearchPage } from './pages/CorrelationPage';
-import { RatioPage } from './pages/RatioPage';
-import { PortfolioPage } from './pages/PortfolioPage';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { LineChart, Home, Briefcase, GraduationCap, Search, Loader2 } from 'lucide-react';
 import { Router, Routes, Route, useLocation, useRouter } from './router';
+
+// Lazy load pages to reduce initial bundle size
+// We map named exports to default exports for React.lazy
+const HomePage = lazy(() => import('./pages/HomePage').then(module => ({ default: module.HomePage })));
+const SearchPage = lazy(() => import('./pages/CorrelationPage').then(module => ({ default: module.SearchPage })));
+const RatioPage = lazy(() => import('./pages/RatioPage').then(module => ({ default: module.RatioPage })));
+const PortfolioPage = lazy(() => import('./pages/PortfolioPage').then(module => ({ default: module.PortfolioPage })));
 
 // Shared Menu Items Configuration
 const MENU_ITEMS = [
@@ -148,6 +151,14 @@ function MobileBottomNav() {
   );
 }
 
+// Simple Loading Component for Suspense
+const PageLoader = () => (
+  <div className="flex flex-col items-center justify-center min-h-[60vh] animate-pulse">
+    <Loader2 className="w-10 h-10 text-cyan-500 animate-spin mb-4" />
+    <span className="text-slate-500 text-sm">در حال بارگذاری...</span>
+  </div>
+);
+
 export function App() {
   return (
     <Router>
@@ -158,12 +169,14 @@ export function App() {
         {/* Main Content Area */}
         <main className="md:mr-28 mr-0 pt-20 pb-20 md:pt-8 md:pb-8 min-h-screen transition-all">
           <div className="p-4 md:p-8 max-w-7xl mx-auto">
-             <Routes>
-               <Route path="/" element={<HomePage />} />
-               <Route path="/search" element={<SearchPage />} />
-               <Route path="/technical" element={<RatioPage />} />
-               <Route path="/portfolio" element={<PortfolioPage />} />
-             </Routes>
+             <Suspense fallback={<PageLoader />}>
+               <Routes>
+                 <Route path="/" element={<HomePage />} />
+                 <Route path="/search" element={<SearchPage />} />
+                 <Route path="/technical" element={<RatioPage />} />
+                 <Route path="/portfolio" element={<PortfolioPage />} />
+               </Routes>
+             </Suspense>
           </div>
         </main>
         

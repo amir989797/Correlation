@@ -35,8 +35,11 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
+          // React core libraries
+          vendor: ['react', 'react-dom'],
+          // Heavy charting library separated for caching
           recharts: ['recharts'],
+          // Icons separated
           icons: ['lucide-react']
         }
       }
