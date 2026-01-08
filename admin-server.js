@@ -18,6 +18,7 @@ const PORT = parseInt(process.env.ADMIN_PORT || '8080');
 
 // Configuration
 const PYTHON_SCRIPT_PATH = path.resolve(process.env.HOME || '/root', 'tse_downloader/full_market_download.py');
+const SHAKHES_SCRIPT_PATH = path.resolve(process.env.HOME || '/root', 'tse_downloader/shakhes.py');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123';
 
@@ -109,15 +110,30 @@ const requireAuth = (req, res, next) => {
 const syncSymbolsTable = async () => {
   const client = await pool.connect();
   try {
-    const insertQuery = `
+    // 1. Sync from daily_prices (Stocks)
+    await client.query(`
       INSERT INTO symbols (symbol, name)
       SELECT symbol, MAX(name) as name
       FROM daily_prices
       GROUP BY symbol
       ON CONFLICT (symbol) DO NOTHING;
-    `;
-    const res = await client.query(insertQuery);
-    return res.rowCount;
+    `);
+
+    // 2. Sync from index_prices (Indices)
+    try {
+        await client.query(`
+          INSERT INTO symbols (symbol, name)
+          SELECT symbol, MAX(name) as name
+          FROM index_prices
+          GROUP BY symbol
+          ON CONFLICT (symbol) DO NOTHING;
+        `);
+    } catch (e) {
+        console.warn('⚠️ Index table sync skipped (table might not exist yet).');
+    }
+
+    const res = await client.query('SELECT COUNT(*) FROM symbols');
+    return res.rows[0].count;
   } finally {
     client.release();
   }
@@ -165,15 +181,21 @@ const calculateAllAssetReturns = async () => {
         const processAsset = async (asset) => {
             const client = await pool.connect();
             try {
+                // Check daily_prices first, fallback to index_prices (though assets usually stocks)
                 const historyResOpt = await client.query(`
                     SELECT * FROM (
                         SELECT to_char(date, 'YYYYMMDD') as date, close 
                         FROM daily_prices 
-                        WHERE symbol = $1 
+                        WHERE symbol = $1
+                        UNION ALL
+                        SELECT to_char(date, 'YYYYMMDD') as date, close
+                        FROM index_prices
+                        WHERE symbol = $1
                         ORDER BY date DESC
                         LIMIT 600
                     ) sub ORDER BY date ASC
                 `, [asset.symbol]);
+                
                 const history = historyResOpt.rows;
                 if (history.length > 0) {
                     const retVal = calcReturn(history);
@@ -231,54 +253,82 @@ const restoreBackupData = async () => {
     }
 };
 
-// ... (Existing Update Logic - runUpdateProcess) ...
+// Helper to run python scripts
+const executeScript = (scriptPath) => {
+    return new Promise((resolve, reject) => {
+        const proc = spawn('python3', ['-u', scriptPath]);
+        currentProcess = proc;
+        
+        proc.stdout.on('data', (data) => {
+            lastUpdateLog = (lastUpdateLog + data.toString()).slice(-5000);
+        });
+        
+        proc.stderr.on('data', (data) => {
+             const text = data.toString();
+             if (text.includes('%') || text.includes('it/s')) {
+                lastUpdateLog += `\n[PROGRESS]: ${text}`;
+             } else {
+                lastUpdateLog += `\n[LOG]: ${text}`;
+             }
+             lastUpdateLog = lastUpdateLog.slice(-5000);
+        });
+
+        proc.on('close', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`Script exited with code ${code}`));
+        });
+        
+        proc.on('error', (err) => reject(err));
+    });
+};
+
 const runUpdateProcess = async () => {
     if (isUpdating) return;
-    if (!fs.existsSync(PYTHON_SCRIPT_PATH)) {
-        lastUpdateLog += `\n❌ فایل اسکریپت یافت نشد.`;
-        return;
-    }
     isUpdating = true;
     lastUpdateLog = "📦 در حال ایجاد نسخه پشتیبان (Backup)...\n";
+    
+    // 1. Backup
     const backupSuccess = await createBackup();
     if (!backupSuccess) {
         lastUpdateLog += "\n❌ عملیات به دلیل شکست در بکاپ‌گیری متوقف شد.";
         isUpdating = false;
         return;
     }
-    lastUpdateLog += "✅ بکاپ گرفته شد.\n🚀 آپدیت شروع شد (حالت چند رشته‌ای)...\n";
-    currentProcess = spawn('python3', ['-u', PYTHON_SCRIPT_PATH]);
-    currentProcess.stdout.on('data', (data) => {
-        const chunk = data.toString();
-        lastUpdateLog = (lastUpdateLog + chunk).slice(-5000); 
-    });
-    currentProcess.stderr.on('data', (data) => {
-        const text = data.toString();
-        if (text.includes('%') || text.includes('it/s')) {
-            lastUpdateLog += `\n[PROGRESS]: ${text}`; 
+    lastUpdateLog += "✅ بکاپ گرفته شد.\n";
+
+    try {
+        // 2. Market Update
+        if (fs.existsSync(PYTHON_SCRIPT_PATH)) {
+            lastUpdateLog += "🚀 آپدیت بازار (سهام) شروع شد...\n";
+            await executeScript(PYTHON_SCRIPT_PATH);
+            lastUpdateLog += "\n✅ آپدیت سهام تمام شد.\n";
         } else {
-            lastUpdateLog += `\n[ERROR]: ${text}`;
+            lastUpdateLog += "\n⚠️ فایل اسکریپت سهام یافت نشد.\n";
         }
-        lastUpdateLog = lastUpdateLog.slice(-5000);
-    });
-    currentProcess.on('close', async (code) => {
-        currentProcess = null;
+
+        // 3. Index Update
+        if (fs.existsSync(SHAKHES_SCRIPT_PATH)) {
+            lastUpdateLog += "🚀 آپدیت شاخص‌ها شروع شد...\n";
+            await executeScript(SHAKHES_SCRIPT_PATH);
+            lastUpdateLog += "\n✅ آپدیت شاخص‌ها تمام شد.\n";
+        } else {
+            lastUpdateLog += "\n⚠️ فایل اسکریپت شاخص یافت نشد.\n";
+        }
+
+        // 4. Sync & Recalc
+        const count = await syncSymbolsTable();
+        lastUpdateLog += `\n✨ لیست جستجو بروز شد (تعداد کل: ${count}).`;
+        
+        lastUpdateLog += `\n🔄 در حال محاسبه بازدهی نمادهای منتخب...`;
+        const updated = await calculateAllAssetReturns();
+        lastUpdateLog += `\n✅ بازدهی ${updated} نماد محاسبه و ذخیره شد.`;
+
+    } catch (e) {
+        lastUpdateLog += `\n❌ عملیات با خطا متوقف شد: ${e.message}`;
+    } finally {
         isUpdating = false;
-        if (code === 0) {
-            lastUpdateLog += `\n✅ دریافت دیتا تمام شد.`;
-            try {
-                const count = await syncSymbolsTable();
-                lastUpdateLog += `\n✨ لیست جستجو بروز شد (${count} نماد جدید).`;
-                lastUpdateLog += `\n🔄 در حال محاسبه بازدهی نمادهای منتخب...`;
-                const updated = await calculateAllAssetReturns();
-                lastUpdateLog += `\n✅ بازدهی ${updated} نماد محاسبه و ذخیره شد.`;
-            } catch (e) {
-                lastUpdateLog += `\n⚠️ خطا در پردازش پس از آپدیت: ${e.message}`;
-            }
-        } else {
-            lastUpdateLog += `\n❌ عملیات متوقف شد (Code: ${code}).`;
-        }
-    });
+        currentProcess = null;
+    }
 };
 
 cron.schedule('0 18 * * *', () => {
@@ -325,6 +375,8 @@ app.get('/api/stats', requireAuth, async (req, res) => {
     const countQuery = `SELECT (SELECT COUNT(*) FROM symbols) as symbol_count, (SELECT MAX(date) FROM daily_prices) as last_date`;
     const result = await client.query(countQuery);
     const scriptExists = fs.existsSync(PYTHON_SCRIPT_PATH);
+    const indexScriptExists = fs.existsSync(SHAKHES_SCRIPT_PATH);
+    
     res.json({
       symbolCount: result.rows[0].symbol_count || 0,
       lastDate: result.rows[0].last_date,
@@ -332,7 +384,8 @@ app.get('/api/stats', requireAuth, async (req, res) => {
       isRestoring,
       lastLog: lastUpdateLog,
       scriptPath: PYTHON_SCRIPT_PATH,
-      scriptExists
+      scriptExists,
+      indexScriptExists
     });
   } catch (err) {
     res.status(500).json({ error: 'Database Error' });

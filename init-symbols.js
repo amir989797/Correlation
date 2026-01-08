@@ -39,10 +39,7 @@ const migrate = async () => {
     `);
 
     // 3. Populate from daily_prices
-    // We use GROUP BY symbol to ensure we only get one entry per symbol.
-    // We take the most frequent or max name (usually sufficient) to handle potential name changes in history.
-    console.log('📥 Extracting unique symbols from daily_prices (This may take a while)...');
-    
+    console.log('📥 Extracting unique symbols from daily_prices...');
     const insertQuery = `
       INSERT INTO symbols (symbol, name)
       SELECT symbol, MAX(name) as name
@@ -50,9 +47,24 @@ const migrate = async () => {
       GROUP BY symbol
       ON CONFLICT (symbol) DO NOTHING;
     `;
-    
     const res = await client.query(insertQuery);
-    console.log(`✅ Migration complete! Inserted/Processed ${res.rowCount} symbols.`);
+    console.log(`✅ Stocks Processed: ${res.rowCount} new symbols.`);
+
+    // 4. Populate from index_prices
+    console.log('📥 Extracting unique symbols from index_prices...');
+    try {
+        const insertIndices = `
+          INSERT INTO symbols (symbol, name)
+          SELECT symbol, MAX(name) as name
+          FROM index_prices
+          GROUP BY symbol
+          ON CONFLICT (symbol) DO NOTHING;
+        `;
+        const resIndex = await client.query(insertIndices);
+        console.log(`✅ Indices Processed: ${resIndex.rowCount} new symbols.`);
+    } catch (e) {
+        console.log('⚠️ Could not sync indices (table might be missing or empty):', e.message);
+    }
 
   } catch (err) {
     console.error('❌ Migration failed:', err);

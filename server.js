@@ -112,6 +112,7 @@ app.get('/api/assets', async (req, res) => {
 
 /**
  * History Endpoint
+ * Supports both Stock symbols (daily_prices) and Indices (index_prices)
  */
 app.get('/api/history/:symbol', async (req, res) => {
   const { symbol } = req.params;
@@ -121,11 +122,19 @@ app.get('/api/history/:symbol', async (req, res) => {
   try {
     client = await pool.connect();
     
+    // Union both tables to find the symbol. 
+    // Usually a symbol is unique to one table, but this covers both cases.
     const query = `
       SELECT * FROM (
-          SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
-          FROM daily_prices 
-          WHERE symbol = $1 
+          SELECT * FROM (
+              SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
+              FROM daily_prices 
+              WHERE symbol = $1 
+              UNION ALL
+              SELECT to_char(date, 'YYYYMMDD') as date, close, open, high, low, volume
+              FROM index_prices 
+              WHERE symbol = $1 
+          ) combined
           ORDER BY date DESC 
           LIMIT $2
       ) sub ORDER BY date ASC
@@ -140,6 +149,8 @@ app.get('/api/history/:symbol', async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error('❌ History Error:', err);
+    // If table index_prices doesn't exist yet, it throws an error. 
+    // We send a generic 500 but log the detail.
     res.status(500).json({ error: 'Database error', details: err.message });
   } finally {
     if (client) client.release();
